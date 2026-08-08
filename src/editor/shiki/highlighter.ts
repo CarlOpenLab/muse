@@ -91,6 +91,43 @@ export function normalizeLang(lang: string): string {
 }
 
 /**
+ * 代码块语言下拉的可选项。
+ *
+ * 与上面 `langs` 列表保持同步：value 用归一化后的 Shiki 语言 id（即
+ * `normalizeLang` 映射的目标），label 用人类可读名称。`codeBlockView` 的
+ * 语言 `<select>` 直接消费这张表，保证「下拉里能选的」≈「能高亮的」。
+ */
+export const LANGUAGE_OPTIONS: { label: string; value: string }[] = [
+  { label: '纯文本', value: '' },
+  { label: 'JavaScript', value: 'javascript' },
+  { label: 'TypeScript', value: 'typescript' },
+  { label: 'JSX', value: 'jsx' },
+  { label: 'TSX', value: 'tsx' },
+  { label: 'Python', value: 'python' },
+  { label: 'Bash / Shell', value: 'bash' },
+  { label: 'JSON', value: 'json' },
+  { label: 'HTML', value: 'html' },
+  { label: 'CSS', value: 'css' },
+  { label: 'Vue', value: 'vue' },
+  { label: 'Markdown', value: 'markdown' },
+  { label: 'YAML', value: 'yaml' },
+  { label: 'XML', value: 'xml' },
+  { label: 'SQL', value: 'sql' },
+  { label: 'Go', value: 'go' },
+  { label: 'Rust', value: 'rust' },
+  { label: 'Java', value: 'java' },
+  { label: 'C', value: 'c' },
+  { label: 'C++', value: 'cpp' },
+  { label: 'C#', value: 'csharp' },
+  { label: 'PHP', value: 'php' },
+  { label: 'Ruby', value: 'ruby' },
+  { label: 'Swift', value: 'swift' },
+  { label: 'Kotlin', value: 'kotlin' },
+  { label: 'Diff', value: 'diff' },
+  { label: 'TOML', value: 'toml' },
+]
+
+/**
  * 把代码切成带颜色的 token 二维数组（行 -> token）。
  * 语言未加载时返回 `null`，表示不高亮（纯文本渲染）。
  */

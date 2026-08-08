@@ -91,7 +91,8 @@ body {
   border-color: var(--accent);
 }
 
-/* ===== 代码块语言条（code_block node view） ===== */
+/* ===== 代码块工具条（code_block node view） =====
+ * 右上角：语言下拉 + 复制 / 删除图标按钮，flex 紧凑排列。 */
 .code-block {
   position: relative;
 }
@@ -101,30 +102,151 @@ body {
   top: 6px;
   right: 8px;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
-.code-lang-input {
-  width: 80px;
-  padding: 2px 6px;
+.code-lang-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 130px;
+  padding: 2px 5px;
   font: inherit;
   font-size: 12px;
   color: var(--fg-soft);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
-  text-align: right;
   outline: none;
-  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 
-.code-lang-input:hover {
+.code-lang-trigger:hover {
   border-color: var(--border);
+  background: var(--bg);
+  color: var(--fg);
 }
 
-.code-lang-input:focus {
+.code-lang-trigger.open {
   border-color: var(--accent);
-  color: var(--fg);
   background: var(--bg);
+  color: var(--fg);
+}
+
+.code-lang-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-lang-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--fg-soft);
+  transition: transform 0.15s;
+}
+
+.code-lang-trigger.open .code-lang-chevron {
+  transform: rotate(180deg);
+}
+
+/* 语言浮层：position:fixed 挂在 body，避开编辑器 overflow:hidden */
+.code-lang-popover {
+  position: fixed;
+  z-index: 9999;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.2);
+  overflow: hidden;
+}
+
+.code-lang-search {
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  outline: none;
+}
+
+.code-lang-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.code-lang-option {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--fg);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.code-lang-option:hover {
+  background: var(--bg-soft);
+}
+
+.code-lang-option.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.code-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--fg-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.code-action-btn:hover {
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.code-action-btn:active {
+  background: var(--bg-soft);
+}
+
+/* 复制成功反馈：短暂变绿 + ✓ */
+.code-action-btn.copied {
+  color: #1a7f37;
+  border-color: transparent;
+  background: transparent;
+}
+:root.dark .code-action-btn.copied {
+  color: #3fb950;
+}
+
+/* 删除按钮：hover 走危险色 */
+.code-action-btn.danger:hover {
+  color: #cf222e;
+}
+:root.dark .code-action-btn.danger:hover {
+  color: #f85149;
 }
 
 /* ===== 查找替换高亮 ===== */
