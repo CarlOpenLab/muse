@@ -13,6 +13,7 @@ import { replaceAll, callCommand } from '@milkdown/utils'
 import '@milkdown/theme-nord/style.css'
 import { shikiCodeBlock } from './shiki/shikiCodeBlock'
 import { codeBlockView } from './codeBlockView'
+import { codeBlockTabKeymap } from './codeBlockKeymap'
 import { searchPlugin } from './searchPlugin'
 import { searchCommand } from './searchCommands'
 import { useSearch } from '../composables/useSearch'
@@ -39,6 +40,7 @@ const { get } = useEditor((root) =>
     .config(nord)
     .use(commonmark)
     .use(codeBlockView)
+    .use(codeBlockTabKeymap)
     .use(gfm)
     .use(listener)
     .use(history)
