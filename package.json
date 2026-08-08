@@ -1,0 +1,52 @@
+{
+  "name": "md-ai",
+  "version": "0.1.0",
+  "description": "Typora-like WYSIWYG markdown editor with Shiki highlighting",
+  "main": "./out/main/index.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:win": "electron-vite build && electron-builder --win",
+    "build:linux": "electron-vite build && electron-builder --linux"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.30.0",
+    "@milkdown/core": "^7.22.0",
+    "@milkdown/ctx": "^7.22.0",
+    "@milkdown/plugin-clipboard": "^7.22.0",
+    "@milkdown/plugin-history": "^7.22.0",
+    "@milkdown/plugin-trailing": "^7.22.0",
+    "@milkdown/plugin-listener": "^7.22.0",
+    "@milkdown/preset-commonmark": "^7.22.0",
+    "@milkdown/preset-gfm": "^7.22.0",
+    "@milkdown/prose": "^7.22.0",
+    "@milkdown/theme-nord": "^7.22.0",
+    "@milkdown/transformer": "^7.22.0",
+    "@milkdown/vue": "^7.22.0",
+    "shiki": "^4.4.2",
+    "unocss": "^66.7.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.0",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^7.0.0",
+    "vue": "^3.5.0",
+    "vue-tsc": "^3.0.0"
+  },
+  "allowScripts": {
+    "electron@43.3.0": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.1": true,
+    "electron-winstaller@5.4.0": true,
+    "fsevents@2.3.3": true
+  }
+}

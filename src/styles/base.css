@@ -1,0 +1,237 @@
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-soft: #f6f7f9;
+  --fg: #1f2328;
+  --fg-soft: #57606a;
+  --border: #d8dee4;
+  --border-subtle: rgba(31, 35, 40, 0.08); /* 柔和边框：半透明，接近 shadcn 质感 */
+  --accent: #0969da;
+  --code-bg: #f6f8fa;
+  --code-inline-bg: #eaeef2;
+  --page-bg: #eef0f4; /* 画布背景：稍灰，衬托白色卡片 */
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+}
+
+/* 暗黑模式：Nord 极夜色板 + 暗色 Shiki 代码主题配套 */
+:root.dark {
+  color-scheme: dark;
+  --bg: #2e3440; /* nord0 */
+  --bg-soft: #3b4252; /* nord1 */
+  --fg: #eceff4; /* nord6 */
+  --fg-soft: #a6acba;
+  --border: #3b4252;
+  --border-subtle: rgba(236, 239, 244, 0.1); /* 暗色柔和边框 */
+  --accent: #88c0d0; /* nord8 */
+  --code-bg: #212631; /* 比 bg 更暗，配 github-dark token 颜色 */
+  --code-inline-bg: #3b4252;
+  --page-bg: #1e222b; /* 比 bg 更暗，让卡片浮起来 */
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* ===== Milkdown 编辑器：在 Nord 主题基础上让颜色跟随明暗 =====
+ * Nord 主题的文字色继承 body（无显式 prose color），翻转 --fg 即翻转全文；
+ * Nord 仅用 @media (prefers-color-scheme: dark) 适配了代码块/表格/行内代码，
+ * 但那只跟随系统、不支持手动切换，这里用同特异性选择器（后加载胜）统一接管。 */
+
+/* 代码块：背景/边框/等宽字体跟随主题；上下留出块间距（Nord 没给 pre 设外边距，
+ * 相邻代码块会贴在一起）。 */
+.milkdown-theme-nord.prose pre {
+  background-color: var(--code-bg);
+  border: 1px solid var(--border);
+  font-family: 'SF Mono', 'JetBrains Mono', Menlo, Monaco, Consolas,
+    'Liberation Mono', monospace;
+  tab-size: 2;
+  margin-block: calc(var(--spacing) * 4);
+}
+
+.milkdown-theme-nord.prose pre code {
+  display: block;
+  color: var(--fg);
+  background: none;
+  /* 清掉 Nord 给行内 code 加的 padding（pre 自带 16px 内边距，code 不必再加） */
+  padding: 0;
+}
+
+/* 行内代码背景跟随主题 */
+.milkdown-theme-nord.prose code {
+  background-color: var(--code-inline-bg);
+}
+
+/* 分隔线、引用块边框跟随主题 */
+.milkdown-theme-nord.prose hr {
+  border-color: var(--border);
+}
+
+.milkdown-theme-nord.prose blockquote {
+  border-color: var(--accent);
+}
+
+/* ===== 代码块语言条（code_block node view） ===== */
+.code-block {
+  position: relative;
+}
+
+.code-lang-bar {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
+}
+
+.code-lang-input {
+  width: 80px;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: right;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.code-lang-input:hover {
+  border-color: var(--border);
+}
+
+.code-lang-input:focus {
+  border-color: var(--accent);
+  color: var(--fg);
+  background: var(--bg);
+}
+
+/* ===== 查找替换高亮 ===== */
+.search-match {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.search-match.current {
+  background: var(--accent);
+  color: var(--bg);
+  box-shadow: none;
+}
+
+/* ===== 面板动效 ===== */
+/* 编辑卡片阴影：双层柔和阴影，暗色下加深 */
+.card-shadow {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.05),
+    0 12px 32px -8px rgb(0 0 0 / 0.12);
+}
+:root.dark .card-shadow {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.3),
+    0 12px 32px -8px rgb(0 0 0 / 0.5);
+}
+
+/* 毛玻璃面板：颜色变量 + color-mix 实现半透明，避免 UnoCSS 丢弃 alpha */
+.panel-glass {
+  background-color: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+}
+
+/* 左侧大纲侧边栏：宽度折叠动画（shadcn 风格，占位式挤压内容） */
+.sidebar-enter-active,
+.sidebar-leave-active {
+  transition: width 0.22s ease, opacity 0.22s ease;
+  overflow: hidden;
+}
+.sidebar-enter-from,
+.sidebar-leave-to {
+  width: 0 !important;
+  opacity: 0;
+  border-right-width: 0;
+}
+
+/* 设置抽屉：背景淡入，面板从右滑入 */
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: opacity 0.2s ease;
+}
+.drawer-enter-active > div,
+.drawer-leave-active > div {
+  transition: transform 0.25s ease;
+}
+.drawer-enter-from,
+.drawer-leave-to {
+  opacity: 0;
+}
+.drawer-enter-from > div,
+.drawer-leave-to > div {
+  transform: translateX(100%);
+}
+
+/* ===== 编辑器排版（设置面板控制） ===== */
+.milkdown-theme-nord.prose {
+  font-size: var(--editor-font-size, 16px);
+  line-height: var(--editor-line-height, 1.7);
+}
+
+/* Nord 主题在 p/pre/code/标题等元素上直接声明了 font-size / line-height，
+ * 会覆盖 .prose 的继承值，导致设置面板的「字号 / 行高」形同虚设。
+ * 这里用更高特异性的选择器接管：
+ * - 「字号」只改正文基准（p/li/blockquote），标题与代码块保持 nord 固定字号，
+ *   避免所有文字等比放大变成「整页缩放」的效果；
+ * - 「行高」对所有文本生效。 */
+.milkdown-theme-nord.prose p,
+.milkdown-theme-nord.prose li,
+.milkdown-theme-nord.prose blockquote {
+  font-size: var(--editor-font-size, 16px);
+  line-height: var(--editor-line-height, 1.7);
+}
+
+/* 标题：字号保持 nord 层级（30/24/20/16/14px），行高跟随设置 */
+.milkdown-theme-nord.prose h1,
+.milkdown-theme-nord.prose h2,
+.milkdown-theme-nord.prose h3,
+.milkdown-theme-nord.prose h4,
+.milkdown-theme-nord.prose h5,
+.milkdown-theme-nord.prose h6 {
+  line-height: var(--editor-line-height, 1.7);
+}
+
+/* 代码块：字号保持 nord 的 14px，行高跟随设置 */
+.milkdown-theme-nord.prose pre,
+.milkdown-theme-nord.prose pre code {
+  line-height: var(--editor-line-height, 1.7);
+}
+
+/* 块级元素垂直间距：Nord 主题漏掉了 p / blockquote 的外边距，正文段落之间也贴在一起 */
+.milkdown-theme-nord.prose p,
+.milkdown-theme-nord.prose blockquote {
+  margin-block: calc(var(--spacing) * 4);
+}
+
+.milkdown-theme-nord.prose blockquote p {
+  margin-block: 0;
+}
