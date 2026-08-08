@@ -11,6 +11,8 @@ function basename(p: string): string {
 const doc = ref('')
 const currentPath = ref<string | null>(null)
 const dirty = ref(false)
+// 是否已进入编辑（新建 / 打开 / 恢复草稿后为 true）。未进入时显示 Entry 欢迎页。
+const started = ref(false)
 // 程序性替换内容时置 true，抑制 watch 触发脏标记与草稿写入
 let suppress = false
 
@@ -46,6 +48,7 @@ function loadContent(path: string | null, content: string): void {
   doc.value = content
   currentPath.value = path
   syncDirty(false)
+  started.value = true
   void nextTick(() => {
     suppress = false
   })
@@ -132,6 +135,7 @@ export function useFile() {
     doc,
     currentPath,
     dirty,
+    started,
     filename,
     title,
     loadContent,

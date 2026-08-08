@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { Sun, Moon, PanelLeft, Settings as SettingsIcon } from '@lucide/vue'
 import MilkdownEditor from './editor/MilkdownEditor.vue'
+import EntryScreen from './components/EntryScreen.vue'
 import { useTheme } from './composables/useTheme'
 import { useFile } from './composables/useFile'
 import { useDocStats } from './composables/useDocStats'
@@ -18,6 +19,7 @@ const {
   doc,
   currentPath,
   dirty,
+  started,
   filename,
   title,
   newFile,
@@ -26,7 +28,6 @@ const {
   save,
   saveAs,
   handleCloseRequest,
-  loadContent,
   restoreDraft
 } = useFile()
 
@@ -37,22 +38,13 @@ const { settings } = useSettings()
 
 const showOutline = ref(true)
 const showSettings = ref(false)
+const recentFiles = ref<string[]>([])
 
-const DEFAULT_DOC =
-  '# md-ai\n\n' +
-  '一个 **Typora 式** 的 Markdown 编辑器，正在用 Milkdown 做 WYSIWYG 即时渲染。\n\n' +
-  '## 功能演示\n\n' +
-  '打字时 `#` 会变成标题、`**加粗**` 会即时生效、`-` 会变成列表：\n\n' +
-  '- 列表项一\n- 列表项二\n- 列表项三\n\n' +
-  '> 引用块：所见即所得。\n\n' +
-  '```js\nfunction hello(name) {\n  return `Hello, ${name}!`\n}\n```\n\n' +
-  '```ts\ninterface User { id: number; name: string }\nconst u: User = { id: 1, name: "md-ai" }\n```\n\n' +
-  '```python\ndef greet(name):\n    return f"Hello, {name}!"\n```\n\n' +
-  '代码块现在用 **Shiki** 做语法高亮（打字即时变色）。✅ Phase 2\n\n' +
-  '---\n\n试试 **⌘O 打开** / **⌘S 保存** / **⌘N 新建**，或把 .md 文件拖进窗口。✅ Phase 3\n'
-
-// setup 阶段载入默认文档，再尝试恢复未命名草稿（覆盖默认文档）
-loadContent(null, DEFAULT_DOC)
+// 启动：先拉最近文件供 Entry 页展示；再尝试恢复未命名草稿。
+// 没有草稿则停在 Entry 欢迎页（started 仍为 false），不再自动填入默认示例文档。
+void window.md?.invoke('fs:readRecent').then((r) => {
+  recentFiles.value = Array.isArray(r) ? (r as string[]) : []
+})
 void restoreDraft()
 
 onMounted(() => {
@@ -124,7 +116,22 @@ function onDrop(e: DragEvent): void {
       <main class="flex-1 overflow-auto bg-page-bg">
         <div class="px-3 py-3 min-h-full flex flex-col">
           <div class="relative rounded-xl card-shadow flex-1 flex flex-col">
+            <!-- Entry 欢迎页：未新建/打开任何文档时显示 -->
             <div
+              v-if="!started"
+              class="rounded-xl border border-border-subtle bg-bg overflow-hidden flex-1 flex"
+            >
+              <EntryScreen
+                :recent="recentFiles"
+                @new="newFile"
+                @open="open"
+                @open-recent="openPath"
+              />
+            </div>
+
+            <!-- 编辑器卡片 -->
+            <div
+              v-else
               class="rounded-xl border border-border-subtle bg-bg overflow-hidden flex-1"
             >
               <MilkdownEditor v-model="doc" class="px-6 pt-10 pb-24" />

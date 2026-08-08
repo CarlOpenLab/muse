@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { List } from '@lucide/vue'
-import type { Heading } from '../composables/useOutline'
+import { List, Heading } from '@lucide/vue'
+import type { Heading as HeadingT } from '../composables/useOutline'
 
-defineProps<{ headings: Heading[] }>()
+defineProps<{ headings: HeadingT[] }>()
 const emit = defineEmits<{ jump: [index: number]; close: [] }>()
 </script>
 
@@ -34,9 +34,13 @@ const emit = defineEmits<{ jump: [index: number]; close: [] }>()
     </ul>
     <div
       v-else
-      class="flex-1 flex items-center justify-center text-xs text-fg-soft opacity-60 py-4"
+      class="flex-1 flex flex-col items-center justify-center gap-2 text-fg-soft py-10 px-4 text-center"
     >
-      暂无标题
+      <Heading :size="22" class="opacity-25" />
+      <div class="text-xs opacity-70">暂无大纲</div>
+      <div class="text-[11px] opacity-40 leading-relaxed">
+        打开或新建文档后，<br />标题会显示在这里
+      </div>
     </div>
   </aside>
 </template>
