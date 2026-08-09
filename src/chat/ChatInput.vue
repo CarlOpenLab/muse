@@ -2,7 +2,7 @@
 import { computed, h, ref } from 'vue'
 import type { PromptsItemType } from '@antdv-next/x'
 import { Prompts, Sender } from '@antdv-next/x'
-import { BrainCircuit, FileCode2, MessageSquareText, Square } from '@lucide/vue'
+import { BrainCircuit, FileCode2, Square, Sparkles } from '@lucide/vue'
 
 const props = defineProps<{
   modelValue: string
@@ -26,7 +26,7 @@ defineExpose({ focus })
 const promptItems: PromptsItemType[] = [
   {
     key: 'hello',
-    icon: h(MessageSquareText, { size: 15 }),
+    icon: h(Sparkles, { size: 15 }),
     label: '打个招呼',
     description: '你好，Muse AI！',
   },
@@ -64,14 +64,14 @@ const showPrompts = computed(() => props.showPrompts && !props.loading)
 </script>
 
 <template>
-  <footer class="chat-footer shrink-0 px-4 pb-4 pt-1">
+  <footer class="chat-footer shrink-0 px-6 pb-5 pt-2">
     <Prompts
       v-if="showPrompts"
       class="chat-prompts"
       :items="promptItems"
       title="试试这样问"
-      vertical
-      @prompt-click="handlePromptClick"
+      :wrap="true"
+      @item-click="handlePromptClick"
     />
 
     <Sender
@@ -85,9 +85,9 @@ const showPrompts = computed(() => props.showPrompts && !props.loading)
       :on-cancel="() => emit('cancel')"
     >
       <template #footer="{ defaultNode }">
-        <div class="flex items-center justify-between gap-2 min-h-[34px]">
+        <div class="flex items-center justify-between gap-3 min-h-[34px]">
           <span class="text-[11px] text-fg-soft select-none">
-            本地演示模式 · 接入 API 后启用流式输出
+            Muse AI 可能会出错，请核查重要信息。
           </span>
           <a-tooltip v-if="loading" title="停止生成">
             <a-button
@@ -104,33 +104,32 @@ const showPrompts = computed(() => props.showPrompts && !props.loading)
         </div>
       </template>
     </Sender>
-    <p class="mt-1.5 mb-0 text-center text-[10px] text-fg-soft select-none">
-      Muse AI 可能会出错，请核查重要信息。
-    </p>
   </footer>
 </template>
 
 <style scoped>
 .chat-footer :deep(.antd-sender) {
-  width: min(100%, 780px);
+  width: min(100%, 760px);
   margin: 0 auto;
 }
 .chat-footer :deep(.antd-sender-main) {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--bg);
-  box-shadow: 0 4px 16px rgba(9, 9, 11, 0.06);
+  box-shadow: 0 2px 12px rgba(9, 9, 11, 0.05);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 .chat-footer :deep(.antd-sender-main:focus-within) {
   border-color: var(--fg-soft);
-  box-shadow: 0 0 0 1px var(--fg-soft), 0 4px 16px rgba(9, 9, 11, 0.06);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--fg-soft) 14%, transparent),
+    0 4px 20px rgba(9, 9, 11, 0.07);
 }
 .chat-footer :deep(.antd-sender-content) {
-  padding: 10px 12px 2px;
+  padding: 12px 14px 2px;
 }
 .chat-footer :deep(.antd-sender-footer) {
-  padding: 0 12px 8px;
+  padding: 0 12px 10px;
 }
 .chat-footer :deep(textarea) {
   color: var(--fg);
@@ -143,18 +142,53 @@ const showPrompts = computed(() => props.showPrompts && !props.loading)
   opacity: 0.75;
 }
 .chat-footer :deep(.antd-sender-actions-btn) {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 9px;
   background: var(--accent);
   color: var(--bg);
+  box-shadow: 0 2px 6px rgba(9, 9, 11, 0.18);
 }
+.chat-footer :deep(.antd-sender-actions-btn:disabled) {
+  opacity: 0.35;
+  box-shadow: none;
+}
+.chat-footer :deep(.antd-sender-actions-btn:hover:not(:disabled)) {
+  opacity: 0.9;
+}
+
+/* Prompts：横向卡片网格 */
 .chat-prompts {
-  width: min(100%, 780px);
-  margin: 0 auto 10px;
+  width: min(100%, 760px);
+  margin: 0 auto 12px;
+}
+.chat-prompts :deep(.antd-prompts-list) {
+  grid-template-columns: repeat(3, 1fr);
 }
 .chat-prompts :deep(.antd-prompts-item) {
-  border-color: var(--border);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+.chat-prompts :deep(.antd-prompts-item:hover) {
+  border-color: var(--fg-soft);
+  box-shadow: 0 4px 14px rgba(9, 9, 11, 0.07);
+  transform: translateY(-1px);
+}
+.chat-prompts :deep(.antd-prompts-title) {
+  font-size: 12px;
+  color: var(--fg-soft);
+  margin-bottom: 8px;
+}
+.chat-prompts :deep(.antd-prompts-item-label) {
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+.chat-prompts :deep(.antd-prompts-item-description) {
+  color: var(--fg-soft);
+  font-size: 12px;
 }
 </style>

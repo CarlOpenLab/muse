@@ -338,8 +338,10 @@ function onDrop(e: DragEvent): void {
 
           <!-- 右侧内容区：画布 + 编辑卡片（大纲收进卡片内，Notion 风格右侧边栏） -->
           <main class="flex-1 overflow-auto bg-page-bg">
-            <div class="px-3 py-3 min-h-full flex flex-col">
-              <div class="relative rounded-xl card-shadow flex-1 flex flex-col overflow-hidden">
+            <div class="px-3 py-3 h-full flex flex-col">
+              <div
+                class="relative rounded-xl card-shadow flex-1 flex flex-col overflow-hidden bg-bg"
+              >
                 <!-- ===== 视图一：Markdown 编辑器 ===== -->
                 <div v-show="activeView === 'editor'" class="flex-1 min-h-0 flex flex-col">
                   <!-- Entry 欢迎页：未新建 / 打开任何文档时显示 -->

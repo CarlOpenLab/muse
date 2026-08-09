@@ -2,7 +2,7 @@
 import { computed, h } from 'vue'
 import type { ConversationItemType, ConversationsProps } from '@antdv-next/x'
 import { Conversations } from '@antdv-next/x'
-import { Ellipsis, MessageSquareText, Pencil, Pin, Trash2 } from '@lucide/vue'
+import { Ellipsis, MessageSquareText, Pencil, Pin, Sparkles, Trash2 } from '@lucide/vue'
 import type { Conversation } from './useChat'
 
 const props = defineProps<{
@@ -73,41 +73,110 @@ function handleActiveChange(key: string): void {
 </script>
 
 <template>
-  <aside class="chat-sidebar w-56 shrink-0 flex flex-col border-r border-border bg-bg-soft">
-    <div class="px-2.5 pt-2.5 pb-1">
-      <a-button block type="text" class="!justify-start !h-9 !rounded-lg" @click="emit('new')">
-        <template #icon><MessageSquareText :size="15" /></template>
-        <span class="text-[13px]">新对话</span>
-      </a-button>
+  <aside class="chat-sidebar w-[236px] shrink-0 flex flex-col bg-bg border-r border-border">
+    <!-- 品牌区 + 新对话 -->
+    <div class="px-3 pt-3.5 pb-2.5 space-y-3">
+      <div class="flex items-center gap-2 px-1">
+        <span class="grid place-items-center w-6 h-6 rounded-md bg-accent text-bg">
+          <Sparkles :size="13" />
+        </span>
+        <span class="text-[13px] font-semibold tracking-wide select-none">Muse AI</span>
+      </div>
+      <button type="button" class="new-chat-btn" @click="emit('new')">
+        <MessageSquareText :size="15" />
+        <span>新对话</span>
+      </button>
     </div>
-    <div class="flex-1 min-h-0 overflow-y-auto px-1.5 pb-2">
+
+    <!-- 会话列表 -->
+    <div class="flex-1 min-h-0 overflow-y-auto px-2 pb-2 chat-list">
       <Conversations
         :items="items"
         :active-key="props.activeKey"
         :menu="menu"
+        :on-active-change="handleActiveChange"
+        @update:active-key="handleActiveChange"
         :groupable="{ collapsible: true }"
-        @active-change="handleActiveChange"
       />
+    </div>
+
+    <!-- 底部状态 -->
+    <div
+      class="shrink-0 px-4 py-2.5 border-t border-border-subtle flex items-center gap-1.5 text-[11px] text-fg-soft select-none"
+    >
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500/80"></span>
+      本地演示模式
     </div>
   </aside>
 </template>
 
 <style scoped>
+.new-chat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+.new-chat-btn:hover {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+.new-chat-btn:active {
+  transform: scale(0.98);
+}
+
+/* Conversations：让 item 更紧凑精致，选中态黑底白字（shadcn 风格） */
 .chat-sidebar :deep(.antd-conversations) {
   padding: 0;
 }
 .chat-sidebar :deep(.antd-conversations-item) {
+  height: 34px;
   border-radius: 8px;
+  padding-inline: 8px;
+  margin-block: 1px;
+  transition: background 120ms ease;
+}
+.chat-sidebar :deep(.antd-conversations-item:hover) {
+  background: var(--bg-soft);
+}
+.chat-sidebar :deep(.antd-conversations-item-active),
+.chat-sidebar :deep(.antd-conversations-item-active:hover) {
+  background: var(--fg);
+}
+.chat-sidebar :deep(.antd-conversations-item-active .antd-conversations-item-label),
+.chat-sidebar :deep(.antd-conversations-item-active .antd-conversations-item-icon) {
+  color: var(--bg);
 }
 .chat-sidebar :deep(.antd-conversations-item-label) {
   font-size: 13px;
+  color: var(--fg);
+}
+.chat-sidebar :deep(.antd-conversations-item-icon) {
+  color: var(--fg-soft);
+}
+.chat-sidebar :deep(.antd-conversations-group-label) {
+  font-size: 11px;
+  color: var(--fg-soft);
+  font-weight: 500;
+  padding: 10px 8px 4px;
 }
 .conversation-menu-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border: 0;
   border-radius: 6px;
   background: transparent;

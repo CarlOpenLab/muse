@@ -50,9 +50,7 @@ watch(activeKey, () => {
 </script>
 
 <template>
-  <div
-    class="relative rounded-xl border border-border bg-bg overflow-hidden flex-1 flex min-h-0"
-  >
+  <div class="chat-view flex h-full min-h-0">
     <ChatSidebar
       :conversations="conversationList"
       :active-key="activeKey"
@@ -62,20 +60,24 @@ watch(activeKey, () => {
       @remove="removeConversation"
     />
 
-    <div class="flex-1 min-w-0 flex flex-col bg-page-bg">
+    <div class="flex-1 min-w-0 flex flex-col bg-bg">
       <!-- 顶栏 -->
       <header
-        class="h-11 shrink-0 flex items-center justify-between px-4 border-b border-border-subtle bg-bg"
+        class="shrink-0 h-12 flex items-center justify-between px-5 border-b border-border-subtle select-none"
       >
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="text-[13px] font-semibold truncate">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="text-[14px] font-semibold truncate tracking-tight">
             {{ activeConversation?.label ?? '新对话' }}
           </span>
         </div>
         <span
-          class="shrink-0 text-[11px] px-2 py-0.5 rounded-full border border-border-subtle text-fg-soft select-none"
+          class="shrink-0 inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border border-border-subtle text-fg-soft"
         >
-          {{ isRequesting ? '生成中…' : 'Muse AI' }}
+          <span
+            class="w-1.5 h-1.5 rounded-full"
+            :class="isRequesting ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500/80'"
+          ></span>
+          {{ isRequesting ? '生成中' : 'Muse AI 在线' }}
         </span>
       </header>
 

@@ -45,25 +45,24 @@ const lastAssistantKey = computed(
 )
 
 const markdownComponents = { code: MarkdownCodeRenderer }
+
+/** XMarkdown 主题类：需带上 x-markdown-light/dark 才能命中主题 CSS */
+const markdownClassName = computed(() =>
+  props.isDark ? 'chat-markdown x-markdown-dark' : 'chat-markdown x-markdown-light'
+)
 </script>
 
 <template>
   <main class="chat-messages flex-1 min-h-0 overflow-hidden">
     <!-- 空状态 -->
-    <section v-if="showWelcome" class="h-full flex items-center justify-center">
+    <section v-if="showWelcome" class="h-full flex items-center justify-center px-6">
       <Welcome
-        class="chat-welcome"
+        class="chat-welcome flex-col items-center text-center"
         variant="borderless"
         title="今天想一起完成什么？"
         description="和 Muse AI 聊聊：总结文档、写代码、整理思路，灵感逐字涌现。"
       >
-        <template #icon><Sparkles :size="20" /></template>
-        <template #extra>
-          <div class="chat-welcome-tips">
-            <span>💡 试试「写一段 Vue 代码」</span>
-            <span>🧠 试试「介绍一下 Muse 架构」</span>
-          </div>
-        </template>
+        <template #icon><Sparkles :size="22" /></template>
       </Welcome>
     </section>
 
@@ -99,7 +98,7 @@ const markdownComponents = { code: MarkdownCodeRenderer }
               ? { hasNextChunk: isStreaming(item.status), enableAnimation: false }
               : undefined
           "
-          class-name="chat-markdown"
+          :class-name="markdownClassName"
         />
       </template>
 
@@ -130,16 +129,25 @@ const markdownComponents = { code: MarkdownCodeRenderer }
 
 <style scoped>
 .chat-messages :deep(.antd-bubble-list) {
-  width: min(100%, 780px);
+  width: min(100%, 760px);
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 28px;
 }
 .chat-messages :deep(.antd-bubble-list-scroll-content) {
-  padding-block: 20px;
+  padding-block: 28px 12px;
 }
 .chat-messages :deep(.antd-bubble) {
   max-width: 100%;
   padding-block: 12px;
+}
+.chat-messages :deep(.antd-bubble-start) {
+  padding-inline-end: 48px;
+}
+.chat-messages :deep(.antd-bubble-end) {
+  padding-inline-start: 48px;
+}
+.chat-messages :deep(.antd-bubble-avatar) {
+  min-width: 30px;
 }
 .chat-messages :deep(.antd-bubble-start .antd-bubble-content) {
   background: transparent;
@@ -147,7 +155,7 @@ const markdownComponents = { code: MarkdownCodeRenderer }
 }
 .chat-messages :deep(.antd-bubble-end .antd-bubble-content) {
   padding: 10px 14px;
-  border-radius: 12px 12px 4px;
+  border-radius: 14px 14px 4px 14px;
   background: var(--bg-soft);
   color: var(--fg);
   border: 1px solid var(--border-subtle);
@@ -157,18 +165,18 @@ const markdownComponents = { code: MarkdownCodeRenderer }
   place-items: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  border-radius: 9px;
   flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(9, 9, 11, 0.06);
 }
 .chat-avatar-assistant {
   background: var(--accent);
   color: var(--bg);
-  border-color: var(--accent);
 }
 .chat-avatar-user {
   background: var(--bg-soft);
   color: var(--fg-soft);
+  border: 1px solid var(--border);
 }
 .chat-user-text {
   white-space: pre-wrap;
@@ -196,9 +204,10 @@ const markdownComponents = { code: MarkdownCodeRenderer }
 .chat-markdown :deep(h2),
 .chat-markdown :deep(h3),
 .chat-markdown :deep(h4) {
-  margin: 18px 0 10px;
+  margin: 20px 0 10px;
   font-weight: 650;
   line-height: 1.35;
+  letter-spacing: -0.01em;
 }
 .chat-markdown :deep(h1) {
   font-size: 20px;
@@ -215,14 +224,14 @@ const markdownComponents = { code: MarkdownCodeRenderer }
   padding-left: 22px;
 }
 .chat-markdown :deep(li) {
-  margin: 3px 0;
+  margin: 4px 0;
 }
 .chat-markdown :deep(blockquote) {
   margin: 0 0 12px;
-  padding: 6px 12px;
+  padding: 8px 14px;
   border-left: 3px solid var(--border);
   background: var(--bg-soft);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 8px 8px 0;
   color: var(--fg-soft);
 }
 .chat-markdown :deep(code) {
@@ -233,6 +242,8 @@ const markdownComponents = { code: MarkdownCodeRenderer }
 }
 .chat-markdown :deep(pre) {
   margin: 0 0 12px;
+  border-radius: 10px;
+  overflow: hidden;
 }
 .chat-markdown :deep(pre code) {
   padding: 0;
@@ -243,10 +254,12 @@ const markdownComponents = { code: MarkdownCodeRenderer }
   margin: 0 0 12px;
   border-collapse: collapse;
   font-size: 13px;
+  border-radius: 8px;
+  overflow: hidden;
 }
 .chat-markdown :deep(th),
 .chat-markdown :deep(td) {
-  padding: 6px 10px;
+  padding: 7px 12px;
   border: 1px solid var(--border);
   text-align: left;
 }
@@ -260,7 +273,7 @@ const markdownComponents = { code: MarkdownCodeRenderer }
   text-underline-offset: 2px;
 }
 .chat-markdown :deep(hr) {
-  margin: 16px 0;
+  margin: 18px 0;
   border: 0;
   border-top: 1px solid var(--border);
 }
@@ -272,29 +285,23 @@ const markdownComponents = { code: MarkdownCodeRenderer }
 .chat-welcome :deep(.antd-welcome-icon) {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  margin: 0 auto 12px;
-  border-radius: 10px;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 18px;
+  border-radius: 14px;
   background: var(--accent);
   color: var(--bg);
+  box-shadow: 0 8px 24px rgba(9, 9, 11, 0.14);
 }
 .chat-welcome :deep(.antd-welcome-title) {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   color: var(--fg);
-  font-size: 22px;
-  font-weight: 680;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 .chat-welcome :deep(.antd-welcome-description) {
   color: var(--fg-soft);
   font-size: 13px;
-}
-.chat-welcome-tips {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 14px;
-  color: var(--fg-soft);
-  font-size: 12px;
 }
 </style>
