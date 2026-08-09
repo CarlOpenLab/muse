@@ -51,11 +51,12 @@ function handleSubmit(value: string): void {
   send(value)
 }
 
-// 首次进入且没有任何会话时，自动新建一个空会话（进入 welcome 态）
+// 首次进入 AI Chat：从「新对话」开始（历史会话保留在侧栏），与编辑器首次启动停在欢迎页一致。
+// 已有空会话则复用，避免每次启动堆积空的「新对话」。
 onMounted(() => {
-  if (!activeKey.value && conversationList.value.length === 0) {
-    newConversation()
-  }
+  const empty = conversationList.value.find((c) => c.messages.length === 0)
+  if (empty) activate(empty.key)
+  else newConversation()
 })
 
 // 切换会话时清空输入草稿

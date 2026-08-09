@@ -156,7 +156,10 @@ export function useChat() {
     XModelResponse
   >({
     provider,
-    defaultMessages: () => activeConversation.value?.messages ?? [],
+    // 缓冲区初始化必须为空：defaultMessages 是异步加载，若指向会话内容会在
+    // 会话切换后迟到写入，污染新会话（空「新对话」被塞入旧消息）。
+    // 渲染读的是 conversation.messages，发送前也总是先 setMessages 同步，无需此处预加载。
+    defaultMessages: () => [],
     requestPlaceholder: () => ({ role: 'assistant', content: '思考中…' }),
     requestFallback: (_, { error }) => {
       if (error?.name === 'AbortError') {
