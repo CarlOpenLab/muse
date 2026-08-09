@@ -304,7 +304,7 @@ function onDrop(e: DragEvent): void {
                 type="text"
                 shape="circle"
                 size="small"
-                :class="{ '!bg-border-subtle': activeView === 'editor' }"
+                :class="{ '!bg-accent !text-bg': activeView === 'editor' }"
                 title="Markdown 编辑器"
                 @click="activeView = 'editor'"
               >
@@ -314,7 +314,7 @@ function onDrop(e: DragEvent): void {
                 type="text"
                 shape="circle"
                 size="small"
-                :class="{ '!bg-border-subtle': activeView === 'chat' }"
+                :class="{ '!bg-accent !text-bg': activeView === 'chat' }"
                 title="AI 对话"
                 @click="activeView = 'chat'"
               >

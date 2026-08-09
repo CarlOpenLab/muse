@@ -11,7 +11,6 @@ const {
   conversationList,
   activeKey,
   activeConversation,
-  showWelcome,
   isRequesting,
   newConversation,
   activate,
@@ -92,7 +91,6 @@ watch(activeKey, () => {
         ref="senderRef"
         v-model="draft"
         :loading="isRequesting"
-        :show-prompts="showWelcome"
         @submit="handleSubmit"
         @cancel="stop"
       />
