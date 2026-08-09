@@ -333,7 +333,7 @@ body {
 /* 右侧大纲侧边栏：宽度折叠动画（shadcn 风格，占位式挤压内容） */
 .sidebar-enter-active,
 .sidebar-leave-active {
-  transition: width 0.22s ease, opacity 0.22s ease;
+  transition: width 0.22s ease, opacity 0.22s ease, border-left-width 0.22s ease;
   overflow: hidden;
 }
 .sidebar-enter-from,
@@ -404,4 +404,55 @@ body {
 
 .milkdown-theme-nord.prose blockquote p {
   margin-block: 0;
+}
+
+/* ===== 大纲列表（Notion 风格右侧边栏） =====
+ * 扁平标题列表，按层级缩进，无折叠箭头；hover / active 用 --fg 半透明叠加，
+ * 亮暗模式同向着色（亮色变浅灰、暗色变浅白）。active 由 App 滚动监听驱动，
+ * 点亮当前阅读章节。 */
+.outline-item {
+  display: block;
+  width: 100%;
+  padding: 4px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-soft);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.outline-item:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--fg);
+}
+
+.outline-item.active {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+/* 层级缩进：每级递增，深层标题略小 */
+.outline-item[data-level='2'] {
+  padding-left: 22px;
+}
+.outline-item[data-level='3'] {
+  padding-left: 34px;
+}
+.outline-item[data-level='4'] {
+  padding-left: 46px;
+}
+.outline-item[data-level='5'] {
+  padding-left: 54px;
+  font-size: 12px;
+}
+.outline-item[data-level='6'] {
+  padding-left: 62px;
+  font-size: 12px;
 }

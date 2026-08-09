@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { Sun, Moon, PanelRight, Settings as SettingsIcon } from '@lucide/vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { Sun, Moon, PanelRightOpen, PanelRightClose, Settings as SettingsIcon } from '@lucide/vue'
 import { ConfigProvider, theme as antdTheme } from 'antdv-next'
 import { ThemeProvider } from 'antdv-style'
 import MilkdownEditor from './editor/MilkdownEditor.vue'
@@ -224,13 +224,48 @@ watch(title, (t) => {
   document.title = t
 }, { immediate: true })
 
+const editorScrollRef = ref<HTMLElement | null>(null)
+const activeHeading = ref(-1)
+
 /** 点击大纲跳转：按文档顺序匹配第 index 个标题 DOM */
 function scrollToHeading(index: number): void {
-  const heads = document.querySelectorAll(
+  activeHeading.value = index
+  const heads = editorScrollRef.value?.querySelectorAll(
     '.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6'
   )
-  heads[index]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  heads?.[index]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
+
+/** 滚动时同步「当前章节」高亮（Notion 风格）：取越过顶部阈值线的最后一个标题 */
+let scrollRaf = 0
+function onEditorScroll(): void {
+  if (scrollRaf) return
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = 0
+    const container = editorScrollRef.value
+    if (!container) return
+    const heads = container.querySelectorAll<HTMLElement>(
+      '.ProseMirror h1,.ProseMirror h2,.ProseMirror h3,.ProseMirror h4,.ProseMirror h5,.ProseMirror h6'
+    )
+    if (!heads.length) {
+      activeHeading.value = -1
+      return
+    }
+    const cTop = container.getBoundingClientRect().top
+    const threshold = 40
+    let active = -1
+    heads.forEach((el, i) => {
+      if (el.getBoundingClientRect().top - cTop <= threshold) active = i
+    })
+    activeHeading.value = active === -1 ? 0 : active
+  })
+}
+
+// 文档变化（打开 / 新建 / 编辑标题）后重置高亮并重算
+watch(headings, () => {
+  activeHeading.value = headings.value.length ? 0 : -1
+  nextTick(onEditorScroll)
+})
 
 function onDrop(e: DragEvent): void {
   const f = e.dataTransfer?.files?.[0]
@@ -263,22 +298,10 @@ function onDrop(e: DragEvent): void {
             </div>
           </aside>
 
-          <!-- 右侧内容区：画布 + 编辑卡片（卡片右上角放大纲折叠开关） -->
+          <!-- 右侧内容区：画布 + 编辑卡片（大纲收进卡片内，Notion 风格右侧边栏） -->
           <main class="flex-1 overflow-auto bg-page-bg">
             <div class="px-3 py-3 min-h-full flex flex-col">
-              <div class="relative rounded-xl card-shadow flex-1 flex flex-col">
-                <!-- 卡片右上角：大纲折叠开关（对齐 shadcn Header 的 SidebarTrigger） -->
-                <div class="absolute top-2 right-2 z-10">
-                  <a-button
-                    type="text"
-                    shape="circle"
-                    size="small"
-                    :title="showOutline ? '隐藏大纲' : '显示大纲'"
-                    @click="showOutline = !showOutline"
-                  >
-                    <template #icon><PanelRight :size="16" /></template>
-                  </a-button>
-                </div>
+              <div class="relative rounded-xl card-shadow flex-1 flex flex-col overflow-hidden">
                 <!-- Entry 欢迎页：未新建 / 打开任何文档时显示 -->
                 <div
                   v-if="!started"
@@ -292,21 +315,51 @@ function onDrop(e: DragEvent): void {
                   />
                 </div>
 
-                <!-- 编辑器卡片 -->
+                <!-- 编辑器卡片：编辑区 + 大纲侧边栏（均在卡片内） -->
                 <div
                   v-else
-                  class="rounded-xl border border-border bg-bg overflow-hidden flex-1"
+                  class="relative rounded-xl border border-border bg-bg overflow-hidden flex-1 flex"
                 >
-                  <MilkdownEditor v-model="doc" class="px-6 pt-6 pb-24" />
+                  <!-- 大纲开关：常驻卡片右上角，图标随状态切换（单按钮，避免收展动画出现两个图标） -->
+                  <div class="absolute top-2 right-2 z-20">
+                    <a-button
+                      type="text"
+                      shape="circle"
+                      size="small"
+                      :title="showOutline ? '隐藏大纲' : '显示大纲'"
+                      @click="showOutline = !showOutline"
+                    >
+                      <template #icon>
+                        <PanelRightClose v-if="showOutline" :size="16" />
+                        <PanelRightOpen v-else :size="16" />
+                      </template>
+                    </a-button>
+                  </div>
+
+                  <!-- 编辑区（内部滚动，卡片高度固定，对齐 Notion） -->
+                  <div class="flex-1 min-w-0 flex flex-col">
+                    <div
+                      ref="editorScrollRef"
+                      class="flex-1 overflow-y-auto"
+                      @scroll.passive="onEditorScroll"
+                    >
+                      <MilkdownEditor v-model="doc" class="px-6 pt-6 pb-24" />
+                    </div>
+                  </div>
+
+                  <!-- 大纲侧边栏（右侧，卡片内） -->
+                  <Transition name="sidebar">
+                    <OutlinePanel
+                      v-if="showOutline"
+                      :headings="headings"
+                      :active="activeHeading"
+                      @jump="scrollToHeading"
+                    />
+                  </Transition>
                 </div>
               </div>
             </div>
           </main>
-
-          <!-- 大纲侧边栏（右侧） -->
-          <Transition name="sidebar">
-            <OutlinePanel v-if="showOutline" :headings="headings" @jump="scrollToHeading" />
-          </Transition>
         </div>
 
         <SettingsPanel :open="showSettings" @close="showSettings = false" />
