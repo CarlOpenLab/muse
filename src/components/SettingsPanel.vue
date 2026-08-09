@@ -1,58 +1,47 @@
 <script setup lang="ts">
-import { X } from '@lucide/vue'
 import { useSettings } from '../composables/useSettings'
 
 const { settings } = useSettings()
+
+defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 z-30 bg-black/25 flex justify-end"
-    @click.self="emit('close')"
+  <a-drawer
+    :open="open"
+    title="设置"
+    placement="right"
+    :width="320"
+    @close="emit('close')"
   >
-    <div
-      class="panel-glass w-80 h-full rounded-l-2xl border-l border-border-subtle shadow-2xl p-5 flex flex-col gap-5"
-    >
-      <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold">设置</h2>
-        <button
-          class="w-7 h-7 flex items-center justify-center rounded text-fg-soft hover:bg-bg-soft hover:text-fg transition-colors"
-          @click="emit('close')"
-        >
-          <X :size="16" />
-        </button>
-      </div>
-
-      <label class="flex flex-col gap-2 text-xs text-fg-soft">
-        <span class="flex items-center justify-between">
+    <a-form layout="vertical">
+      <a-form-item>
+        <template #label>
           <span>字号</span>
-          <b class="text-fg tabular-nums">{{ settings.fontSize }}px</b>
-        </span>
-        <input
-          v-model.number="settings.fontSize"
-          type="range"
-          min="12"
-          max="22"
-          step="1"
-          class="accent-(--accent)"
+          <span class="ml-2 text-xs text-fg-soft tabular-nums">{{ settings.fontSize }}px</span>
+        </template>
+        <a-slider
+          v-model:value="settings.fontSize"
+          :min="12"
+          :max="22"
+          :step="1"
+          :marks="{ 12: '12', 22: '22' }"
         />
-      </label>
-
-      <label class="flex flex-col gap-2 text-xs text-fg-soft">
-        <span class="flex items-center justify-between">
+      </a-form-item>
+      <a-form-item>
+        <template #label>
           <span>行高</span>
-          <b class="text-fg tabular-nums">{{ settings.lineHeight }}</b>
-        </span>
-        <input
-          v-model.number="settings.lineHeight"
-          type="range"
-          min="1.4"
-          max="2.2"
-          step="0.1"
-          class="accent-(--accent)"
+          <span class="ml-2 text-xs text-fg-soft tabular-nums">{{ settings.lineHeight }}</span>
+        </template>
+        <a-slider
+          v-model:value="settings.lineHeight"
+          :min="1.4"
+          :max="2.2"
+          :step="0.1"
+          :marks="{ 1.4: '1.4', 2.2: '2.2' }"
         />
-      </label>
-    </div>
-  </div>
+      </a-form-item>
+    </a-form>
+  </a-drawer>
 </template>

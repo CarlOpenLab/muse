@@ -2,6 +2,8 @@ import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
+import Components from 'unplugin-vue-components/vite'
+import { AntdvNextResolver } from '@antdv-next/auto-import-resolver'
 
 // 三端构建：main / preload / renderer
 // main 与 preload 走 externalizeDepsPlugin（electron 及依赖不打包）
@@ -35,6 +37,6 @@ export default defineConfig({
         '@': resolve(__dirname, 'src')
       }
     },
-    plugins: [UnoCSS(), vue()]
+    plugins: [UnoCSS(), vue(), Components({ resolvers: [AntdvNextResolver()], dts: 'src/components.d.ts' })]
   }
 })

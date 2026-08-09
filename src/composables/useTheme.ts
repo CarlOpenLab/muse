@@ -31,6 +31,7 @@ const isDark = ref(initialTheme() === 'dark')
 
 function apply(dark: boolean): void {
   document.documentElement.classList.toggle('dark', dark)
+  document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
   setActiveShikiTheme(dark ? 'github-dark' : 'github-light')
   // Shiki 可能尚未加载（activeView 为空时为空操作）；已加载则立即用新主题重着色
   refreshShikiHighlight()

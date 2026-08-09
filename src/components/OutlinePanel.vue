@@ -1,46 +1,62 @@
 <script setup lang="ts">
-import { List, Heading } from '@lucide/vue'
+import { computed } from 'vue'
 import type { Heading as HeadingT } from '../composables/useOutline'
 
-defineProps<{ headings: HeadingT[] }>()
-const emit = defineEmits<{ jump: [index: number]; close: [] }>()
+interface TreeNode {
+  title: string
+  key: number
+  children?: TreeNode[]
+}
+
+const props = defineProps<{ headings: HeadingT[] }>()
+const emit = defineEmits<{ jump: [index: number] }>()
+
+// 扁平标题列表（带 level） -> 嵌套树，供 a-tree 渲染
+const treeData = computed<TreeNode[]>(() => {
+  const root: TreeNode[] = []
+  const stack: { node: TreeNode; level: number }[] = []
+  for (const h of props.headings) {
+    const node: TreeNode = { title: h.text, key: h.index }
+    while (stack.length && stack[stack.length - 1].level >= h.level) stack.pop()
+    if (stack.length) {
+      ;(stack[stack.length - 1].node.children ??= []).push(node)
+    } else {
+      root.push(node)
+    }
+    stack.push({ node, level: h.level })
+  }
+  return root
+})
+
+function onSelect(keys: (string | number)[]): void {
+  if (keys.length) emit('jump', Number(keys[0]))
+}
 </script>
 
 <template>
-  <aside class="w-56 shrink-0 bg-page-bg overflow-y-auto flex flex-col">
+  <aside class="w-56 shrink-0 bg-page-bg border-l border-border-subtle overflow-y-auto flex flex-col">
     <div
-      class="flex items-center justify-between px-4 pt-3 pb-2 text-xs text-fg-soft uppercase tracking-wide select-none"
+      class="flex items-center px-4 pt-3 pb-2 text-xs text-fg-soft uppercase tracking-wide select-none"
     >
-      <span class="flex items-center gap-1.5"><List :size="13" /> 大纲</span>
-      <button
-        class="w-5 h-5 flex items-center justify-center rounded hover:bg-bg hover:text-fg transition-colors"
-        @click="emit('close')"
-        title="收起大纲"
-      >
-        ✕
-      </button>
+      <span>大纲</span>
     </div>
-    <ul v-if="headings.length" class="py-1.5 text-sm">
-      <li
-        v-for="h in headings"
-        :key="h.index"
-        class="outline-item px-3.5 py-1 cursor-pointer truncate text-fg-soft hover:text-fg hover:bg-bg transition-colors"
-        :style="{ paddingLeft: 14 + (h.level - 1) * 14 + 'px' }"
-        :title="h.text"
-        @click="emit('jump', h.index)"
-      >
-        {{ h.text }}
-      </li>
-    </ul>
-    <div
-      v-else
-      class="flex-1 flex flex-col items-center justify-center gap-2 text-fg-soft py-10 px-4 text-center"
-    >
-      <Heading :size="22" class="opacity-25" />
-      <div class="text-xs opacity-70">暂无大纲</div>
-      <div class="text-[11px] opacity-40 leading-relaxed">
-        打开或新建文档后，<br />标题会显示在这里
-      </div>
+    <a-tree
+      v-if="headings.length"
+      :tree-data="treeData"
+      :default-expand-all="true"
+      block-node
+      class="!px-1 !text-sm"
+      @select="onSelect"
+    />
+    <div v-else class="flex-1 flex items-center justify-center px-4">
+      <a-empty>
+        <template #description>
+          <div class="text-xs text-fg-soft">
+            <div>暂无大纲</div>
+            <div class="text-[11px] opacity-60 mt-1">打开或新建文档后，标题会显示在这里</div>
+          </div>
+        </template>
+      </a-empty>
     </div>
   </aside>
 </template>

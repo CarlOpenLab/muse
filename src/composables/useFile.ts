@@ -1,4 +1,5 @@
 import { ref, computed, watch, nextTick } from 'vue'
+import { dispatchEditorAction } from './useEditorControl'
 
 // 渲染进程无 node:path，自备 basename（兼容 / 与 \）
 function basename(p: string): string {
@@ -69,7 +70,10 @@ async function newFile(): Promise<void> {
   if (!(await confirmDiscard())) return
   // 新建后清掉旧草稿，避免下次启动恢复到已废弃内容
   void window.md?.invoke('fs:clearDraft')
-  loadContent(null, '')
+  // 初始内容为一个空 H1（标题位）：placeholderPlugin 会在其上显示「无标题」占位；
+  // focus-after-title 动作会在标题后补一个空段落并聚焦其起始，让用户从「标题下一行」落笔。
+  loadContent(null, '# \n')
+  dispatchEditorAction('focus-after-title')
 }
 
 async function open(): Promise<void> {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useEditor, Milkdown } from '@milkdown/vue'
-import { Editor, rootCtx, defaultValueCtx } from '@milkdown/core'
+import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from '@milkdown/core'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { gfm } from '@milkdown/preset-gfm'
 import { nord } from '@milkdown/theme-nord'
@@ -10,13 +10,17 @@ import { history } from '@milkdown/plugin-history'
 import { clipboard } from '@milkdown/plugin-clipboard'
 import { trailing } from '@milkdown/plugin-trailing'
 import { replaceAll, callCommand } from '@milkdown/utils'
+import { TextSelection } from '@milkdown/prose/state'
+import type { EditorView } from '@milkdown/prose/view'
 import '@milkdown/theme-nord/style.css'
 import { shikiCodeBlock } from './shiki/shikiCodeBlock'
 import { codeBlockView } from './codeBlockView'
 import { codeBlockTabKeymap } from './codeBlockKeymap'
 import { searchPlugin } from './searchPlugin'
 import { searchCommand } from './searchCommands'
+import { placeholderPlugin } from './placeholderPlugin'
 import { useSearch } from '../composables/useSearch'
+import { useEditorControl } from '../composables/useEditorControl'
 
 const props = defineProps<{ modelValue: string }>()
 const emit = defineEmits<{ 'update:modelValue': [string] }>()
@@ -31,8 +35,9 @@ let justLoaded = true
 const stripTrailingNL = (s: string): string => s.replace(/\n+$/, '')
 
 const search = useSearch()
+const { pendingAction } = useEditorControl()
 
-const { get } = useEditor((root) =>
+const { get, loading } = useEditor((root) =>
   Editor.make()
     .config((ctx) => {
       ctx.set(rootCtx, root)
@@ -60,6 +65,7 @@ const { get } = useEditor((root) =>
     .use(trailing)
     .use(searchPlugin)
     .use(searchCommand)
+    .use(placeholderPlugin)
 )
 
 // 外部修改 markdown（如打开文件）时同步进编辑器
@@ -73,6 +79,49 @@ watch(
     if (editor) editor.action(replaceAll(val))
   }
 )
+
+// 编辑器就绪后执行待办动作（如新建文档后聚焦标题下一行）。
+// 同时依赖 loading 与 pendingAction：编辑器未就绪时等就绪，已就绪时等请求。
+// 注册顺序在 modelValue watch 之后，保证「先 replaceAll、再聚焦」的时序。
+watch(
+  [loading, pendingAction],
+  ([isLoading, action]) => {
+    if (isLoading || !action) return
+    const editor = get()
+    if (!editor) return
+    if (action.type === 'focus-after-title') focusAfterTitle(editor)
+    pendingAction.value = null // 消费
+  }
+)
+
+/**
+ * 新建文档后：确保标题（首个 H1）后跟一个空段落，并把光标聚焦到该段落起始，
+ * 让用户落笔在「标题下一行」而非标题里（标题留空显示「无标题」占位）。
+ * 这步产生的段落插入属载入归一化范畴，不应标脏——由 justLoaded 吸收。
+ */
+function focusAfterTitle(editor: Editor): void {
+  editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx) as EditorView
+    const state = view.state
+    const doc = state.doc
+    const first = doc.firstChild
+    if (!first) {
+      view.focus()
+      return
+    }
+    let tr = state.tr
+    // 标题后若无段落，补一个空段落作为正文起始行
+    if (doc.childCount < 2 || doc.child(1).type.name !== 'paragraph') {
+      const pType = state.schema.nodes.paragraph
+      tr = tr.insert(first.nodeSize, pType.create())
+    }
+    // 光标置于标题后第一段起始（paraStart+1 = 段落内容起点）
+    const $pos = tr.doc.resolve(first.nodeSize + 1)
+    tr = tr.setSelection(TextSelection.near($pos))
+    view.dispatch(tr.scrollIntoView())
+    view.focus()
+  })
+}
 
 // 查询词变化 / 文档内容变化 -> 重新搜索
 watch(

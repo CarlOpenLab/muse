@@ -11,158 +11,47 @@ function basename(p: string): string {
 </script>
 
 <template>
-  <div class="entry-screen">
-    <div class="entry-inner">
-      <div class="entry-logo"><Feather :size="28" /></div>
-      <h1 class="entry-title">md-ai</h1>
-      <p class="entry-subtitle">一个 Typora 式的 Markdown 编辑器，所见即所得。</p>
-
-      <div class="entry-actions">
-        <button class="entry-btn primary" @click="emit('new')">
-          <FilePlus :size="16" />
-          <span>新建文件</span>
-        </button>
-        <button class="entry-btn" @click="emit('open')">
-          <FolderOpen :size="16" />
-          <span>打开文件</span>
-        </button>
+  <div class="flex-1 flex overflow-auto p-6">
+    <div class="m-auto flex flex-col items-center text-center max-w-[360px] w-full">
+      <div
+        class="flex items-center justify-center w-14 h-14 mb-4 rounded-2xl text-accent"
+        style="background: color-mix(in srgb, var(--accent) 12%, transparent)"
+      >
+        <Feather :size="28" />
       </div>
+      <a-typography-title :level="3" class="!mb-1">md-ai</a-typography-title>
+      <a-typography-text type="secondary" class="!mb-6 block">
+        一个 Typora 式的 Markdown 编辑器，所见即所得。
+      </a-typography-text>
 
-      <div v-if="recent.length" class="entry-recent">
-        <div class="entry-recent-title">最近打开</div>
-        <ul>
-          <li
-            v-for="p in recent"
-            :key="p"
-            class="entry-recent-item"
-            :title="p"
-            @click="emit('open-recent', p)"
-          >
-            <FileText :size="14" />
-            <span class="truncate">{{ basename(p) }}</span>
-          </li>
-        </ul>
+      <a-space :size="10" class="mb-7">
+        <a-button type="primary" size="large" @click="emit('new')">
+          <template #icon><FilePlus :size="16" /></template>
+          新建文件
+        </a-button>
+        <a-button size="large" @click="emit('open')">
+          <template #icon><FolderOpen :size="16" /></template>
+          打开文件
+        </a-button>
+      </a-space>
+
+      <div v-if="recent.length" class="w-full text-left">
+        <div class="text-xs text-fg-soft uppercase tracking-wide mb-2 px-1">最近打开</div>
+        <a-list size="small" :data-source="recent">
+          <template #renderItem="{ item }">
+            <a-list-item
+              class="!cursor-pointer !px-2.5"
+              :title="item"
+              @click="emit('open-recent', item)"
+            >
+              <div class="flex items-center gap-2">
+                <FileText :size="14" class="text-fg-soft shrink-0" />
+                <span class="text-sm text-fg-soft truncate">{{ basename(item) }}</span>
+              </div>
+            </a-list-item>
+          </template>
+        </a-list>
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.entry-screen {
-  flex: 1 1 0%;
-  min-height: 0;
-  display: flex;
-  overflow: auto;
-  padding: 24px;
-}
-
-.entry-inner {
-  margin: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  max-width: 360px;
-  width: 100%;
-}
-
-.entry-logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 56px;
-  margin-bottom: 16px;
-  border-radius: 16px;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.entry-title {
-  margin: 0 0 6px;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--fg);
-}
-
-.entry-subtitle {
-  margin: 0 0 24px;
-  font-size: 13px;
-  color: var(--fg-soft);
-  line-height: 1.6;
-}
-
-.entry-actions {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 28px;
-}
-
-.entry-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.entry-btn:hover {
-  background: var(--bg-soft);
-  border-color: var(--accent);
-}
-
-.entry-btn.primary {
-  color: var(--bg);
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.entry-btn.primary:hover {
-  background: color-mix(in srgb, var(--accent) 88%, #000);
-}
-
-.entry-recent {
-  width: 100%;
-  text-align: left;
-}
-
-.entry-recent-title {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--fg-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 8px;
-  padding: 0 4px;
-}
-
-.entry-recent ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.entry-recent-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  font-size: 13px;
-  color: var(--fg-soft);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.entry-recent-item:hover {
-  background: var(--bg-soft);
-  color: var(--fg);
-}
-</style>

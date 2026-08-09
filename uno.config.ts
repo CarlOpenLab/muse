@@ -1,4 +1,5 @@
 import { defineConfig, presetWind } from 'unocss'
+import { presetAntd } from '@antdv-next/unocss'
 
 /**
  * UnoCSS 配置。
@@ -8,7 +9,7 @@ import { defineConfig, presetWind } from 'unocss'
  *   等会随 `<html>.dark` 类自动翻转，无需写两套。
  */
 export default defineConfig({
-  presets: [presetWind()],
+  presets: [presetWind(), presetAntd()],
   theme: {
     colors: {
       bg: 'var(--bg)',
