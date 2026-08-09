@@ -2,7 +2,7 @@ import { $prose } from '@milkdown/utils'
 import { Plugin, PluginKey, type EditorState } from '@milkdown/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/prose/view'
 
-export const placeholderKey = new PluginKey<DecorationSet>('mdai-placeholder')
+export const placeholderKey = new PluginKey<DecorationSet>('muse-placeholder')
 
 const TITLE_PLACEHOLDER = '无标题'
 

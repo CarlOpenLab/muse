@@ -2,7 +2,7 @@
 /// <reference types="unocss/vite-client" />
 
 interface Window {
-  md?: {
+  muse?: {
     version: string
     platform: string
     invoke: (channel: string, ...args: unknown[]) => Promise<unknown>

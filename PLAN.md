@@ -1,7 +1,7 @@
-# md-ai · 规划文档 v1
+# Muse · 规划文档 v1
 
 > 目标：做一个 Electron 桌面应用，第一版实现 **Typora 式的 markdown 即时渲染（WYSIWYG）**，
-> 代码块用 **Shiki** 高亮；并为后续 **AI 流式输出**（项目名 md-ai 的真正含义）打好地基。
+> 代码块用 **Shiki** 高亮；并为后续 **AI 流式输出**（项目名 Muse 的真正含义）打好地基。
 
 ---
 
@@ -40,7 +40,7 @@
 ## 2. 目录结构
 
 ```
-md-ai/
+muse/
 ├── electron/                    # 主进程
 │   ├── main.ts                  # 生命周期 / 窗口 / 菜单
 │   ├── preload.ts               # 安全 IPC 桥（contextIsolation）
@@ -121,7 +121,7 @@ md-ai/
 > 运行时验证：大纲 2 项 + h1/h2 正确；状态栏 137 字；查找替换 matches 2 + 计数 1/2；
 > 设置面板打开 + 字号变量生效 + 编辑区 max-width 820px。
 
-### Phase 5 · AI 流式输出（未来，md-ai 真正主线）
+### Phase 5 · AI 流式输出（未来，Muse 真正主线）
 - [ ] AI 侧栏：流式接收模型 markdown/代码 token
 - [ ] **@shikijs/stream** 增量高亮流式代码，不每 token 全量重算
 - [ ] **@shikijs/rehype** 渲染流式 markdown 预览

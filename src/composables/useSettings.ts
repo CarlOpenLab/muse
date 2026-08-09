@@ -5,7 +5,7 @@ export interface Settings {
   lineHeight: number
 }
 
-const STORAGE_KEY = 'md-ai:settings'
+const STORAGE_KEY = 'muse:settings'
 
 function load(): Settings {
   const defaults: Settings = { fontSize: 16, lineHeight: 1.7 }

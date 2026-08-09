@@ -51,7 +51,7 @@ function runSearch(v: EditorView): void {
  * `editor.action(callCommand(searchCommand.key, action))` 触发。
  * ProseMirror Command 签名的第三个参数 view 直接可用，无需 ctx.get(editorViewCtx)。
  */
-export const searchCommand = $command<SearchAction, 'mdai-search'>('mdai-search', () => {
+export const searchCommand = $command<SearchAction, 'muse-search'>('muse-search', () => {
   const search = useSearch()
 
   return (action?: SearchAction) =>

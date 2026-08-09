@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Feather, FilePlus, FolderOpen, FileText } from '@lucide/vue'
+import { FilePlus, FolderOpen, FileText } from '@lucide/vue'
+import logoUrl from '../../resources/icon.png'
 
 defineProps<{ recent: string[] }>()
 const emit = defineEmits<{ new: []; open: []; 'open-recent': [path: string] }>()
@@ -13,13 +14,13 @@ function basename(p: string): string {
 <template>
   <div class="flex-1 flex overflow-auto p-6">
     <div class="m-auto flex flex-col items-center text-center max-w-[360px] w-full">
-      <div
-        class="flex items-center justify-center w-14 h-14 mb-4 rounded-2xl text-accent"
-        style="background: color-mix(in srgb, var(--accent) 12%, transparent)"
-      >
-        <Feather :size="28" />
-      </div>
-      <a-typography-title :level="3" class="!mb-1">md-ai</a-typography-title>
+      <img
+        :src="logoUrl"
+        alt="Muse"
+        class="w-16 h-16 mb-5 rounded-2xl select-none shadow-sm"
+        draggable="false"
+      />
+      <a-typography-title :level="3" class="!mb-1">Muse</a-typography-title>
       <a-typography-text type="secondary" class="!mb-6 block">
         一个 Typora 式的 Markdown 编辑器，所见即所得。
       </a-typography-text>

@@ -101,7 +101,7 @@ export const shikiCodeBlock = $prose(() => {
       if (activeView) activeView.dispatch(activeView.state.tr.setMeta(key, { ready: true }))
       else pendingReady = true
     })
-    .catch((e) => console.error('[md-ai] shiki: init FAILED', e))
+    .catch((e) => console.error('[muse] shiki: init FAILED', e))
 
   return new Plugin<DecorationSet>({
     key,

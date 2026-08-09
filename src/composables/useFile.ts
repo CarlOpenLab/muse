@@ -18,7 +18,7 @@ const started = ref(false)
 let suppress = false
 
 const filename = computed(() => (currentPath.value ? basename(currentPath.value) : '未命名'))
-const title = computed(() => `${dirty.value ? '● ' : ''}${filename.value} - md-ai`)
+const title = computed(() => `${dirty.value ? '● ' : ''}${filename.value} - Muse`)
 
 // 草稿自动保存定时器（仅未命名文档）
 let draftTimer: ReturnType<typeof setTimeout> | undefined
@@ -27,19 +27,19 @@ let draftTimer: ReturnType<typeof setTimeout> | undefined
 watch(doc, () => {
   if (suppress) return
   dirty.value = true
-  void window.md?.invoke('app:set-dirty', true)
+  void window.muse?.invoke('app:set-dirty', true)
   // 未命名文档：防抖写草稿，避免每键一次 IO
   if (currentPath.value === null) {
     clearTimeout(draftTimer)
     draftTimer = setTimeout(() => {
-      void window.md?.invoke('fs:writeDraft', doc.value)
+      void window.muse?.invoke('fs:writeDraft', doc.value)
     }, 1500)
   }
 })
 
 function syncDirty(v: boolean): void {
   dirty.value = v
-  void window.md?.invoke('app:set-dirty', v)
+  void window.muse?.invoke('app:set-dirty', v)
 }
 
 /** 载入新内容（打开/新建/恢复草稿），重置路径与脏标记 */
@@ -60,7 +60,7 @@ type ConfirmResult = 'save' | 'discard' | 'cancel'
 /** 当前若有未保存更改，弹确认框；返回是否可继续（新建/打开） */
 async function confirmDiscard(): Promise<boolean> {
   if (!dirty.value) return true
-  const r = (await window.md?.invoke('dialog:confirm-unsaved', filename.value)) as ConfirmResult
+  const r = (await window.muse?.invoke('dialog:confirm-unsaved', filename.value)) as ConfirmResult
   if (r === 'cancel') return false
   if (r === 'save') return await save()
   return true // discard
@@ -69,7 +69,7 @@ async function confirmDiscard(): Promise<boolean> {
 async function newFile(): Promise<void> {
   if (!(await confirmDiscard())) return
   // 新建后清掉旧草稿，避免下次启动恢复到已废弃内容
-  void window.md?.invoke('fs:clearDraft')
+  void window.muse?.invoke('fs:clearDraft')
   // 初始内容为一个空 H1（标题位）：placeholderPlugin 会在其上显示「无标题」占位；
   // focus-after-title 动作会在标题后补一个空段落并聚焦其起始，让用户从「标题下一行」落笔。
   loadContent(null, '# \n')
@@ -78,33 +78,33 @@ async function newFile(): Promise<void> {
 
 async function open(): Promise<void> {
   if (!(await confirmDiscard())) return
-  const r = (await window.md?.invoke('fs:open')) as { path: string; content: string } | null
+  const r = (await window.muse?.invoke('fs:open')) as { path: string; content: string } | null
   if (r) loadContent(r.path, r.content)
 }
 
 async function openPath(path: string): Promise<void> {
   if (!(await confirmDiscard())) return
-  const r = (await window.md?.invoke('fs:openPath', path)) as { path: string; content: string } | null
+  const r = (await window.muse?.invoke('fs:openPath', path)) as { path: string; content: string } | null
   if (r) loadContent(r.path, r.content)
 }
 
 /** 保存：有路径直接存，无路径走另存为。返回是否成功 */
 async function save(): Promise<boolean> {
   if (currentPath.value) {
-    await window.md?.invoke('fs:save', currentPath.value, doc.value)
+    await window.muse?.invoke('fs:save', currentPath.value, doc.value)
     syncDirty(false)
-    void window.md?.invoke('fs:clearDraft') // 已落盘，清草稿
+    void window.muse?.invoke('fs:clearDraft') // 已落盘，清草稿
     return true
   }
   return saveAs()
 }
 
 async function saveAs(): Promise<boolean> {
-  const p = (await window.md?.invoke('fs:saveAs', doc.value)) as string | null
+  const p = (await window.muse?.invoke('fs:saveAs', doc.value)) as string | null
   if (p) {
     currentPath.value = p
     syncDirty(false)
-    void window.md?.invoke('fs:clearDraft')
+    void window.muse?.invoke('fs:clearDraft')
     return true
   }
   return false
@@ -113,20 +113,20 @@ async function saveAs(): Promise<boolean> {
 /** main 触发的关闭请求：脏则确认，再决定关闭或放弃 */
 async function handleCloseRequest(): Promise<void> {
   if (!dirty.value) {
-    void window.md?.invoke('app:close')
+    void window.muse?.invoke('app:close')
     return
   }
-  const r = (await window.md?.invoke('dialog:confirm-unsaved', filename.value)) as ConfirmResult
+  const r = (await window.muse?.invoke('dialog:confirm-unsaved', filename.value)) as ConfirmResult
   if (r === 'cancel') return
   if (r === 'save') {
     if (!(await save())) return // 保存被取消（另存为未选路径）
   }
-  void window.md?.invoke('app:close')
+  void window.muse?.invoke('app:close')
 }
 
 /** 启动时尝试恢复未命名草稿；有则载入并返回 true */
 async function restoreDraft(): Promise<boolean> {
-  const d = (await window.md?.invoke('fs:readDraft')) as { content: string } | null
+  const d = (await window.muse?.invoke('fs:readDraft')) as { content: string } | null
   if (d && d.content) {
     loadContent(null, d.content)
     return true

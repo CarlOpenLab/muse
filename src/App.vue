@@ -183,13 +183,13 @@ const recentFiles = ref<string[]>([])
 
 // 启动：先拉最近文件供 Entry 页展示；再尝试恢复未命名草稿。
 // 没有草稿则停在 Entry 欢迎页（started 仍为 false），不再自动填入默认示例文档。
-void window.md?.invoke('fs:readRecent').then((r) => {
+void window.muse?.invoke('fs:readRecent').then((r) => {
   recentFiles.value = Array.isArray(r) ? (r as string[]) : []
 })
 void restoreDraft()
 
 onMounted(() => {
-  window.md?.on('menu:action', (payload: unknown) => {
+  window.muse?.on('menu:action', (payload: unknown) => {
     const { action, path } = payload as { action: string; path?: string }
     if (action === 'new') void newFile()
     else if (action === 'open') void open()
@@ -199,7 +199,7 @@ onMounted(() => {
     else if (action === 'find') search.open()
   })
 
-  window.md?.on('app:request-close', () => {
+  window.muse?.on('app:request-close', () => {
     void handleCloseRequest()
   })
 
@@ -270,7 +270,7 @@ watch(headings, () => {
 function onDrop(e: DragEvent): void {
   const f = e.dataTransfer?.files?.[0]
   if (!f) return
-  const path = window.md?.getPathForFile(f)
+  const path = window.muse?.getPathForFile(f)
   if (path) void openPath(path)
 }
 </script>

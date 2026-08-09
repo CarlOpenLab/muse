@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/md--ai-WYSIWYG%20Markdown%20Editor-88c0d0" alt="md-ai" />
+  <img src="https://img.shields.io/badge/Muse-WYSIWYG%20Markdown%20Editor-88c0d0" alt="Muse" />
 </p>
 
-<h1 align="center">md-ai</h1>
+<h1 align="center">Muse</h1>
 
 <p align="center">
   <strong>Typora-style WYSIWYG Markdown editor</strong> · Shiki code highlighting · Electron + Vue 3
@@ -27,7 +27,7 @@
 
 # 🇨🇳 中文文档
 
-一个 **Typora 式** 的所见即所得（WYSIWYG）Markdown 桌面编辑器：打字时 `#` 立刻变成标题、`**加粗**` 即时生效、代码块用 **Shiki** 实时语法高亮。基于 **Milkdown 7**（ProseMirror）构建，未来计划接入 **AI 流式输出**（项目名 md-ai 的真正含义）。
+一个 **Typora 式** 的所见即所得（WYSIWYG）Markdown 桌面编辑器：打字时 `#` 立刻变成标题、`**加粗**` 即时生效、代码块用 **Shiki** 实时语法高亮。基于 **Milkdown 7**（ProseMirror）构建，未来计划接入 **AI 流式输出**（项目名 Muse 的真正含义）。
 
 ## ✨ 功能特性
 
@@ -81,7 +81,7 @@ npm run build:linux# 打包 Linux AppImage / deb
 ## 📁 目录结构
 
 ```
-md-ai/
+muse/
 ├── electron/                 # 主进程
 │   ├── main.ts               # 窗口生命周期 / 原生菜单 / 快捷键
 │   ├── preload.ts            # 安全 IPC 桥（contextIsolation）
@@ -122,7 +122,7 @@ md-ai/
 
 # 🇬🇧 English Docs
 
-**md-ai** is a **Typora-style WYSIWYG Markdown editor** for the desktop. Type `#` and it becomes a heading; `**bold**` renders instantly; code blocks are highlighted in real time with **Shiki**. Built on **Milkdown 7** (ProseMirror), with AI streaming output planned as the project's true north.
+**Muse** is a **Typora-style WYSIWYG Markdown editor** for the desktop. Type `#` and it becomes a heading; `**bold**` renders instantly; code blocks are highlighted in real time with **Shiki**. Built on **Milkdown 7** (ProseMirror), with AI streaming output planned as the project's true north.
 
 ## ✨ Features
 
@@ -176,7 +176,7 @@ npm run build:linux# package Linux AppImage / deb
 ## 📁 Project Structure
 
 ```
-md-ai/
+muse/
 ├── electron/                 # Main process
 │   ├── main.ts               # window lifecycle / native menu / shortcuts
 │   ├── preload.ts            # secure IPC bridge (contextIsolation)

@@ -1,5 +1,5 @@
-appId: com.earendil.md-ai
-productName: md-ai
+appId: com.earendil.muse
+productName: Muse
 directories:
   output: dist
   buildResources: resources

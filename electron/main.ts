@@ -64,7 +64,8 @@ function createWindow(): void {
     minHeight: 480,
     show: false,
     autoHideMenuBar: true,
-    title: 'md-ai',
+    title: 'Muse',
+    icon: isDev ? join(__dirname, '../../resources/icon.png') : undefined,
     backgroundColor: '#ffffff',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

@@ -15,7 +15,7 @@ import { refreshShikiHighlight } from '../editor/shiki/shikiCodeBlock'
 
 type Theme = 'light' | 'dark'
 
-const STORAGE_KEY = 'md-ai:theme'
+const STORAGE_KEY = 'muse:theme'
 
 function systemDark(): boolean {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false

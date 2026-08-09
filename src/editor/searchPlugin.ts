@@ -8,7 +8,7 @@ export interface SearchState {
   current: number
 }
 
-export const searchPluginKey = new PluginKey<SearchState>('mdai-search')
+export const searchPluginKey = new PluginKey<SearchState>('muse-search')
 
 /**
  * 查找替换高亮插件。

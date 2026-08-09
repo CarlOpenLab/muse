@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
-// 受控的 IPC 桥：渲染进程只通过 window.md 访问能力
+// 受控的 IPC 桥：渲染进程只通过 window.muse 访问能力
 const api = {
   version: process.versions.electron,
   platform: process.platform,
@@ -13,6 +13,6 @@ const api = {
   }
 }
 
-contextBridge.exposeInMainWorld('md', api)
+contextBridge.exposeInMainWorld('muse', api)
 
-export type MdApi = typeof api
+export type MuseApi = typeof api
