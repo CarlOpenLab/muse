@@ -1,17 +1,27 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useChat } from './useChat'
 import ChatSidebar from './ChatSidebar.vue'
 import ChatMessages from './ChatMessages.vue'
 import ChatInput from './ChatInput.vue'
 
 const props = defineProps<{ isDark: boolean }>()
+const emit = defineEmits<{ manage: [] }>()
 
+const chat = useChat()
 const {
   conversationList,
   activeKey,
   activeConversation,
   isRequesting,
+  providers,
+  activeProviderName,
+  activeModelId,
+  reasoningAvailable,
+  webSearchConfigured,
+  searching,
+  selectProvider,
+  selectModel,
   newConversation,
   activate,
   removeConversation,
@@ -19,7 +29,21 @@ const {
   send,
   stop,
   reload,
-} = useChat()
+} = chat
+
+// 可写开关：computed 包装解构出的 ref，保证 v-model 写入 .value
+const reasoning = computed<boolean>({
+  get: () => chat.reasoning.value,
+  set: (value: boolean) => {
+    chat.reasoning.value = value
+  },
+})
+const webSearch = computed<boolean>({
+  get: () => chat.webSearch.value,
+  set: (value: boolean) => {
+    chat.webSearch.value = value
+  },
+})
 
 const draft = ref('')
 
@@ -91,8 +115,19 @@ watch(activeKey, () => {
         ref="senderRef"
         v-model="draft"
         :loading="isRequesting"
+        :searching="searching"
+        :providers="providers"
+        :active-provider="activeProviderName"
+        :active-model="activeModelId"
+        v-model:reasoning="reasoning"
+        :reasoning-available="reasoningAvailable"
+        v-model:web-search="webSearch"
+        :web-search-configured="webSearchConfigured"
+        @update:active-provider="selectProvider"
+        @update:active-model="selectModel"
         @submit="handleSubmit"
         @cancel="stop"
+        @manage="emit('manage')"
       />
     </div>
   </div>

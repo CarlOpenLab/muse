@@ -1,10 +1,9 @@
 /**
  * 本地 Mock LLM：用 OpenAI 兼容的 SSE 流式格式模拟 AI 回复。
  *
- * 通过给 XRequest 注入自定义 `fetch`，返回一个可读流 Response，
- * 完全走 x-sdk 的真实请求管线（SSE 解析 → onUpdate → transformMessage），
- * 未来接入真实 OpenAI / DeepSeek 兼容 API 时，只需删掉 `fetch` 覆盖、
- * 把 baseURL 换成真实地址即可，其余代码零改动。
+ * 仅作为「未配置供应商」时的演示回退（见 ipcProvider.ts）：
+ * 一旦用户在设置中添加供应商，真实请求会走主进程 IPC 转发。
+ * 保留 mock 的好处是首次打开应用即可体验完整的流式 UI。
  */
 import type { XModelParams, XModelResponse } from '@antdv-next/x-sdk'
 

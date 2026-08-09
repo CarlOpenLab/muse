@@ -11,20 +11,31 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AAlert: typeof import('antdv-next')['Alert']
     AButton: typeof import('antdv-next')['Button']
-    ADrawer: typeof import('antdv-next')['Drawer']
+    ACheckbox: typeof import('antdv-next')['Checkbox']
+    ACol: typeof import('antdv-next')['Col']
     AForm: typeof import('antdv-next')['Form']
     AFormItem: typeof import('antdv-next')['FormItem']
     AInput: typeof import('antdv-next')['Input']
+    AInputPassword: typeof import('antdv-next')['InputPassword']
+    AModal: typeof import('antdv-next')['Modal']
+    APopconfirm: typeof import('antdv-next')['Popconfirm']
+    ARadio: typeof import('antdv-next')['Radio']
+    ARadioGroup: typeof import('antdv-next')['RadioGroup']
+    ARow: typeof import('antdv-next')['Row']
+    ASegmented: typeof import('antdv-next')['Segmented']
     ASlider: typeof import('antdv-next')['Slider']
     ASpace: typeof import('antdv-next')['Space']
+    ATag: typeof import('antdv-next')['Tag']
     ATooltip: typeof import('antdv-next')['Tooltip']
     ATypographyText: typeof import('antdv-next')['TypographyText']
     ATypographyTitle: typeof import('antdv-next')['TypographyTitle']
     EntryScreen: typeof import('./components/EntryScreen.vue')['default']
     OutlinePanel: typeof import('./components/OutlinePanel.vue')['default']
+    ProviderSettings: typeof import('./components/ProviderSettings.vue')['default']
     SearchBar: typeof import('./components/SearchBar.vue')['default']
-    SettingsPanel: typeof import('./components/SettingsPanel.vue')['default']
+    SettingsModal: typeof import('./components/SettingsModal.vue')['default']
     StatusBar: typeof import('./components/StatusBar.vue')['default']
   }
 }

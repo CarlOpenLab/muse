@@ -17,7 +17,7 @@ import { useSettings } from './composables/useSettings'
 import OutlinePanel from './components/OutlinePanel.vue'
 import StatusBar from './components/StatusBar.vue'
 import SearchBar from './components/SearchBar.vue'
-import SettingsPanel from './components/SettingsPanel.vue'
+import SettingsModal from './components/SettingsModal.vue'
 
 const { isDark, toggle } = useTheme()
 
@@ -296,10 +296,10 @@ function onDrop(e: DragEvent): void {
         <div class="flex flex-1 overflow-hidden">
           <!-- 左侧活动栏：视图切换 + 主题 / 设置，常驻显示 -->
           <aside
-            class="w-10 shrink-0 flex flex-col items-center gap-1 py-2 bg-bg-soft border-r border-border-subtle"
+            class="w-10 shrink-0 flex flex-col items-center gap-3 py-2 bg-bg-soft border-r border-border-subtle"
           >
             <!-- 顶部：视图切换（MD 编辑器 / AI 对话） -->
-            <div class="flex flex-col items-center gap-1">
+            <div class="flex flex-col items-center gap-3">
               <a-button
                 type="text"
                 shape="circle"
@@ -323,7 +323,7 @@ function onDrop(e: DragEvent): void {
             </div>
 
             <!-- 底部：主题 / 设置 -->
-            <div class="mt-auto flex flex-col items-center gap-1">
+            <div class="mt-auto flex flex-col items-center gap-3">
               <a-button type="text" shape="circle" size="small" @click="toggle">
                 <template #icon>
                   <Sun v-if="isDark" :size="16" />
@@ -398,7 +398,7 @@ function onDrop(e: DragEvent): void {
                 <!-- ===== 视图二：AI 对话（@antdv-next/x 全家桶） ===== -->
                 <div v-show="activeView === 'chat'" class="flex-1 min-h-0 flex flex-col">
                   <XProvider :theme="themeConfig" :locale="chatLocale">
-                    <ChatView :is-dark="isDark" />
+                    <ChatView :is-dark="isDark" @manage="showSettings = true" />
                   </XProvider>
                 </div>
               </div>
@@ -406,7 +406,7 @@ function onDrop(e: DragEvent): void {
           </main>
         </div>
 
-        <SettingsPanel :open="showSettings" @close="showSettings = false" />
+        <SettingsModal :open="showSettings" @close="showSettings = false" />
         <SearchBar />
         <StatusBar
           v-show="activeView === 'editor'"

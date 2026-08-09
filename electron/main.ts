@@ -1,8 +1,14 @@
 import { app, BrowserWindow, shell, Menu, type MenuItemConstructorOptions } from 'electron'
 import { basename, join } from 'node:path'
 import { registerFileService, setRebuildMenu, isDirty, shouldForceClose, resetForceClose, getRecent } from './services/fs'
+import { registerAiService } from './services/ai'
 
 const isDev = !app.isPackaged
+
+// 项目 logo（resources/icon.png，1024px 透明底）
+// - dev：用于 macOS Dock 图标（BrowserWindow 的 icon 在 mac 上不生效）
+// - 打包后：由 electron-builder 的 icon.icns / icon.png 配置提供
+const APP_ICON = join(__dirname, '../../resources/icon.png')
 
 function buildMenu(win: BrowserWindow): void {
   const recent = getRecent()
@@ -65,7 +71,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     title: 'Muse',
-    icon: isDev ? join(__dirname, '../../resources/icon.png') : undefined,
+    icon: isDev ? APP_ICON : undefined,
     backgroundColor: '#ffffff',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -125,6 +131,11 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   registerFileService()
+  registerAiService()
+  // dev 模式下把 Dock 图标换成项目 logo（打包后由 .icns 提供）
+  if (isDev && process.platform === 'darwin') {
+    app.dock?.setIcon(APP_ICON)
+  }
   createWindow()
 
   app.on('activate', () => {

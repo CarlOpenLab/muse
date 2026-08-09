@@ -7,7 +7,10 @@ files:
   - out/**/*
   - package.json
 asar: true
+# 应用图标：resources/ 下统一维护，mac 用 .icns，win/linux 用 png（构建时自动转换）
+icon: icon.png
 mac:
+  icon: icon.icns
   category: public.app-category.productivity
   target:
     - dmg

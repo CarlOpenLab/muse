@@ -6,6 +6,7 @@ interface Window {
     version: string
     platform: string
     invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+    send: (channel: string, ...args: unknown[]) => void
     getPathForFile: (file: File) => string
     on: (channel: string, cb: (...args: unknown[]) => void) => () => void
   }
