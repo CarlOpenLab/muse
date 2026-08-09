@@ -38,20 +38,19 @@ function basename(p: string): string {
 
       <div v-if="recent.length" class="w-full text-left">
         <div class="text-xs text-fg-soft uppercase tracking-wide mb-2 px-1">最近打开</div>
-        <a-list size="small" :data-source="recent">
-          <template #renderItem="{ item }">
-            <a-list-item
-              class="!cursor-pointer !px-2.5"
-              :title="item"
-              @click="emit('open-recent', item)"
-            >
-              <div class="flex items-center gap-2">
-                <FileText :size="14" class="text-fg-soft shrink-0" />
-                <span class="text-sm text-fg-soft truncate">{{ basename(item) }}</span>
-              </div>
-            </a-list-item>
-          </template>
-        </a-list>
+        <div class="overflow-hidden rounded-lg border border-border-subtle">
+          <div
+            v-for="(item, index) in recent"
+            :key="item"
+            class="flex items-center gap-2 px-2.5 py-2 cursor-pointer transition-colors hover:bg-bg-soft"
+            :class="{ 'border-t border-border-subtle': index > 0 }"
+            :title="item"
+            @click="emit('open-recent', item)"
+          >
+            <FileText :size="14" class="text-fg-soft shrink-0" />
+            <span class="text-sm text-fg-soft truncate">{{ basename(item) }}</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>

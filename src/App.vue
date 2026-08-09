@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { Sun, Moon, PanelRightOpen, PanelRightClose, Settings as SettingsIcon } from '@lucide/vue'
+import { FileText, Sun, Moon, PanelRightOpen, PanelRightClose, Settings as SettingsIcon, Sparkles } from '@lucide/vue'
 import { ConfigProvider, theme as antdTheme } from 'antdv-next'
 import { ThemeProvider } from 'antdv-style'
+import { XProvider } from '@antdv-next/x'
+import type { XProviderProps } from '@antdv-next/x'
 import MilkdownEditor from './editor/MilkdownEditor.vue'
 import EntryScreen from './components/EntryScreen.vue'
+import ChatView from './chat/ChatView.vue'
 import { useTheme } from './composables/useTheme'
 import { useFile } from './composables/useFile'
 import { useDocStats } from './composables/useDocStats'
@@ -181,6 +184,17 @@ const showOutline = ref(true)
 const showSettings = ref(false)
 const recentFiles = ref<string[]>([])
 
+/** 主区域视图：'editor' = Markdown 编辑器，'chat' = AI 对话 */
+const activeView = ref<'editor' | 'chat'>('editor')
+
+// @antdv-next/x 组件库中文文案
+const chatLocale: XProviderProps['locale'] = {
+  locale: 'zh-cn',
+  Conversations: { create: '新对话' },
+  Sender: { stopLoading: '停止请求', speechRecording: '正在录音' },
+  Bubble: { editableOk: '确认', editableCancel: '取消' },
+}
+
 // 启动：先拉最近文件供 Entry 页展示；再尝试恢复未命名草稿。
 // 没有草稿则停在 Entry 欢迎页（started 仍为 false），不再自动填入默认示例文档。
 void window.muse?.invoke('fs:readRecent').then((r) => {
@@ -280,10 +294,34 @@ function onDrop(e: DragEvent): void {
     <ThemeProvider :appearance="appearance">
       <div class="flex flex-col h-full" @dragover.prevent @drop.prevent="onDrop">
         <div class="flex flex-1 overflow-hidden">
-          <!-- 左侧活动栏：主题 / 设置，常驻显示 -->
+          <!-- 左侧活动栏：视图切换 + 主题 / 设置，常驻显示 -->
           <aside
             class="w-10 shrink-0 flex flex-col items-center gap-1 py-2 bg-bg-soft border-r border-border-subtle"
           >
+            <!-- 顶部：视图切换（MD 编辑器 / AI 对话） -->
+            <div class="flex flex-col items-center gap-1">
+              <a-button
+                type="text"
+                shape="circle"
+                size="small"
+                :class="{ '!bg-border-subtle': activeView === 'editor' }"
+                title="Markdown 编辑器"
+                @click="activeView = 'editor'"
+              >
+                <template #icon><FileText :size="16" /></template>
+              </a-button>
+              <a-button
+                type="text"
+                shape="circle"
+                size="small"
+                :class="{ '!bg-border-subtle': activeView === 'chat' }"
+                title="AI 对话"
+                @click="activeView = 'chat'"
+              >
+                <template #icon><Sparkles :size="16" /></template>
+              </a-button>
+            </div>
+
             <!-- 底部：主题 / 设置 -->
             <div class="mt-auto flex flex-col items-center gap-1">
               <a-button type="text" shape="circle" size="small" @click="toggle">
@@ -302,24 +340,20 @@ function onDrop(e: DragEvent): void {
           <main class="flex-1 overflow-auto bg-page-bg">
             <div class="px-3 py-3 min-h-full flex flex-col">
               <div class="relative rounded-xl card-shadow flex-1 flex flex-col overflow-hidden">
-                <!-- Entry 欢迎页：未新建 / 打开任何文档时显示 -->
-                <div
-                  v-if="!started"
-                  class="rounded-xl border border-border bg-bg overflow-hidden flex-1 flex"
-                >
-                  <EntryScreen
-                    :recent="recentFiles"
-                    @new="newFile"
-                    @open="open"
-                    @open-recent="openPath"
-                  />
-                </div>
+                <!-- ===== 视图一：Markdown 编辑器 ===== -->
+                <div v-show="activeView === 'editor'" class="flex-1 min-h-0 flex flex-col">
+                  <!-- Entry 欢迎页：未新建 / 打开任何文档时显示 -->
+                  <div v-if="!started" class="flex-1 flex">
+                    <EntryScreen
+                      :recent="recentFiles"
+                      @new="newFile"
+                      @open="open"
+                      @open-recent="openPath"
+                    />
+                  </div>
 
-                <!-- 编辑器卡片：编辑区 + 大纲侧边栏（均在卡片内） -->
-                <div
-                  v-else
-                  class="relative rounded-xl border border-border bg-bg overflow-hidden flex-1 flex"
-                >
+                  <!-- 编辑器：编辑区 + 大纲侧边栏 -->
+                  <div v-else class="relative flex-1 flex min-h-0">
                   <!-- 大纲开关：常驻卡片右上角，图标随状态切换（单按钮，避免收展动画出现两个图标） -->
                   <div class="absolute top-2 right-2 z-20">
                     <a-button
@@ -357,6 +391,14 @@ function onDrop(e: DragEvent): void {
                     />
                   </Transition>
                 </div>
+                </div>
+
+                <!-- ===== 视图二：AI 对话（@antdv-next/x 全家桶） ===== -->
+                <div v-show="activeView === 'chat'" class="flex-1 min-h-0 flex flex-col">
+                  <XProvider :theme="themeConfig" :locale="chatLocale">
+                    <ChatView :is-dark="isDark" />
+                  </XProvider>
+                </div>
               </div>
             </div>
           </main>
@@ -364,7 +406,13 @@ function onDrop(e: DragEvent): void {
 
         <SettingsPanel :open="showSettings" @close="showSettings = false" />
         <SearchBar />
-        <StatusBar :stats="stats" :filename="filename" :dirty="dirty" :path="currentPath" />
+        <StatusBar
+          v-show="activeView === 'editor'"
+          :stats="stats"
+          :filename="filename"
+          :dirty="dirty"
+          :path="currentPath"
+        />
       </div>
     </ThemeProvider>
   </ConfigProvider>
