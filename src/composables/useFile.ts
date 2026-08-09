@@ -124,10 +124,20 @@ async function handleCloseRequest(): Promise<void> {
   void window.muse?.invoke('app:close')
 }
 
+/** 草稿是否实质为空：去掉 markdown 结构符号与空白后无可读文本 */
+function isDraftEmpty(content: string): boolean {
+  const text = content
+    .replace(/#{1,6}\s*/g, '') // 标题标记
+    .replace(/[*_>`~\-]/g, '') // 强调/引用/列表/分隔线符号
+    .replace(/\s+/g, '')
+  return text.length === 0
+}
+
 /** 启动时尝试恢复未命名草稿；有则载入并返回 true */
 async function restoreDraft(): Promise<boolean> {
   const d = (await window.muse?.invoke('fs:readDraft')) as { content: string } | null
-  if (d && d.content) {
+  // 空草稿（如仅标题位 `# ` / 空行）视为无草稿：首次进入应停在欢迎页（empty 状态）
+  if (d && d.content && !isDraftEmpty(d.content)) {
     loadContent(null, d.content)
     return true
   }
