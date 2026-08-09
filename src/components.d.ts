@@ -36,6 +36,7 @@ declare module 'vue' {
     ProviderSettings: typeof import('./components/ProviderSettings.vue')['default']
     SearchBar: typeof import('./components/SearchBar.vue')['default']
     SettingsModal: typeof import('./components/SettingsModal.vue')['default']
+    SidePanel: typeof import('./components/SidePanel.vue')['default']
     StatusBar: typeof import('./components/StatusBar.vue')['default']
   }
 }

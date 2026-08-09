@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Sender } from '@antdv-next/x'
-import { Square, Brain, Globe, ChevronDown, Settings2 } from '@lucide/vue'
+import { Square, Brain, Globe, ChevronDown, Settings2, FileText, SlidersHorizontal, PenLine } from '@lucide/vue'
 import type { ProviderConfig } from '../composables/useSettings'
 
 const props = defineProps<{
@@ -15,6 +15,10 @@ const props = defineProps<{
   reasoningAvailable: boolean
   webSearch: boolean
   webSearchConfigured: boolean
+  /** 引用当前文档内容作为上下文 */
+  docContext: boolean
+  /** AI 可修改文档（agent 工具调用） */
+  editingTools: boolean
 }>()
 
 const emit = defineEmits<{
@@ -23,6 +27,8 @@ const emit = defineEmits<{
   'update:activeModel': [id: string]
   'update:reasoning': [value: boolean]
   'update:webSearch': [value: boolean]
+  'update:docContext': [value: boolean]
+  'update:editingTools': [value: boolean]
   submit: [value: string]
   cancel: []
   /** 打开设置（管理供应商） */
@@ -100,15 +106,55 @@ function pickModel(m: ProviderConfig['models'][number]): void {
   closePicker()
 }
 
+// ===== 对话选项（深度思考 / 联网搜索 / 引用文档）：收进一个 icon，popover 开启 =====
+// 侧栏布局窄，不横向平铺图标；任一选项开启时工具按钮高亮提示。
+const toolsOpen = ref(false)
+const toolsStyle = ref<Record<string, string>>({})
+const toolsRootRef = ref<HTMLElement | null>(null)
+const toolsPanelRef = ref<HTMLElement | null>(null)
+
+/** 任一选项开启 → 工具按钮高亮（用户可感知当前开启项） */
+const anyToolOn = computed(
+  () => props.reasoning || props.webSearch || props.docContext || props.editingTools
+)
+
+function openTools(): void {
+  const rect = toolsRootRef.value?.getBoundingClientRect()
+  if (!rect) return
+  // 输入框在面板底部，弹层向上展开，箭头指向触发按钮
+  toolsStyle.value = {
+    left: `${Math.max(8, rect.left)}px`,
+    bottom: `${window.innerHeight - rect.top + 10}px`,
+  }
+  closePicker()
+  toolsOpen.value = true
+}
+function closeTools(): void {
+  toolsOpen.value = false
+}
+function toggleTools(): void {
+  toolsOpen.value ? closeTools() : openTools()
+}
+
 // 点击外部 / Esc 关闭
 function onDocMouseDown(e: MouseEvent): void {
-  if (!pickerOpen.value) return
   const target = e.target as Node
-  if (pickerRootRef.value?.contains(target) || pickerPanelRef.value?.contains(target)) return
-  closePicker()
+  if (pickerOpen.value) {
+    if (!pickerRootRef.value?.contains(target) && !pickerPanelRef.value?.contains(target)) {
+      closePicker()
+    }
+  }
+  if (toolsOpen.value) {
+    if (!toolsRootRef.value?.contains(target) && !toolsPanelRef.value?.contains(target)) {
+      closeTools()
+    }
+  }
 }
 function onDocKeyDown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') closePicker()
+  if (e.key === 'Escape') {
+    closePicker()
+    closeTools()
+  }
 }
 onMounted(() => {
   document.addEventListener('mousedown', onDocMouseDown)
@@ -131,7 +177,7 @@ const sendDisabled = computed(() => Boolean(props.activeProvider) && props.activ
       :loading="loading"
       :disabled="sendDisabled"
       :auto-size="{ minRows: 1, maxRows: 6 }"
-      placeholder="和 Muse AI 聊聊…（Enter 发送，Shift+Enter 换行）"
+      placeholder="问 Muse：总结 / 扩写 / 润色 / 翻译…（Enter 发送，Shift+Enter 换行）"
       :on-change="handleChange"
       :on-submit="handleSubmit"
       :on-cancel="() => emit('cancel')"
@@ -140,50 +186,79 @@ const sendDisabled = computed(() => Boolean(props.activeProvider) && props.activ
            仅保留 footer 中的唯一发送按钮（defaultNode） -->
       <template #suffix></template>
 
-      <!-- footer：深度思考/联网搜索 图标 + 模型选择器 + 发送按钮，同一行对齐 -->
+      <!-- footer：对话选项（一个 icon）+ 模型选择器 + 发送按钮，同一行对齐 -->
       <template #footer="{ defaultNode }">
         <div class="chat-footer-row">
-          <!-- 最左侧：深度思考 / 联网搜索 图标开关（与发送按钮同行） -->
-          <div class="chat-prefix">
-            <a-tooltip
-              :title="
-                reasoningAvailable
-                  ? reasoning
-                    ? '深度思考：开'
-                    : '深度思考：关'
-                  : '当前模型不支持深度思考'
-              "
-            >
+          <!-- 最左侧：对话选项（深度思考 / 联网搜索 / 引用文档 收进一个 icon，popover 开启） -->
+          <div ref="toolsRootRef" class="chat-tools">
+            <a-tooltip :title="anyToolOn ? '对话选项（有开启项）' : '对话选项'">
               <button
                 type="button"
                 class="chat-toggle"
-                :class="{ active: reasoning, disabled: !reasoningAvailable }"
-                aria-label="深度思考"
-                @click="reasoningAvailable && emit('update:reasoning', !reasoning)"
+                :class="{ active: anyToolOn, searching }"
+                aria-label="对话选项"
+                @click="toggleTools"
               >
-                <Brain :size="16" stroke-width="1.8" />
+                <SlidersHorizontal :size="16" stroke-width="1.8" />
               </button>
             </a-tooltip>
 
-            <a-tooltip
-              :title="
-                webSearchConfigured
-                  ? webSearch
-                    ? '联网搜索：开'
-                    : '联网搜索：关'
-                  : '需在「设置 → 联网搜索」中配置 Brave Search API Key'
-              "
-            >
-              <button
-                type="button"
-                class="chat-toggle"
-                :class="{ active: webSearch, disabled: !webSearchConfigured, searching }"
-                aria-label="联网搜索"
-                @click="webSearchConfigured && emit('update:webSearch', !webSearch)"
+            <Teleport to="body">
+              <div
+                v-if="toolsOpen"
+                ref="toolsPanelRef"
+                class="muse-tools-pop"
+                :style="toolsStyle"
               >
-                <Globe :size="16" stroke-width="1.8" />
-              </button>
-            </a-tooltip>
+                <button
+                  type="button"
+                  class="muse-tools-item"
+                  :class="{ active: reasoning, disabled: !reasoningAvailable }"
+                  :title="reasoningAvailable ? '' : '当前模型不支持深度思考'"
+                  @click="reasoningAvailable && emit('update:reasoning', !reasoning)"
+                >
+                  <Brain :size="14" />
+                  <span class="muse-tools-label">深度思考</span>
+                  <span class="muse-tools-state">{{ reasoning ? '开' : '关' }}</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="muse-tools-item"
+                  :class="{ active: webSearch, disabled: !webSearchConfigured }"
+                  :title="webSearchConfigured ? '' : '需在「设置 → 联网搜索」配置 Brave Search API Key'"
+                  @click="webSearchConfigured && emit('update:webSearch', !webSearch)"
+                >
+                  <Globe :size="14" />
+                  <span class="muse-tools-label">联网搜索</span>
+                  <span class="muse-tools-state">{{ webSearch ? '开' : '关' }}</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="muse-tools-item"
+                  :class="{ active: docContext }"
+                  :title="docContext ? '提问时快照当前文档作为上下文' : ''"
+                  @click="emit('update:docContext', !docContext)"
+                >
+                  <FileText :size="14" />
+                  <span class="muse-tools-label">引用当前文档</span>
+                  <span class="muse-tools-state">{{ docContext ? '开' : '关' }}</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="muse-tools-item"
+                  :class="{ active: editingTools }"
+                  :title="editingTools ? '模型可用工具直接修改文档（⌘Z 可撤销）' : '模型只能给建议，不直接改文档'"
+                  @click="emit('update:editingTools', !editingTools)"
+                >
+                  <PenLine :size="14" />
+                  <span class="muse-tools-label">AI 可修改文档</span>
+                  <span class="muse-tools-state">{{ editingTools ? '开' : '关' }}</span>
+                </button>
+              </div>
+            </Teleport>
           </div>
 
           <div class="flex-1" />
@@ -343,11 +418,10 @@ const sendDisabled = computed(() => Boolean(props.activeProvider) && props.activ
   min-height: 34px;
 }
 
-/* 深度思考 / 联网搜索 图标开关：与发送按钮同行对齐 */
-.chat-prefix {
+/* 深度思考 / 联网搜索 / 引用文档 图标开关：收进一个「对话选项」icon，popover 开启 */
+.chat-tools {
   display: flex;
   align-items: center;
-  gap: 2px;
 }
 .chat-toggle {
   display: grid;
@@ -581,5 +655,76 @@ const sendDisabled = computed(() => Boolean(props.activeProvider) && props.activ
 }
 .muse-picker-manage:hover {
   color: var(--accent);
+}
+
+/* ===== 对话选项 popover（Teleport 到 body）===== */
+.muse-tools-pop {
+  position: fixed;
+  z-index: 1080;
+  width: 228px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow:
+    0 10px 32px rgba(9, 9, 11, 0.16),
+    0 2px 8px rgba(9, 9, 11, 0.08);
+}
+/* 小箭头：朝触发按钮方向（弹层在触发按钮上方，箭头向下） */
+.muse-tools-pop::before {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 20px;
+  width: 10px;
+  height: 10px;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+.muse-tools-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.muse-tools-item:hover:not(.disabled) {
+  background: var(--bg-soft);
+}
+.muse-tools-item.active {
+  color: var(--accent);
+}
+.muse-tools-item.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.muse-tools-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.muse-tools-state {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--fg-soft);
+  font-variant-numeric: tabular-nums;
+}
+.muse-tools-item.active .muse-tools-state {
+  color: var(--accent);
+  font-weight: 600;
 }
 </style>

@@ -153,14 +153,98 @@ export function mockChatFetch(
 ): Promise<Response> {
   // 从请求体里取出最后一条用户消息
   let userMessage = '你好'
+  let hasTools = false
+  let hasToolResult = false
   try {
     const bodyText = String((_options as { body?: string }).body ?? '')
     const body = JSON.parse(bodyText)
     const messages: { role?: string; content?: unknown }[] = body?.messages ?? []
     const last = [...messages].reverse().find((m) => m.role === 'user')
     if (last && typeof last.content === 'string') userMessage = last.content
+    hasTools = Array.isArray(body?.tools) && body.tools.length > 0
+    hasToolResult = messages.some((m) => m.role === 'tool')
   } catch {
     /* ignore */
+  }
+
+  // 工具调用演示：带 tools 且用户有修改意图时，第一轮返回 tool_calls（agent loop 会真改文档），
+  // 工具结果返回后的第二轮给出总结文本。
+  const DEMO_TOOL_CONTENT = [
+    '## 由 Muse AI 演示添加',
+    '',
+    '> 这是 **工具调用** 的演示——AI 直接修改了你的文档。',
+    '> 接入真实大模型后，你可以让我润色、替换、增删任意内容。',
+  ].join('\n')
+  const TOOL_INTENT = /修改|替换|改|添加|追加|插入|删除|编辑|润色|总结|翻译|扩写/
+  if (hasTools && !hasToolResult && TOOL_INTENT.test(userMessage)) {
+    const toolCallEvent = JSON.stringify({
+      choices: [
+        {
+          index: 0,
+          delta: {
+            role: 'assistant',
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_mock_1',
+                type: 'function',
+                function: {
+                  name: 'editor_insert_at_end',
+                  arguments: JSON.stringify({ content: DEMO_TOOL_CONTENT }),
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+    const finishEvent = JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] })
+    const bytes = [
+      `data: ${toolCallEvent}\n\n`,
+      `data: ${finishEvent}\n\n`,
+      'data: [DONE]\n\n',
+    ].join('')
+    return Promise.resolve(
+      new Response(new Blob([bytes]).stream(), {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+      })
+    )
+  }
+
+  if (hasToolResult) {
+    // 工具已执行完毕的收尾轮：说明结果
+    const reply = [
+      '✅ 已通过 **工具调用** 修改文档（本地演示）：在文末追加了一段演示内容。',
+      '',
+      '接入真实大模型后，你可以直接说「把 XX 改成 YY」「补充一段关于 Z 的」「修正错别字」，我会用工具直接改好，⌘Z 随时可撤销。',
+    ].join('\n')
+    const tokens = splitTokens(reply)
+    let index = 0
+    let cancelled = false
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const push = async () => {
+          while (index < tokens.length && !cancelled) {
+            controller.enqueue(sseChunk(tokens[index]))
+            index += 1
+            await sleep(40 + Math.random() * 60)
+          }
+          if (!cancelled) controller.enqueue(DONE)
+          controller.close()
+        }
+        void push()
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    return Promise.resolve(
+      new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+      })
+    )
   }
 
   const reply = buildReply(userMessage)

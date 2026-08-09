@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useEditor, Milkdown } from '@milkdown/vue'
-import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from '@milkdown/core'
+import { Editor, rootCtx, defaultValueCtx, editorViewCtx, parserCtx, schemaCtx } from '@milkdown/core'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { gfm } from '@milkdown/preset-gfm'
 import { nord } from '@milkdown/theme-nord'
@@ -10,6 +10,7 @@ import { history } from '@milkdown/plugin-history'
 import { clipboard } from '@milkdown/plugin-clipboard'
 import { trailing } from '@milkdown/plugin-trailing'
 import { replaceAll, callCommand } from '@milkdown/utils'
+import { Slice } from '@milkdown/prose/model'
 import { TextSelection } from '@milkdown/prose/state'
 import type { EditorView } from '@milkdown/prose/view'
 import '@milkdown/theme-nord/style.css'
@@ -17,6 +18,8 @@ import { shikiCodeBlock } from './shiki/shikiCodeBlock'
 import { codeBlockView } from './codeBlockView'
 import { codeBlockTabKeymap } from './codeBlockKeymap'
 import { searchPlugin } from './searchPlugin'
+import { selectionPlugin } from './selectionPlugin'
+import { handleEditorTool } from './editorToolHandlers'
 import { searchCommand } from './searchCommands'
 import { placeholderPlugin } from './placeholderPlugin'
 import { useSearch } from '../composables/useSearch'
@@ -64,6 +67,7 @@ const { get, loading } = useEditor((root) =>
     .use(shikiCodeBlock)
     .use(trailing)
     .use(searchPlugin)
+    .use(selectionPlugin)
     .use(searchCommand)
     .use(placeholderPlugin)
 )
@@ -90,6 +94,25 @@ watch(
     const editor = get()
     if (!editor) return
     if (action.type === 'focus-after-title') focusAfterTitle(editor)
+    if (action.type === 'insert-text' && action.text) insertMarkdown(editor, action.text)
+    if (action.type === 'replace-selection' && action.text) {
+      replaceSelection(editor, {
+        from: action.from ?? 0,
+        to: action.to ?? 0,
+        expectedText: action.expectedText ?? '',
+        text: action.text,
+      })
+    }
+    if (action.type === 'tool' && action.tool) {
+      // AI 工具调用：在编辑器 action 中执行（持有 view/parser/schema），结果回传 agent loop
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx) as EditorView
+        const parser = ctx.get(parserCtx)
+        const schema = ctx.get(schemaCtx)
+        const result = handleEditorTool({ view, schema, parser }, action.tool!.name, action.tool!.args)
+        action.resolve?.(result)
+      })
+    }
     pendingAction.value = null // 消费
   }
 )
@@ -118,6 +141,54 @@ function focusAfterTitle(editor: Editor): void {
     // 光标置于标题后第一段起始（paraStart+1 = 段落内容起点）
     const $pos = tr.doc.resolve(first.nodeSize + 1)
     tr = tr.setSelection(TextSelection.near($pos))
+    view.dispatch(tr.scrollIntoView())
+    view.focus()
+  })
+}
+
+/**
+ * 把一段 markdown 按语法解析后插入到当前光标处（AI「插入到正文」）。
+ * 用 parser 而非 insertText：标题 / 列表 / 代码块等块级结构能正确落地。
+ * 若当前选中了文字则替换选中区域；插入后滚动到插入点并聚焦编辑器。
+ */
+function insertMarkdown(editor: Editor, markdown: string): void {
+  editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx) as EditorView
+    const parser = ctx.get(parserCtx)
+    const doc = parser(markdown)
+    if (!doc) return
+    const { state } = view
+    const { from, to } = state.selection
+    const slice = new Slice(doc.content, 0, 0)
+    view.dispatch(state.tr.replace(from, to, slice).scrollIntoView())
+    view.focus()
+  })
+}
+
+/**
+ * 用一段 markdown 替换选中区域（AI「替换选中」）。
+ * 替换前做原文一致性校验：若选区内容已被用户改动（from/to 失效），
+ * 退化为在选区起点插入，避免误删用户新写的内容。
+ */
+function replaceSelection(
+  editor: Editor,
+  a: { from: number; to: number; expectedText: string; text: string }
+): void {
+  editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx) as EditorView
+    const parser = ctx.get(parserCtx)
+    const doc = parser(a.text)
+    if (!doc) return
+    const { state } = view
+    const size = state.doc.content.size
+    const f = Math.min(a.from, size)
+    const t = Math.min(a.to, size)
+    const current = state.doc.textBetween(Math.min(f, t), Math.max(f, t), '\n').trim()
+    const matched = current === a.expectedText.trim()
+    const slice = new Slice(doc.content, 0, 0)
+    const tr = matched
+      ? state.tr.replace(f, t, slice)
+      : state.tr.insert(f, slice.content)
     view.dispatch(tr.scrollIntoView())
     view.focus()
   })

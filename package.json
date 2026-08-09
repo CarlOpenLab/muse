@@ -10,6 +10,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "vue-tsc --noEmit",
+    "test:agent": "node scripts/test-agent.mjs",
+    "test:e2e": "npm run build && node scripts/e2e-agent.mjs",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:win": "electron-vite build && electron-builder --win",
     "build:linux": "electron-vite build && electron-builder --linux"

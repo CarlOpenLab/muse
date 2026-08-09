@@ -18,6 +18,7 @@ import type {
 } from '@antdv-next/x-sdk'
 import { useSettings, type ProviderConfig } from '../composables/useSettings'
 import { ipcChatFetch, setChatConnection, setPendingSearchContext } from './ipcProvider'
+import { EDITOR_TOOLS } from './editorTools'
 import type { WebSearchResponse } from './ipcProvider'
 
 export interface Conversation {
@@ -129,6 +130,8 @@ export function useChat() {
   const reasoning = ref(false)
   const webSearch = ref(false)
   const searching = ref(false)
+  /** AI 可修改文档（agent 工具调用）；侧边栏定位为文档辅助，默认开启 */
+  const editingTools = ref(true)
 
   // 供应商/模型变化 -> 同步主进程请求连接
   watch(
@@ -222,11 +225,15 @@ export function useChat() {
     }
   }
 
-  // ===== 请求参数（模型 + 深度思考）=====
+  // ===== 请求参数（模型 + 深度思考 + 文档编辑工具）=====
   function buildParams(): Partial<XModelParams> {
     return {
       model: activeProvider.value ? activeModelId.value : 'muse-mock',
       ...(reasoning.value && reasoningAvailable.value ? { reasoning_effort: 'high' } : {}),
+      // agent 工具调用：模型可通过工具直接修改当前文档
+      ...(editingTools.value
+        ? { tools: EDITOR_TOOLS as unknown as XModelParams['tools'], tool_choice: 'auto' }
+        : {}),
     }
   }
 
@@ -302,6 +309,7 @@ export function useChat() {
     reasoning,
     webSearch,
     searching,
+    editingTools,
     selectProvider,
     selectModel,
     newConversation,

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, provide } from 'vue'
+import { computed, h, provide } from 'vue'
 import type { BubbleItemType, BubbleListProps } from '@antdv-next/x'
-import { BubbleList, Welcome } from '@antdv-next/x'
+import { BubbleList, Welcome, Actions, ActionsCopy } from '@antdv-next/x'
+import type { ItemType as ActionsItemType } from '@antdv-next/x'
 import { XMarkdown } from '@antdv-next/x-markdown'
-import { RotateCcw, Sparkles } from '@lucide/vue'
+import { RotateCcw, Sparkles, ArrowDownToLine, Replace } from '@lucide/vue'
 import MarkdownCodeRenderer from './MarkdownCodeRenderer.vue'
 import { isDarkKey } from './theme'
 import type { Conversation } from './useChat'
@@ -12,10 +13,16 @@ const props = defineProps<{
   conversation?: Conversation
   isRequesting: boolean
   isDark: boolean
+  /** 最近一次提问针对过选区（回答可用「替换选中」直接落回文档） */
+  canReplaceSelection?: boolean
 }>()
 
 const emit = defineEmits<{
   reload: [messageId: string | number]
+  /** 把某条 AI 回答的 markdown 插入到正文 */
+  insert: [text: string]
+  /** 用某条 AI 回答的 markdown 替换选中的原文 */
+  replaceSelection: [text: string]
 }>()
 
 provide(isDarkKey, computed(() => props.isDark))
@@ -44,6 +51,34 @@ const lastAssistantKey = computed(
   () => [...bubbleItems.value].reverse().find((i) => i.role === 'assistant')?.key
 )
 
+/** 消息操作（@antdv-next/x Actions）：复制 / 插入到正文 / 替换选中 / 重新生成 */
+function actionItems(item: BubbleItemType): ActionsItemType[] {
+  const content = String(item.content)
+  const items: ActionsItemType[] = []
+  if (item.role !== 'assistant' || item.status !== 'success') return items
+  items.push({ key: 'copy', actionRender: h(ActionsCopy, { text: content }) })
+  items.push({
+    key: 'insert',
+    icon: h(ArrowDownToLine, { size: 13 }),
+    onItemClick: () => emit('insert', content),
+  })
+  if (props.canReplaceSelection && item.key === lastAssistantKey.value) {
+    items.push({
+      key: 'replace',
+      icon: h(Replace, { size: 13 }),
+      onItemClick: () => emit('replaceSelection', content),
+    })
+  }
+  if (item.key === lastAssistantKey.value && !props.isRequesting) {
+    items.push({
+      key: 'reload',
+      icon: h(RotateCcw, { size: 13 }),
+      onItemClick: () => emit('reload', item.key),
+    })
+  }
+  return items
+}
+
 const markdownComponents = { code: MarkdownCodeRenderer }
 
 /** XMarkdown 主题类：需带上 x-markdown-light/dark 才能命中主题 CSS */
@@ -59,8 +94,8 @@ const markdownClassName = computed(() =>
       <Welcome
         class="chat-welcome flex-col items-center text-center"
         variant="borderless"
-        title="今天想一起完成什么？"
-        description="和 Muse AI 聊聊：总结文档、写代码、整理思路，灵感逐字涌现。"
+        title="帮你写文档"
+        description="基于当前文档问答：总结、扩写、润色、翻译，满意的回答直接插入正文。"
       >
         <template #icon><Sparkles :size="22" /></template>
       </Welcome>
@@ -103,25 +138,12 @@ const markdownClassName = computed(() =>
       </template>
 
       <template #footer="{ item }">
-        <a-tooltip
-          v-if="
-            item.role === 'assistant' &&
-            item.status === 'success' &&
-            item.key === lastAssistantKey &&
-            !isRequesting
-          "
-          title="重新生成"
-        >
-          <a-button
-            type="text"
-            size="small"
-            class="!w-7 !h-7 !min-w-0 !rounded-md !px-0 text-fg-soft"
-            aria-label="重新生成回答"
-            @click="emit('reload', item.key)"
-          >
-            <template #icon><RotateCcw :size="13" /></template>
-          </a-button>
-        </a-tooltip>
+        <Actions
+          v-if="item.role === 'assistant' && item.status === 'success'"
+          :items="actionItems(item)"
+          variant="borderless"
+          class="chat-msg-actions"
+        />
       </template>
     </BubbleList>
   </main>
@@ -183,6 +205,14 @@ const markdownClassName = computed(() =>
   word-break: break-word;
   font-size: 13.5px;
   line-height: 1.65;
+}
+
+/* 消息底部操作区（@antdv-next/x Actions）：复制 / 插入正文 / 替换选中 / 重新生成 */
+.chat-msg-actions {
+  margin-top: 6px;
+}
+.chat-msg-actions :deep(.antd-actions-item) {
+  color: var(--fg-soft);
 }
 
 /* ===== XMarkdown 排版 ===== */

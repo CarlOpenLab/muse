@@ -150,6 +150,18 @@ muse/
 - ✅ Phase 2 Shiki 代码块：完成（ProseMirror decoration 方案，非 node view）
 - ✅ Phase 3 文件与应用外壳：完成（IPC + 原生菜单 + 拖拽 + 最近文件 + 关闭确认）
 - ✅ Phase 4 体验打磨：大纲 / 字数 / 查找替换 / 草稿自动保存 / 设置面板；块级聚焦留 v2
+- ✅ 布局演进：编辑器常驻主区域，右侧辅助侧栏同一位置「大纲 | AI」标签切换（Notion AI 式写作辅助）；
+  AI 面板支持会话下拉切换、「引用当前文档」上下文注入、「插入到正文」（markdown 解析后落到光标处）
+- ✅ AI 直接编辑文档：选区跟踪插件（ProseMirror selection → 模块级快照）→ 侧栏「已选中 N 字」操作条（润色 / 扩写 / 总结 / 翻译快捷动作），
+  发送时选中文本注入 system 上下文并记录目标选区，回答完成后「替换选中」按 markdown 解析直接替换原文（带原文一致性校验，防误删）
+- ✅ **Agent 工具调用**：侧栏 AI 用自然语言说明文档问题，模型通过 OpenAI function calling 直接修改文档（get_document / get_selection / replace_selection / insert_at_cursor / insert_at_end / replace_text 六工具）；
+  ipcChatFetch 内 agent loop 逐轮请求 → 流中解析 tool_calls → dispatchEditorTool 执行（MilkdownCore transaction，⌘Z 可撤销）→ 结果反馈下一轮；
+  输出流只保留 content，UI/x-sdk 层无感；mock 模式带工具演示（可一键验证全链路）；「AI 可修改文档」开关在对话选项中
+
+> 验证：`npm run test:agent`（解析逻辑 12 项单测）+ `npm run test:e2e`（真实构建产物端到端：UI 发送工具意图 → 文档真实追加内容）
+- ✅ **@antdv-next/x 组件化**：思考链（深度思考 reasoning_content 流式 + 工具调用 loading→success|error）用 `ThoughtChain` 渲染（chainStore 模块级数据，agent loop 写入）；
+  消息操作（复制 / 插入正文 / 替换选中 / 重新生成）用 `Actions` + `ActionsCopy`；`Sender` / `Bubble` / `Welcome` / `Conversations` / `XMarkdown` / `CodeHighlighter` 全覆盖；
+  ipcProvider 统一为「解析→转发」核心：普通聊天与 agent 模式同路径，思考链在所有模式可用
 
 > 环境备注：npm 开了 `allow-scripts` 空白名单，已在 `package.json` 持久化批准
 > `electron` / `esbuild` / `electron-winstaller` 的 postinstall，避免 `npm install` 清空二进制。

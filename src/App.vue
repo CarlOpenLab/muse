@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { FileText, Sun, Moon, PanelRightOpen, PanelRightClose, Settings as SettingsIcon, Sparkles } from '@lucide/vue'
+import { Sun, Moon, PanelRightOpen, PanelRightClose, Settings as SettingsIcon } from '@lucide/vue'
 import { ConfigProvider, theme as antdTheme } from 'antdv-next'
 import { ThemeProvider } from 'antdv-style'
 import { XProvider } from '@antdv-next/x'
 import type { XProviderProps } from '@antdv-next/x'
 import MilkdownEditor from './editor/MilkdownEditor.vue'
 import EntryScreen from './components/EntryScreen.vue'
-import ChatView from './chat/ChatView.vue'
+import ChatPanel from './chat/ChatPanel.vue'
+import SidePanel from './components/SidePanel.vue'
 import { useTheme } from './composables/useTheme'
 import { useFile } from './composables/useFile'
 import { useDocStats } from './composables/useDocStats'
 import { useOutline } from './composables/useOutline'
 import { useSearch } from './composables/useSearch'
 import { useSettings } from './composables/useSettings'
+import { dispatchEditorInsert, dispatchEditorReplaceSelection } from './composables/useEditorControl'
 import OutlinePanel from './components/OutlinePanel.vue'
 import StatusBar from './components/StatusBar.vue'
 import SearchBar from './components/SearchBar.vue'
@@ -180,12 +182,52 @@ const headings = useOutline(doc)
 const search = useSearch()
 const { settings } = useSettings()
 
-const showOutline = ref(true)
 const showSettings = ref(false)
 const recentFiles = ref<string[]>([])
 
-/** 主区域视图：'editor' = Markdown 编辑器，'chat' = AI 对话 */
-const activeView = ref<'editor' | 'chat'>('editor')
+// ===== 右侧辅助侧栏：大纲 / AI 在同一位置切换（写文档时的贴身助手）=====
+interface SidebarState {
+  open: boolean
+  tab: 'ai' | 'outline'
+  width: number
+}
+const SIDEBAR_KEY = 'muse:sidebar:v1'
+function loadSidebar(): SidebarState {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_KEY)
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<SidebarState>
+      return {
+        open: p.open !== false,
+        tab: p.tab === 'ai' ? 'ai' : 'outline',
+        width: Math.min(560, Math.max(300, Number(p.width) || 380)),
+      }
+    }
+  } catch {
+    /* 忽略损坏的持久化数据 */
+  }
+  return { open: true, tab: 'outline', width: 380 }
+}
+const sidebar = ref<SidebarState>(loadSidebar())
+watch(
+  sidebar,
+  (s) => {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, JSON.stringify(s))
+    } catch {
+      /* 存储满等场景静默失败 */
+    }
+  },
+  { deep: true }
+)
+
+/** 侧栏开合：标签切换交给侧栏头部（大纲 / AI 相邻），左侧只留一个总开关 */
+function toggleSidebar(): void {
+  sidebar.value.open = !sidebar.value.open
+}
+function onSidebarResize(width: number): void {
+  sidebar.value.width = width
+}
 
 // @antdv-next/x 组件库中文文案
 const chatLocale: XProviderProps['locale'] = {
@@ -287,41 +329,37 @@ function onDrop(e: DragEvent): void {
   const path = window.muse?.getPathForFile(f)
   if (path) void openPath(path)
 }
+
+/** AI 回答 → 插入到正文（按 markdown 解析后落到光标处） */
+function insertIntoDoc(text: string): void {
+  if (!text.trim()) return
+  dispatchEditorInsert(text)
+}
+
+/** AI 回答 → 替换选中的原文（带原文一致性校验，防误删） */
+function replaceFromChat(payload: {
+  from: number
+  to: number
+  expectedText: string
+  text: string
+}): void {
+  if (!payload.text.trim()) return
+  dispatchEditorReplaceSelection(payload.from, payload.to, payload.expectedText, payload.text)
+}
+
+/** 惰性取正文：仅在「引用当前文档」提问时调用，避免每键重渲染聊天树 */
+const getDocContext = (): string => doc.value
 </script>
 
 <template>
   <ConfigProvider :theme="themeConfig">
     <ThemeProvider :appearance="appearance">
-      <div class="flex flex-col h-full" @dragover.prevent @drop.prevent="onDrop">
+      <div class="flex flex-col h-full bg-page-bg" @dragover.prevent @drop.prevent="onDrop">
         <div class="flex flex-1 overflow-hidden">
-          <!-- 左侧活动栏：视图切换 + 主题 / 设置，常驻显示 -->
+          <!-- 左侧活动栏：主题 / 设置（侧栏开合按钮常驻编辑卡片右上角） -->
           <aside
             class="w-10 shrink-0 flex flex-col items-center gap-3 py-2 bg-bg-soft border-r border-border-subtle"
           >
-            <!-- 顶部：视图切换（MD 编辑器 / AI 对话） -->
-            <div class="flex flex-col items-center gap-3">
-              <a-button
-                type="text"
-                shape="circle"
-                size="small"
-                :class="{ '!bg-accent !text-bg': activeView === 'editor' }"
-                title="Markdown 编辑器"
-                @click="activeView = 'editor'"
-              >
-                <template #icon><FileText :size="16" /></template>
-              </a-button>
-              <a-button
-                type="text"
-                shape="circle"
-                size="small"
-                :class="{ '!bg-accent !text-bg': activeView === 'chat' }"
-                title="AI 对话"
-                @click="activeView = 'chat'"
-              >
-                <template #icon><Sparkles :size="16" /></template>
-              </a-button>
-            </div>
-
             <!-- 底部：主题 / 设置 -->
             <div class="mt-auto flex flex-col items-center gap-3">
               <a-button type="text" shape="circle" size="small" @click="toggle">
@@ -336,14 +374,13 @@ function onDrop(e: DragEvent): void {
             </div>
           </aside>
 
-          <!-- 右侧内容区：画布 + 编辑卡片（大纲收进卡片内，Notion 风格右侧边栏） -->
+          <!-- 右侧内容区：编辑器常驻主区域（AI / 大纲 收进右侧辅助侧栏） -->
           <main class="flex-1 overflow-auto bg-page-bg">
             <div class="px-3 py-3 h-full flex flex-col">
               <div
                 class="relative rounded-xl card-shadow flex-1 flex flex-col overflow-hidden bg-bg"
               >
-                <!-- ===== 视图一：Markdown 编辑器 ===== -->
-                <div v-show="activeView === 'editor'" class="flex-1 min-h-0 flex flex-col">
+                <div class="flex-1 min-h-0 flex flex-col">
                   <!-- Entry 欢迎页：未新建 / 打开任何文档时显示 -->
                   <div v-if="!started" class="flex-1 flex">
                     <EntryScreen
@@ -354,62 +391,69 @@ function onDrop(e: DragEvent): void {
                     />
                   </div>
 
-                  <!-- 编辑器：编辑区 + 大纲侧边栏 -->
+                  <!-- 编辑器（内部滚动，卡片高度固定，对齐 Notion） -->
                   <div v-else class="relative flex-1 flex min-h-0">
-                  <!-- 大纲开关：常驻卡片右上角，图标随状态切换（单按钮，避免收展动画出现两个图标） -->
-                  <div class="absolute top-2 right-2 z-20">
-                    <a-button
-                      type="text"
-                      shape="circle"
-                      size="small"
-                      :title="showOutline ? '隐藏大纲' : '显示大纲'"
-                      @click="showOutline = !showOutline"
-                    >
-                      <template #icon>
-                        <PanelRightClose v-if="showOutline" :size="16" />
-                        <PanelRightOpen v-else :size="16" />
-                      </template>
-                    </a-button>
-                  </div>
-
-                  <!-- 编辑区（内部滚动，卡片高度固定，对齐 Notion） -->
-                  <div class="flex-1 min-w-0 flex flex-col">
-                    <div
-                      ref="editorScrollRef"
-                      class="flex-1 overflow-y-auto"
-                      @scroll.passive="onEditorScroll"
-                    >
-                      <MilkdownEditor v-model="doc" class="px-6 pt-6 pb-24" />
+                    <!-- 侧栏开合：常驻卡片右上角（大纲 / AI 标签切换在侧栏头部） -->
+                    <div class="absolute top-2 right-2 z-20">
+                      <a-button
+                        type="text"
+                        shape="circle"
+                        size="small"
+                        :title="sidebar.open ? '收起侧栏' : '打开侧栏'"
+                        @click="toggleSidebar"
+                      >
+                        <template #icon>
+                          <PanelRightClose v-if="sidebar.open" :size="16" />
+                          <PanelRightOpen v-else :size="16" />
+                        </template>
+                      </a-button>
+                    </div>
+                    <div class="flex-1 min-w-0 flex flex-col">
+                      <div
+                        ref="editorScrollRef"
+                        class="flex-1 overflow-y-auto editor-scroll"
+                        @scroll.passive="onEditorScroll"
+                      >
+                        <MilkdownEditor v-model="doc" class="px-6 pt-6 pb-24" />
+                      </div>
                     </div>
                   </div>
-
-                  <!-- 大纲侧边栏（右侧，卡片内） -->
-                  <Transition name="sidebar">
-                    <OutlinePanel
-                      v-if="showOutline"
-                      :headings="headings"
-                      :active="activeHeading"
-                      @jump="scrollToHeading"
-                    />
-                  </Transition>
-                </div>
-                </div>
-
-                <!-- ===== 视图二：AI 对话（@antdv-next/x 全家桶） ===== -->
-                <div v-show="activeView === 'chat'" class="flex-1 min-h-0 flex flex-col">
-                  <XProvider :theme="themeConfig" :locale="chatLocale">
-                    <ChatView :is-dark="isDark" @manage="showSettings = true" />
-                  </XProvider>
                 </div>
               </div>
             </div>
           </main>
+
+          <!-- 右侧辅助侧栏：大纲 / AI 同一位置切换（常驻挂载，聊天草稿与流式不丢；宽度折叠动画） -->
+          <Transition name="sidebar">
+            <SidePanel
+              v-show="sidebar.open"
+              :tab="sidebar.tab"
+              :width="sidebar.width"
+              @update:tab="sidebar.tab = $event"
+              @close="sidebar.open = false"
+              @resize="onSidebarResize"
+            >
+              <template #outline>
+                <OutlinePanel :headings="headings" :active="activeHeading" @jump="scrollToHeading" />
+              </template>
+              <template #ai>
+                <XProvider :theme="themeConfig" :locale="chatLocale">
+                  <ChatPanel
+                    :is-dark="isDark"
+                    :get-doc-context="getDocContext"
+                    @manage="showSettings = true"
+                    @insert="insertIntoDoc"
+                    @replace-selection="replaceFromChat"
+                  />
+                </XProvider>
+              </template>
+            </SidePanel>
+          </Transition>
         </div>
 
         <SettingsModal :open="showSettings" @close="showSettings = false" />
         <SearchBar />
         <StatusBar
-          v-show="activeView === 'editor'"
           :stats="stats"
           :filename="filename"
           :dirty="dirty"

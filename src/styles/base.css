@@ -330,7 +330,7 @@ body {
   backdrop-filter: blur(14px) saturate(1.4);
 }
 
-/* 右侧大纲侧边栏：宽度折叠动画（shadcn 风格，占位式挤压内容） */
+/* 右侧辅助侧栏（大纲 / AI）：宽度折叠动画（shadcn 风格，占位式挤压内容） */
 .sidebar-enter-active,
 .sidebar-leave-active {
   transition: width 0.22s ease, opacity 0.22s ease, border-left-width 0.22s ease;
@@ -341,6 +341,15 @@ body {
   width: 0 !important;
   opacity: 0;
   border-left-width: 0;
+}
+
+/* 编辑区滚动条隐藏（Notion 风格：滚轮 / 键盘 / 拖选滚动不受影响，避免与右上角按钮冲突） */
+.editor-scroll {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE / 旧 Edge */
+}
+.editor-scroll::-webkit-scrollbar {
+  display: none; /* Chromium / Safari */
 }
 
 /* 设置抽屉：背景淡入，面板从右滑入 */
@@ -455,4 +464,14 @@ body {
 .outline-item[data-level='6'] {
   padding-left: 62px;
   font-size: 12px;
+}
+
+/* 通用淡入淡出（工具提示条等） */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 200ms ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
