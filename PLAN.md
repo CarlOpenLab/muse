@@ -1,6 +1,6 @@
 # Muse · 规划文档 v1
 
-> 目标：做一个 Electron 桌面应用，第一版实现 **Typora 式的 markdown 即时渲染（WYSIWYG）**，
+> 目标：做一个 Electron 桌面应用，第一版实现 **markdown 即时渲染（WYSIWYG）**，
 > 代码块用 **Shiki** 高亮；并为后续 **AI 流式输出**（项目名 Muse 的真正含义）打好地基。
 
 ---
@@ -14,7 +14,7 @@
 | `@shikijs/rehype` | 把 Shiki 接进 unified/remark 管道 | 渲染静态 markdown 预览/AI 输出预览 |
 | markdown 解析/序列化 | markdown ⇄ 富文本 | 由编辑器内核（Milkdown）承担 |
 
-**结论**：Typora 式「边打字边渲染」由 **编辑器内核** 负责，Shiki 只在代码块这一层介入。
+**结论**：「边打字边渲染」由 **编辑器内核** 负责，Shiki 只在代码块这一层介入。
 
 ---
 
@@ -25,15 +25,15 @@
 | 外壳 | **Electron 43** | 桌面端、文件系统、原生菜单 |
 | 构建 | **electron-vite 5** | HMR 快、main/preload/renderer 一体化 |
 | UI 框架 | **Vue 3 + TypeScript** | 生态成熟，`@milkdown/vue` 官方适配，做工具栏/侧栏顺手 |
-| 编辑器内核 | **Milkdown 7**（基于 ProseMirror） | 开箱即 WYSIWYG markdown，自带 commonmark/GFM 预设与序列化，最接近 Typora |
+| 编辑器内核 | **Milkdown 7**（基于 ProseMirror） | 开箱即 WYSIWYG markdown，自带 commonmark/GFM 预设与序列化 |
 | 代码高亮 | **Shiki 4**（单例 highlighter） | 代码块染色，主题精美 |
 | AI 流式高亮（未来） | **@shikijs/stream 4** | 流式 token 增量染色，不阻塞 |
 | 状态管理 | Zustand | 轻量 |
 | 打包 | electron-builder | macOS dmg / Windows nsis / Linux AppImage |
 | 样式 | CSS + CSS 变量（主题系统） | 编辑器对排版精细度要求高，Tailwind 反而碍事 |
 
-> **备选内核**：若想更可控、社区更大，可用 **TipTap + tiptap-markdown**，但 markdown 序列化和 Typora 式快捷键要自己补，v1 工作量更大。
-> **最简备选**（非 WYSIWYG）：CodeMirror 6 + 实时预览分栏。但那就不是 Typora 了，仅作降级方案。
+> **备选内核**：若想更可控、社区更大，可用 **TipTap + tiptap-markdown**，但 markdown 序列化和快捷键要自己补，v1 工作量更大。
+> **最简备选**（非 WYSIWYG）：CodeMirror 6 + 实时预览分栏。但那就不是 WYSIWYG 了，仅作降级方案。
 
 ---
 
@@ -72,7 +72,7 @@ muse/
 - **安全**：`contextIsolation: true`、`nodeIntegration: false`，所有文件操作走 preload IPC。
 - **Shiki 单例**：启动时 `createHighlighter`（异步，加载 wasm/语法），之后 `codeToHtml` 近乎同步。避免每块重复初始化。
 - **代码块 node view**：Milkdown 的 fenced-code 节点用自定义 node view，把 Shiki HTML 渲染进去。
-  - v1 策略：**编辑中显示纯文本，失焦/防抖时重新高亮**（避免光标跳动）。Typora 本身也是块级聚焦思路。
+  - v1 策略：**编辑中显示纯文本，失焦/防抖时重新高亮**（避免光标跳动）。这也是「块级聚焦」思路的简化。
   - 增强：把 Shiki 丢进 **Web Worker**，打字时不阻塞主线程。
 - **主题系统**：CSS 变量驱动，Shiki 主题与编辑器主题联动（如 `github-light` / `github-dark`）。
 
@@ -111,8 +111,8 @@ muse/
 > 运行时验证：诊断确认 `document.title` / `getPathForFile` / `fs:readRecent` 端到端，
 > Milkdown 渲染 383 字符 + 3 代码块。
 
-### Phase 4 · Typora 体验打磨（≈2–3 天）✅
-- [ ] 块级聚焦（仅当前编辑块显示 markdown 标记，Typora 招牌特性）—— **v1 未做**：Milkdown 实现需为每种节点做「源码态/渲染态」双视图 node view，成本极高且易破坏现有 WYSIWYG，留 v2 单独攻坚
+### Phase 4 · 编辑体验打磨（≈2–3 天）✅
+- [ ] 块级聚焦（仅当前编辑块显示 markdown 标记）—— **v1 未做**：Milkdown 实现需为每种节点做「源码态/渲染态」双视图 node view，成本极高且易破坏现有 WYSIWYG，留 v2 单独攻坚
 - [x] 明暗主题 + GitHub 风格（提前实现，见 Phase 2 末）
 - [x] 大纲侧栏（标题树 + 点击跳转） / 字数统计（底部状态栏） / 查找替换（⌘F，ProseMirror decoration + $command）
 - [x] 自动保存与草稿持久化（未命名文档防抖写 userData/draft.json，启动恢复）
@@ -135,7 +135,7 @@ muse/
 |------|------|------|
 | Milkdown + Shiki 自定义 node view | 最 tricky，重高亮时光标易跳 | 失焦/防抖重高亮；必要时 Worker 化 |
 | Shiki 体积 | 全语言包很大 | fine-grained 按需引入常用语言；或主进程/Worker 跑 |
-| Typora「块级聚焦」 | 高级特性，实现复杂 | v1 可先全渲染，Phase 4 再做 |
+| 「块级聚焦」 | 高级特性，实现复杂 | v1 可先全渲染，Phase 4 再做 |
 | 编辑器内核二选一 | Milkdown 上手陡但 WYSIWYG 开箱即用；TipTap 灵活但要自己补 markdown | 推荐 Milkdown，待你拍板 |
 
 ---

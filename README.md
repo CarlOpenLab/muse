@@ -1,11 +1,15 @@
 <p align="center">
+  <img src="resources/icon.png" alt="Muse" width="128" />
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Muse-WYSIWYG%20Markdown%20Editor-88c0d0" alt="Muse" />
 </p>
 
 <h1 align="center">Muse</h1>
 
 <p align="center">
-  <strong>Typora-style WYSIWYG Markdown editor</strong> · Shiki code highlighting · Electron + Vue 3
+  <strong>WYSIWYG Markdown 桌面编辑器</strong> · Shiki 实时高亮 · Electron + Vue 3
 </p>
 
 <p align="center">
@@ -27,7 +31,7 @@
 
 # 🇨🇳 中文文档
 
-一个 **Typora 式** 的所见即所得（WYSIWYG）Markdown 桌面编辑器：打字时 `#` 立刻变成标题、`**加粗**` 即时生效、代码块用 **Shiki** 实时语法高亮。基于 **Milkdown 7**（ProseMirror）构建，未来计划接入 **AI 流式输出**（项目名 Muse 的真正含义）。
+一个**所见即所得（WYSIWYG）的 Markdown 桌面编辑器**：打字时 `#` 立刻变成标题、`**加粗**` 即时生效、代码块用 **Shiki** 实时语法高亮。基于 **Milkdown 7**（ProseMirror）构建，未来计划接入 **AI 流式输出**（Muse 的真正主线）。
 
 ## ✨ 功能特性
 
@@ -36,8 +40,8 @@
   - 26 种常用语言按需加载（lazy chunk）
   - 代码块右上角可直接编辑语言标记
   - 明暗主题联动（`github-light` / `github-dark`）
-- **明暗主题** — Nord 色板，一键切换，CSS 变量驱动，持久化到本地
-- **大纲侧栏** — 标题树 + 点击平滑跳转
+- **明暗主题** — 一键切换，CSS 变量驱动，持久化到本地
+- **大纲侧栏** — 标题树 + 点击平滑跳转 + 当前章节高亮
 - **查找替换** — ⌘F 打开、⌘G / ⇧⌘G 上一个/下一个，匹配高亮
 - **字数统计** — 底部状态栏实时显示
 - **设置面板** — 字号 / 行高，实时生效并持久化
@@ -109,7 +113,7 @@ muse/
 | Phase 1 | Milkdown 编辑器内核（WYSIWYG） | ✅ |
 | Phase 2 | Shiki 代码块实时高亮 | ✅ |
 | Phase 3 | 文件 I/O 与应用外壳（菜单 / 拖拽 / 最近文件） | ✅ |
-| Phase 4 | Typora 体验打磨（主题 / 大纲 / 查找 / 统计 / 设置） | ✅ |
+| Phase 4 | 编辑体验打磨（主题 / 大纲 / 查找 / 统计 / 设置） | ✅ |
 | Phase 5 | AI 流式输出（`@shikijs/stream`，未来主线） | ⏳ 规划中 |
 
 详见 [PLAN.md](./PLAN.md)。
@@ -122,7 +126,7 @@ muse/
 
 # 🇬🇧 English Docs
 
-**Muse** is a **Typora-style WYSIWYG Markdown editor** for the desktop. Type `#` and it becomes a heading; `**bold**` renders instantly; code blocks are highlighted in real time with **Shiki**. Built on **Milkdown 7** (ProseMirror), with AI streaming output planned as the project's true north.
+**Muse** is a **WYSIWYG Markdown editor** for the desktop. Type `#` and it becomes a heading; `**bold**` renders instantly; code blocks are highlighted in real time with **Shiki**. Built on **Milkdown 7** (ProseMirror), with AI streaming output planned as the project's true north.
 
 ## ✨ Features
 
@@ -131,8 +135,8 @@ muse/
   - 26 common languages loaded on demand (lazy chunks)
   - Editable language tag at the top-right corner of each code block
   - Theme-aware (`github-light` / `github-dark`)
-- **Light / dark themes** — Nord palette, one-click toggle, persisted locally
-- **Outline sidebar** — heading tree with smooth scroll-to navigation
+- **Light / dark themes** — one-click toggle, CSS-variable driven, persisted locally
+- **Outline sidebar** — heading tree with smooth scroll-to navigation and current-section highlight
 - **Find & replace** — ⌘F to open, ⌘G / ⇧⌘G for prev/next, highlighted matches
 - **Word count** — live stats in the status bar
 - **Settings panel** — font size / line height, applied instantly and persisted
@@ -204,7 +208,7 @@ muse/
 | 1 | Milkdown editor core (WYSIWYG) | ✅ |
 | 2 | Shiki real-time code highlighting | ✅ |
 | 3 | File I/O & app shell (menus / drag-drop / recents) | ✅ |
-| 4 | Typora polish (themes / outline / find / stats / settings) | ✅ |
+| 4 | Editing polish (themes / outline / find / stats / settings) | ✅ |
 | 5 | AI streaming output (`@shikijs/stream`, the main line) | ⏳ planned |
 
 See [PLAN.md](./PLAN.md) for details.
