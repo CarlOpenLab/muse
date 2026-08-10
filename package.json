@@ -34,6 +34,7 @@
     "@milkdown/prose": "^7.22.0",
     "@milkdown/theme-nord": "^7.22.0",
     "@milkdown/transformer": "^7.22.0",
+    "@milkdown/utils": "^7.22.0",
     "@milkdown/vue": "^7.22.0",
     "antdv-next": "^1.5.0",
     "antdv-style": "1.0.0-rc.1",
