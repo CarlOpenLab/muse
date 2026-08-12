@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FilePlus, FolderOpen, FileText, FolderTree } from '@lucide/vue'
+import { FilePlus, FolderOpen, FileText, FileUp } from '@lucide/vue'
 import logoUrl from '../../resources/icon.png'
 
 defineProps<{ recent: string[] }>()
@@ -32,7 +32,7 @@ function basename(p: string): string {
 
       <a-space :size="10" class="mb-3">
         <a-button type="primary" size="large" @click="emit('open-folder')">
-          <template #icon><FolderTree :size="16" /></template>
+          <template #icon><FolderOpen :size="16" /></template>
           打开文件夹
         </a-button>
         <a-button size="large" @click="emit('new')">
@@ -42,7 +42,7 @@ function basename(p: string): string {
       </a-space>
 
       <a-button type="link" size="small" class="!text-fg-soft mb-6" @click="emit('open')">
-        <template #icon><FolderOpen :size="13" /></template>
+        <template #icon><FileUp :size="13" /></template>
         打开单个文件
       </a-button>
 

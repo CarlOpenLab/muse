@@ -2,12 +2,9 @@
 /**
  * 右侧辅助栏：与左栏对称的一整栏（不再是浮起的卡片），
  * 靠一条 1px 分栏线与编辑区分开，内部与主区同底色——对齐参考稿的三栏观感。
- * - 头部：芯片式标签（搜索 / AI）；收起按钮已统一收到底部工具条；
+ * - 顶部：窗口拖拽区（搜索 / AI 标签已移除，改由底部工具条 icon 打开/切换）；
  * - 两个插槽常驻挂载（v-show 切换），切标签不丢聊天状态（草稿/流式）。
- * 文档大纲已改为编辑区右侧的导航竖轨（OutlinePanel），不再占用右栏。
  */
-import { Search, Sparkles } from '@lucide/vue'
-
 type PanelTab = 'ai' | 'search'
 
 const props = defineProps<{
@@ -16,7 +13,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:tab': [tab: PanelTab]
   resize: [width: number]
 }>()
 
@@ -54,27 +50,7 @@ function startDrag(e: MouseEvent): void {
     <!-- 拖拽把手：悬停变列宽光标 -->
     <div class="sidebar-resizer" title="拖拽调整宽度" @mousedown="startDrag" />
 
-    <!-- 头部：芯片式标签（与左栏 / 编辑区顶栏同高，三栏顶部齐平） -->
-    <div class="h-12 shrink-0 flex items-center gap-1.5 pl-3 pr-2 app-drag select-none">
-      <button
-        type="button"
-        class="panel-chip"
-        :class="{ active: tab === 'search' }"
-        @click="emit('update:tab', 'search')"
-      >
-        <Search :size="14" />
-        <span>搜索</span>
-      </button>
-      <button
-        type="button"
-        class="panel-chip"
-        :class="{ active: tab === 'ai' }"
-        @click="emit('update:tab', 'ai')"
-      >
-        <Sparkles :size="14" />
-        <span>AI</span>
-      </button>
-    </div>
+    <!-- 顶部无空条：搜索 / AI 内容直接贴顶（不再保留大段拖拽留白） -->
 
     <!-- 内容：两个插槽常驻挂载，切标签只改可见性（聊天草稿/流式不丢） -->
     <div class="flex-1 min-h-0 flex flex-col">
@@ -102,32 +78,5 @@ function startDrag(e: MouseEvent): void {
   background: color-mix(in srgb, var(--fg-soft) 18%, transparent);
 }
 
-/* 芯片式标签：参考稿右栏头部的那种小圆角标签 */
-.panel-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--fg-soft);
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition:
-    background 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease;
-}
-.panel-chip:hover {
-  color: var(--fg);
-  background: var(--bg-hover);
-}
-.panel-chip.active {
-  background: var(--bg-elev);
-  border-color: var(--border-strong);
-  color: var(--fg);
-}
+/* 芯片式标签样式已随顶部标签移除而废弃 */
 </style>

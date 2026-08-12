@@ -1,20 +1,18 @@
 <script setup lang="ts">
 /**
  * 整窗底部工具条（Zed 式）：左边收起侧栏 + 状态信息（文档位置 + 字数统计），
- * 右边一排 icon 工具（搜索 / 打开文件夹 / AI 栏开关 / 主题 / 设置），
- * 左右 justify-between。
- * 顶栏（TitleBar）、左右侧栏顶部的 icon 按钮统一收在这里。
+ * 右边一排 icon 工具（搜索 / AI / 打开文件夹 / 主题 / 设置），左右 justify-between。
+ * 搜索 / AI 点击打开或切换右栏（已激活时再点收起）；顶栏与右栏的标签切换已移除。
  */
 import {
   Folder,
-  FolderInput,
+  FolderOpen,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
   Search,
   Settings as SettingsIcon,
+  Sparkles,
   Sun,
 } from '@lucide/vue'
 import type { DocStats } from '../composables/useDocStats'
@@ -26,13 +24,14 @@ defineProps<{
   path: string | null
   railCollapsed: boolean
   aiOpen: boolean
+  searchOpen: boolean
   isDark: boolean
 }>()
 
 const emit = defineEmits<{
-  find: []
-  'toggle-rail': []
+  'toggle-search': []
   'toggle-ai': []
+  'toggle-rail': []
   'toggle-theme': []
   settings: []
   'open-folder': []
@@ -72,31 +71,36 @@ const emit = defineEmits<{
 
     <!-- 右：工具 icon 按钮 -->
     <div class="flex items-center gap-0.5 shrink-0">
-      <a-tooltip title="搜索 (⌘F)">
-        <button type="button" class="rail-icon-btn" aria-label="搜索" @click="emit('find')">
+      <a-tooltip :title="searchOpen ? '收起搜索' : '搜索 (⌘F)'">
+        <button
+          type="button"
+          class="rail-icon-btn"
+          :class="{ on: searchOpen }"
+          aria-label="搜索"
+          @click="emit('toggle-search')"
+        >
           <Search :size="14" />
         </button>
       </a-tooltip>
-      <a-tooltip title="打开文件夹">
-        <button type="button" class="rail-icon-btn" aria-label="打开文件夹" @click="emit('open-folder')">
-          <FolderInput :size="14" />
-        </button>
-      </a-tooltip>
-
-      <div class="w-px h-4 bg-border-subtle mx-1.5 shrink-0" />
-
       <a-tooltip :title="aiOpen ? '收起 AI 栏' : '打开 AI 栏'">
         <button
           type="button"
           class="rail-icon-btn"
           :class="{ on: aiOpen }"
-          aria-label="打开或收起 AI 栏"
+          aria-label="AI 助手"
           @click="emit('toggle-ai')"
         >
-          <PanelRightClose v-if="aiOpen" :size="14" />
-          <PanelRightOpen v-else :size="14" />
+          <Sparkles :size="14" />
         </button>
       </a-tooltip>
+      <a-tooltip title="打开文件夹">
+        <button type="button" class="rail-icon-btn" aria-label="打开文件夹" @click="emit('open-folder')">
+          <FolderOpen :size="14" />
+        </button>
+      </a-tooltip>
+
+      <div class="w-px h-4 bg-border-subtle mx-1.5 shrink-0" />
+
       <a-tooltip :title="isDark ? '浅色模式' : '深色模式'">
         <button
           type="button"

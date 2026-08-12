@@ -43,8 +43,8 @@ function goto(index: number): void {
 
 <template>
   <div ref="boxRef" class="flex-1 min-h-0 flex flex-col">
-    <!-- 查找 / 替换 -->
-    <div class="shrink-0 flex flex-col gap-1.5 px-3 pb-2.5">
+    <!-- 查找 / 替换（顶部贴窗口顶，加 pt 缓冲） -->
+    <div class="shrink-0 flex flex-col gap-1.5 px-3 pt-3 pb-2.5">
       <div class="flex items-center gap-1.5">
         <a-input
           v-model:value="query"

@@ -252,9 +252,24 @@ function openSearch(): void {
   search.open()
 }
 
-function onPanelTab(tab: PanelTab): void {
-  sidebar.value.tab = tab
-  if (tab === 'search') search.open()
+/** 底部搜索 icon：已开搜索则收起，否则打开并切到搜索页 */
+function toggleSearch(): void {
+  if (sidebar.value.open && sidebar.value.tab === 'search') {
+    sidebar.value.open = false
+    search.close()
+  } else {
+    openSearch()
+  }
+}
+
+/** 底部 AI icon：已开 AI 则收起，否则打开并切到 AI 页 */
+function toggleAi(): void {
+  if (sidebar.value.open && sidebar.value.tab === 'ai') {
+    sidebar.value.open = false
+  } else {
+    sidebar.value.open = true
+    sidebar.value.tab = 'ai'
+  }
 }
 
 // @antdv-next/x 组件库中文文案
@@ -527,7 +542,6 @@ const getDocContext = (): string => doc.value
               v-show="sidebar.open"
               :tab="sidebar.tab"
               :width="sidebar.width"
-              @update:tab="onPanelTab"
               @resize="onSidebarResize"
             >
               <template #search>
@@ -554,11 +568,12 @@ const getDocContext = (): string => doc.value
           :location="docLocation"
           :path="currentPath"
           :rail-collapsed="railCollapsed"
-          :ai-open="sidebar.open"
+          :ai-open="sidebar.open && sidebar.tab === 'ai'"
+          :search-open="sidebar.open && sidebar.tab === 'search'"
           :is-dark="isDark"
-          @find="openSearch"
+          @toggle-search="toggleSearch"
           @toggle-rail="toggleRail"
-          @toggle-ai="sidebar.open = !sidebar.open"
+          @toggle-ai="toggleAi"
           @toggle-theme="toggle"
           @settings="showSettings = true"
           @open-folder="pickWorkspaceFolder()"

@@ -12,7 +12,7 @@
 import { computed, ref } from 'vue'
 import {
   FilePlus,
-  FolderInput,
+  FolderOpen,
   FolderPlus,
   RefreshCw,
   SquarePen,
@@ -214,7 +214,7 @@ function startDrag(e: MouseEvent): void {
         class="rail-empty"
         @click="pickFolder()"
       >
-        <FolderInput :size="15" class="shrink-0" />
+        <FolderOpen :size="15" class="shrink-0" />
         <span>打开文件夹</span>
       </button>
     </div>

@@ -256,8 +256,9 @@ const activeLabel = computed(() => activeConversation.value?.label ?? '新对话
 
 <template>
   <div class="chat-panel flex-1 min-h-0 flex flex-col">
-    <!-- 会话行：紧贴在侧栏标签下方的一条轻量条（不再画分割线，靠芯片本身分层） -->
-    <header class="shrink-0 h-9 flex items-center gap-1.5 pl-3 pr-2">
+    <!-- 会话行：紧贴在侧栏标签下方的一条轻量条（不再画分割线，靠芯片本身分层）；
+         顶部留 12px 间隙与搜索面板对齐 -->
+    <header class="shrink-0 h-9 mt-3 flex items-center gap-1.5 pl-3 pr-2">
       <div ref="convRootRef" class="min-w-0 flex-1">
         <button
           type="button"
