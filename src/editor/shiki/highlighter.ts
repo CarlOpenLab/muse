@@ -10,15 +10,28 @@ import type { ThemedToken } from 'shiki'
  * 引擎用纯 JS 的 `createJavaScriptRegexEngine`，无需加载 wasm，最适合 Electron。
  *
  * - `createHighlighterCore` 异步拉取语法/主题数据；
- * - 同时加载 `github-light` 与 `github-dark` 两个主题，切换时仅改 active 标记，
- *   无需重新加载，配 `shikiCodeBlock.refreshShikiHighlight()` 即时重着色；
+ * - 一次性加载全部 6 套配套主题（与 useTheme 的 THEMES 注册表对应），切换时仅改
+ *   active 标记，无需重新加载，配 `shikiCodeBlock.refreshShikiHighlight()` 即时重着色；
  * - 完成后 `codeToTokens` 是同步的，可直接在 ProseMirror decoration 回调里用。
  */
 
-export type ShikiThemeName = 'github-light' | 'github-dark'
+export type ShikiThemeName =
+  | 'github-light'
+  | 'github-dark'
+  | 'nord'
+  | 'dracula'
+  | 'catppuccin-mocha'
+  | 'everforest-light'
 
-/** 已加载的 Shiki 主题（亮/暗各一）。 */
-export const SHIKI_THEMES: ShikiThemeName[] = ['github-light', 'github-dark']
+/** 已加载的 Shiki 主题（多主题注册表全部色板各一）。 */
+export const SHIKI_THEMES: ShikiThemeName[] = [
+  'github-light',
+  'github-dark',
+  'nord',
+  'dracula',
+  'catppuccin-mocha',
+  'everforest-light',
+]
 
 let activeTheme: ShikiThemeName = 'github-light'
 
@@ -78,6 +91,10 @@ export function getHighlighter(): Promise<HighlighterCore> {
       themes: [
         import('shiki/themes/github-light.mjs'),
         import('shiki/themes/github-dark.mjs'),
+        import('shiki/themes/nord.mjs'),
+        import('shiki/themes/dracula.mjs'),
+        import('shiki/themes/catppuccin-mocha.mjs'),
+        import('shiki/themes/everforest-light.mjs'),
       ],
       engine: createJavaScriptRegexEngine(),
     })

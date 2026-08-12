@@ -1,20 +1,28 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Type, Server, Globe, Wifi } from '@lucide/vue'
+import { Palette, Server, Globe, Type, Wifi } from '@lucide/vue'
 import { useSettings } from '../composables/useSettings'
+import { useTheme } from '../composables/useTheme'
 import ProviderSettings from './ProviderSettings.vue'
 import type { WebSearchResponse } from '../chat/ipcProvider'
 
 const { settings } = useSettings()
+const { themeId, setTheme, themes } = useTheme()
 
 defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 /** 左侧分组导航：基础设置 / Agent 能力 */
-const activeTab = ref<'basic' | 'providers' | 'search'>('basic')
+const activeTab = ref<'basic' | 'theme' | 'providers' | 'search'>('basic')
 
 const NAV_ITEMS = [
-  { group: '基础设置', items: [{ key: 'basic', label: '排版', icon: Type }] },
+  {
+    group: '基础设置',
+    items: [
+      { key: 'theme', label: '主题', icon: Palette },
+      { key: 'basic', label: '排版', icon: Type },
+    ],
+  },
   {
     group: 'Agent 能力',
     items: [
@@ -88,8 +96,42 @@ async function testSearch(): Promise<void> {
         <div class="h-full flex flex-col rounded-xl card-shadow bg-bg overflow-hidden">
           <div class="flex-1 min-h-0 overflow-y-auto">
             <div class="p-6 pb-12">
+              <!-- 基础设置：主题 -->
+              <div v-if="activeTab === 'theme'">
+                <div class="text-lg font-semibold">主题</div>
+                <p class="text-xs text-fg-soft mt-1 mb-5">选择整体配色，编辑器代码高亮随之联动，实时生效。</p>
+                <div class="grid grid-cols-3 gap-3">
+                  <button
+                    v-for="t in themes"
+                    :key="t.id"
+                    type="button"
+                    class="text-left rounded-xl border p-2 bg-transparent cursor-pointer transition-colors"
+                    :class="t.id === themeId ? 'border-accent bg-bg-hover' : 'border-border hover:border-strong hover:bg-bg-hover'"
+                    @click="setTheme(t.id)"
+                  >
+                    <div class="h-[52px] rounded-lg border border-black/10 overflow-hidden">
+                      <div class="h-8 px-2 pt-2" :style="{ background: t.preview.bg }">
+                        <div class="h-1.5 w-3/4 rounded-full" :style="{ background: t.preview.fg, opacity: 0.45 }" />
+                        <div class="h-1.5 w-1/2 mt-1 rounded-full" :style="{ background: t.preview.fg, opacity: 0.2 }" />
+                      </div>
+                      <div class="flex h-[20px] items-center gap-1.5 px-2" :style="{ background: t.preview.code }">
+                        <span class="h-2 w-2 rounded-full" :style="{ background: t.preview.accent }" />
+                        <span class="h-1.5 w-1.5 rounded-full" :style="{ background: t.preview.fg, opacity: 0.35 }" />
+                        <span class="h-1.5 w-1.5 rounded-full" :style="{ background: t.preview.fg, opacity: 0.18 }" />
+                      </div>
+                    </div>
+                    <div class="mt-2 flex items-center justify-between px-0.5">
+                      <span class="text-[12.5px] font-medium text-fg">{{ t.name }}</span>
+                      <span class="text-[10.5px] px-1.5 py-px rounded-full bg-bg-elev text-fg-dim">
+                        {{ t.mode === 'dark' ? '深色' : '浅色' }}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               <!-- 基础设置：排版 -->
-              <div v-if="activeTab === 'basic'">
+              <div v-else-if="activeTab === 'basic'">
                 <div class="text-lg font-semibold">排版</div>
                 <p class="text-xs text-fg-soft mt-1 mb-6">编辑器字体与行距偏好，实时生效。</p>
                 <a-form layout="vertical">

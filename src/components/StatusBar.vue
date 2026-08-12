@@ -26,6 +26,8 @@ defineProps<{
   aiOpen: boolean
   searchOpen: boolean
   isDark: boolean
+  /** 当前主题名（tooltip 展示） */
+  themeName: string
 }>()
 
 const emit = defineEmits<{
@@ -101,7 +103,7 @@ const emit = defineEmits<{
 
       <div class="w-px h-4 bg-border-subtle mx-1.5 shrink-0" />
 
-      <a-tooltip :title="isDark ? '浅色模式' : '深色模式'">
+      <a-tooltip :title="`${themeName} · 点击切换明暗`">
         <button
           type="button"
           class="rail-icon-btn"

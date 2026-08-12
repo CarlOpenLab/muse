@@ -23,11 +23,16 @@ import StatusBar from './components/StatusBar.vue'
 import SearchPanel from './components/SearchPanel.vue'
 import SettingsModal from './components/SettingsModal.vue'
 
-const { isDark, toggle } = useTheme()
+const { isDark, toggle, themeId, currentTheme } = useTheme()
 
 // antdv 主题接管：appearance 驱动 antdv-style 注入 --ant-color-* CSS 变量，
-// algorithm 驱动 ConfigProvider 的暗色 token 派生。isDark 仍是单一真相源。
+// algorithm 驱动 ConfigProvider 的暗色 token 派生。isDark 仍是明暗模式的单一真相源。
 const appearance = computed(() => (isDark.value ? 'dark' : 'light'))
+
+/** 读取当前生效的主题 CSS 变量（useTheme 的 watch 先于本 computed 应用，时序安全）。 */
+function cssVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}
 
 // antd token：与 base.css 的语义变量同一套取色（参考稿的近黑单色体系）。
 // - 亮色：白底 + 中性灰阶细线，主色近黑，主按钮黑底白字；
@@ -159,10 +164,32 @@ const shadcnDark = {
   boxShadowSecondary: '0 4px 12px 0 rgba(0, 0, 0, 0.45)',
   fontFamily: SHADCN_FONT,
 }
-const themeConfig = computed(() => ({
-  algorithm: isDark.value ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-  token: isDark.value ? shadcnDark : shadcnLight,
-}))
+// 多主题下让 antd 组件（弹窗 / 输入框 / 工具提示等）跟随当前色板：文本、背景、
+// 边框直接取 base.css 的语义变量；浅色主题主色跟 --accent（都能压住 antd 硬编码
+// 的白字）；深色主题保持默认灰阶主色——多主题强调色偏亮，白字主按钮不可读。
+const themeConfig = computed(() => {
+  // 依赖 themeId：同为深色的主题间切换时 isDark 不变，仍需重算 antd token
+  // （此时 useTheme 的 watch 已先应用好 CSS 变量，读取到的值即为新色板）
+  void themeId.value
+  const dark = isDark.value
+  const token = {
+    ...(dark ? shadcnDark : shadcnLight),
+    colorText: cssVar('--fg'),
+    colorTextSecondary: cssVar('--fg-soft'),
+    colorTextTertiary: cssVar('--fg-dim'),
+    colorBgBase: cssVar('--bg'),
+    colorBgContainer: cssVar('--bg'),
+    colorBgLayout: cssVar('--bg'),
+    colorBgElevated: cssVar('--bg-elev'),
+    colorBorder: cssVar('--border-strong'),
+    colorBorderSecondary: cssVar('--border'),
+  }
+  if (!dark) token.colorPrimary = cssVar('--accent')
+  return {
+    algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token,
+  }
+})
 const {
   doc,
   currentPath,
@@ -571,6 +598,7 @@ const getDocContext = (): string => doc.value
           :ai-open="sidebar.open && sidebar.tab === 'ai'"
           :search-open="sidebar.open && sidebar.tab === 'search'"
           :is-dark="isDark"
+          :theme-name="currentTheme.name"
           @toggle-search="toggleSearch"
           @toggle-rail="toggleRail"
           @toggle-ai="toggleAi"

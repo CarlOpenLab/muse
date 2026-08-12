@@ -9,12 +9,18 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: http: https:"
     />
-    <!-- 防闪烁：在 Vue 挂载前根据偏好设置 dark 类，与 useTheme 的逻辑一致 -->
+    <!-- 防闪烁：在 Vue 挂载前按主题偏好设置 data-theme + dark 类，
+         与 useTheme.ts 逻辑一致；id → 明暗 映射需与 THEMES 注册表保持同步。 -->
     <script>
       (function () {
         try {
+          // 1 = 深色，0 = 浅色（需与 src/composables/useTheme.ts 的 THEMES 同步）
+          var MODES = { light: 0, dark: 1, nord: 1, dracula: 1, catppuccin: 1, everforest: 0, sepia: 0 };
           var t = localStorage.getItem('muse:theme');
-          var dark = t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = t && t in MODES
+            ? MODES[t] === 1
+            : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (t && t in MODES) document.documentElement.dataset.theme = t;
           if (dark) document.documentElement.classList.add('dark');
         } catch (e) {}
       })();

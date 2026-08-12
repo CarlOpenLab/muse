@@ -46,6 +46,114 @@
   --page-bg: #1a1a1a;
 }
 
+/* ===== 多主题色板（Typora 式） =====
+ * 每套主题覆盖同一组语义变量，跟随 <html> 的 data-theme 属性生效。
+ * useTheme 在切换时同时设置 `data-theme`（选色板）与 `.dark` 类（明暗模式），
+ * `.dark` 仅服务 antdv / XMarkdown / 下方 `:root.dark` 覆盖规则，不代表配色。
+ * `:root[data-theme='…']` 特异性 (0,1,1) 与 `:root.dark` 相同，靠后定义取胜；
+ * 未在此列出的变量（如 --font）回落到 :root 基值。
+ * ⚠️ 新增 / 删除主题时需同步：useTheme.ts 的 THEMES 注册表 + index.html 防闪烁脚本。 */
+
+/* Nord（深色）：北极夜蓝灰 + 冰霜蓝强调 */
+:root[data-theme='nord'] {
+  color-scheme: dark;
+  --bg: #2e3440;
+  --bg-soft: #323946;
+  --bg-elev: #3b4252;
+  --bg-hover: #434c5e;
+  --fg: #d8dee9;
+  --fg-soft: #a6b0c0;
+  --fg-dim: #8590a5;
+  --fg-ghost: #616c82;
+  --border: #3b4252;
+  --border-strong: #434c5e;
+  --border-subtle: #333a47;
+  --accent: #88c0d0;
+  --code-bg: #262b36;
+  --code-inline-bg: #3b4252;
+  --page-bg: #2e3440;
+}
+
+/* Dracula（深色）：紫底 + 粉紫强调 */
+:root[data-theme='dracula'] {
+  color-scheme: dark;
+  --bg: #282a36;
+  --bg-soft: #2f3140;
+  --bg-elev: #343746;
+  --bg-hover: #3d4050;
+  --fg: #f8f8f2;
+  --fg-soft: #b3b7c9;
+  --fg-dim: #8f93a8;
+  --fg-ghost: #6a6e82;
+  --border: #343746;
+  --border-strong: #44475a;
+  --border-subtle: #2f3140;
+  --accent: #bd93f9;
+  --code-bg: #21222c;
+  --code-inline-bg: #343746;
+  --page-bg: #282a36;
+}
+
+/* Catppuccin Mocha（深色）：午夜蓝 + 冰蓝强调 */
+:root[data-theme='catppuccin'] {
+  color-scheme: dark;
+  --bg: #1e1e2e;
+  --bg-soft: #232338;
+  --bg-elev: #313244;
+  --bg-hover: #45475a;
+  --fg: #cdd6f4;
+  --fg-soft: #a6adc8;
+  --fg-dim: #7f849c;
+  --fg-ghost: #585b70;
+  --border: #313244;
+  --border-strong: #45475a;
+  --border-subtle: #27273a;
+  --accent: #89b4fa;
+  --code-bg: #181825;
+  --code-inline-bg: #313244;
+  --page-bg: #1e1e2e;
+}
+
+/* Everforest（浅色）：暖米纸 + 青蓝强调 */
+:root[data-theme='everforest'] {
+  color-scheme: light;
+  --bg: #fdf6e3;
+  --bg-soft: #f7efd9;
+  --bg-elev: #efe6cd;
+  --bg-hover: #e7dcc0;
+  --fg: #5c6a72;
+  --fg-soft: #7f8a82;
+  --fg-dim: #9da9a0;
+  --fg-ghost: #b6c0b4;
+  --border: #ded8c0;
+  --border-strong: #ccc5a9;
+  --border-subtle: #eee7d2;
+  --accent: #3a94c5;
+  --code-bg: #f2ebd6;
+  --code-inline-bg: #e9e0c8;
+  --page-bg: #fdf6e3;
+}
+
+/* 羊皮纸（浅色）：Newsprint 式暖纸 + 棕褐强调 */
+:root[data-theme='sepia'] {
+  color-scheme: light;
+  --bg: #f4ecd8;
+  --bg-soft: #efe5cf;
+  --bg-elev: #e9dec6;
+  --bg-hover: #e2d5b8;
+  --fg: #433422;
+  --fg-soft: #6f5e45;
+  --fg-dim: #8a795f;
+  --fg-ghost: #a8967a;
+  --border: #d8cbb0;
+  --border-strong: #c9b996;
+  --border-subtle: #e4d9c2;
+  --accent: #9c6b30;
+  --code-bg: #eae0ca;
+  --code-inline-bg: #e6d9be;
+  --page-bg: #f4ecd8;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -142,7 +250,45 @@ body {
 .milkdown-theme-nord.prose table td,
 .milkdown-theme-nord.prose table th,
 .milkdown-theme-nord.prose table tr {
-  border-color: var(--border);
+  /* 网格线用分栏线色（比 --border 深一档）：暗色下 #363637 vs 底 #1a1a1a，
+   * 四边清晰可见；原来用 --border 在深色主题下几乎看不出来。 */
+  border-color: var(--border-strong);
+}
+
+/* 最外层边框：Nord 的 table 用 `border-style: var(--tw-border-style)` 取 Tailwind
+ * v4 @layer properties 的变量，但该变量带 @supports (not (margin-trim: inline))
+ * 条件——Chromium（Electron 43）支持 margin-trim，条件为假 → 变量未定义 →
+ * var() 失效 → border-style 回落 none，外框不显示（宽度/颜色都在也没用）。
+ * 这里显式写死 solid + 1px 覆盖，不再依赖该变量。
+ * 另：Nord 还给 table 挂了右下下沉 box-shadow（--tw-shadow 有 @property 兑底故
+ * 生效）——它只朝右下投射，左上必然「缺失」，看起来像残缺的描边。它不是边框，
+ * 是投影；这里替换为四边均匀的柔和投影（offset 为 0，四周一致），既有层次感
+ * 又不会再有「上左缺失」的错觉。 */
+.milkdown-theme-nord.prose table {
+  border-style: solid;
+  border-width: 1px;
+  box-shadow: 0 0 12px -3px rgb(0 0 0 / 0.25);
+}
+
+/* 暗色模式：底色偏黑，同浓度的黑阴影会「消失」，需要明显加浓（与 .card-shadow
+ * 暗色版同理：rgb(0 0 0 / 0.3 ~ 0.5)）。所有深色主题（dark / nord / dracula /
+ * catppuccin）都带 .dark 类，自动生效。 */
+:root.dark .milkdown-theme-nord.prose table {
+  box-shadow: 0 0 14px -3px rgb(0 0 0 / 0.65);
+}
+
+/* 补全表格网格：Nord 主题只给了 table 外框与 tr 底部行分隔线（td/th 的
+ * border-width 为 0），列间没有竖线，看起来像没边框。这里给 td/th 补上 1px
+ * 边框，形成 Typora / GitHub 式完整网格；表头下用 color-mix 再深一档保留层次
+ * （border-collapse 时单元格边框优先于行边框，th 的加重线不会被 tr 覆盖）。 */
+.milkdown-theme-nord.prose table td,
+.milkdown-theme-nord.prose table th {
+  border-style: solid;
+  border-width: 1px;
+}
+
+.milkdown-theme-nord.prose table th {
+  border-bottom-color: color-mix(in srgb, var(--border-strong) 70%, var(--fg-ghost));
 }
 
 .milkdown-theme-nord.prose table td:nth-child(odd),
