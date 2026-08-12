@@ -19,6 +19,7 @@ export default defineConfig({
       fg: 'var(--fg)',
       'fg-soft': 'var(--fg-soft)',
       'fg-dim': 'var(--fg-dim)',
+      'fg-ghost': 'var(--fg-ghost)',
       border: 'var(--border)',
       'border-strong': 'var(--border-strong)',
       'border-subtle': 'var(--border-subtle)',

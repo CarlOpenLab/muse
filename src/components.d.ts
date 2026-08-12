@@ -36,7 +36,6 @@ declare module 'vue' {
     FileTree: typeof import('./components/FileTree.vue')['default']
     OutlinePanel: typeof import('./components/OutlinePanel.vue')['default']
     ProviderSettings: typeof import('./components/ProviderSettings.vue')['default']
-    SearchBar: typeof import('./components/SearchBar.vue')['default']
     SearchPanel: typeof import('./components/SearchPanel.vue')['default']
     SettingsModal: typeof import('./components/SettingsModal.vue')['default']
     SidePanel: typeof import('./components/SidePanel.vue')['default']

@@ -20,6 +20,7 @@ import {
   readFileSync,
   writeFileSync,
   existsSync,
+  statSync,
   unlinkSync,
   readdirSync,
   mkdirSync,
@@ -208,6 +209,15 @@ export function registerFileService(): void {
   })
 
   ipcMain.handle('fs:openPath', (_e, path: string) => readPath(path))
+
+  // 判断路径是否为目录（窗口内拖入文件夹时区分「工作区」与「文档」）
+  ipcMain.handle('fs:isDir', (_e, path: string) => {
+    try {
+      return statSync(path).isDirectory()
+    } catch {
+      return false
+    }
+  })
 
   ipcMain.handle('fs:save', (_e, path: string, content: string) => {
     writeFileSync(path, content, 'utf-8')

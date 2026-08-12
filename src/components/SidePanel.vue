@@ -2,12 +2,13 @@
 /**
  * 右侧辅助栏：与左栏对称的一整栏（不再是浮起的卡片），
  * 靠一条 1px 分栏线与编辑区分开，内部与主区同底色——对齐参考稿的三栏观感。
- * - 头部：芯片式标签（大纲 / 搜索 / AI）+ 收起按钮；
- * - 三个插槽常驻挂载（v-show 切换），切标签不丢聊天状态（草稿/流式）。
+ * - 头部：芯片式标签（搜索 / AI）；收起按钮已统一收到底部工具条；
+ * - 两个插槽常驻挂载（v-show 切换），切标签不丢聊天状态（草稿/流式）。
+ * 文档大纲已改为编辑区右侧的导航竖轨（OutlinePanel），不再占用右栏。
  */
-import { ListTree, PanelRight, Search, Sparkles } from '@lucide/vue'
+import { Search, Sparkles } from '@lucide/vue'
 
-type PanelTab = 'ai' | 'outline' | 'search'
+type PanelTab = 'ai' | 'search'
 
 const props = defineProps<{
   tab: PanelTab
@@ -16,7 +17,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:tab': [tab: PanelTab]
-  close: []
   resize: [width: number]
 }>()
 
@@ -54,17 +54,8 @@ function startDrag(e: MouseEvent): void {
     <!-- 拖拽把手：悬停变列宽光标 -->
     <div class="sidebar-resizer" title="拖拽调整宽度" @mousedown="startDrag" />
 
-    <!-- 头部：芯片式标签 + 收起（与左栏 / 编辑区顶栏同高，三栏顶部齐平） -->
+    <!-- 头部：芯片式标签（与左栏 / 编辑区顶栏同高，三栏顶部齐平） -->
     <div class="h-12 shrink-0 flex items-center gap-1.5 pl-3 pr-2 app-drag select-none">
-      <button
-        type="button"
-        class="panel-chip"
-        :class="{ active: tab === 'outline' }"
-        @click="emit('update:tab', 'outline')"
-      >
-        <ListTree :size="14" />
-        <span>大纲</span>
-      </button>
       <button
         type="button"
         class="panel-chip"
@@ -83,21 +74,10 @@ function startDrag(e: MouseEvent): void {
         <Sparkles :size="14" />
         <span>AI</span>
       </button>
-
-      <div class="flex-1" />
-
-      <a-tooltip title="收起侧栏">
-        <button type="button" class="rail-icon-btn" @click="emit('close')">
-          <PanelRight :size="16" />
-        </button>
-      </a-tooltip>
     </div>
 
     <!-- 内容：两个插槽常驻挂载，切标签只改可见性（聊天草稿/流式不丢） -->
     <div class="flex-1 min-h-0 flex flex-col">
-      <div v-show="tab === 'outline'" class="flex-1 min-h-0 flex flex-col">
-        <slot name="outline" />
-      </div>
       <div v-show="tab === 'search'" class="flex-1 min-h-0 flex flex-col">
         <slot name="search" />
       </div>

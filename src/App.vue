@@ -92,7 +92,7 @@ const shadcnLight = {
   colorInfoTextActive: '#1d4ed8',
   colorText: '#1f1f21',
   colorTextSecondary: '#6b6b70',
-  colorTextTertiary: '#9a9aa0',
+  colorTextTertiary: '#858585',
   colorTextQuaternary: 'rgba(31, 31, 33, 0.25)',
   colorTextDisabled: 'rgba(31, 31, 33, 0.25)',
   colorBgContainer: '#ffffff',
@@ -135,7 +135,7 @@ const shadcnDark = {
   colorBgBase: '#1a1a1a',
   colorText: '#e2e2e2',
   colorTextSecondary: '#a3a3a3',
-  colorTextTertiary: '#6e6e70',
+  colorTextTertiary: '#7d7d7d',
   colorTextQuaternary: 'rgba(255, 255, 255, 0.22)',
   colorTextDisabled: 'rgba(255, 255, 255, 0.22)',
   colorBgContainer: '#1a1a1a',
@@ -188,6 +188,7 @@ const {
   collapsed: railCollapsed,
   toggleCollapsed: toggleRail,
   pickFolder: pickWorkspaceFolder,
+  setRoot: setWorkspaceRoot,
   createFile: createWorkspaceFile
 } = useWorkspace()
 
@@ -203,7 +204,7 @@ const recentFiles = ref<string[]>([])
 const isMac = window.muse?.platform === 'darwin'
 
 // ===== 右侧辅助栏：大纲 / 搜索 / AI 在同一位置切换（写文档时的贴身助手）=====
-type PanelTab = 'ai' | 'outline' | 'search'
+type PanelTab = 'ai' | 'search'
 interface SidebarState {
   open: boolean
   tab: PanelTab
@@ -217,8 +218,8 @@ function loadSidebar(): SidebarState {
       const p = JSON.parse(raw) as Partial<SidebarState>
       return {
         open: p.open !== false,
-        // 搜索是临时态，重启后回到大纲，避免开机看到一个空搜索框
-        tab: p.tab === 'outline' || p.tab === 'search' ? 'outline' : 'ai',
+        // 搜索是临时态，重启后回到 AI，避免开机看到一个空搜索框
+        tab: p.tab === 'search' ? 'search' : 'ai',
         width: Math.min(560, Math.max(300, Number(p.width) || 380)),
       }
     }
@@ -287,6 +288,14 @@ void window.muse?.invoke('fs:readRecent').then((r) => {
 void restoreDraft()
 
 onMounted(() => {
+  // macOS：Dock / Finder 拖入的文件或文件夹（先注册监听，再拉启动期暂存的路径，避免丢事件）
+  window.muse?.on('app:open-paths', (payload: unknown) => {
+    handleOpenPaths(payload as OpenPathItem[])
+  })
+  void window.muse?.invoke('app:get-open-paths').then((p) => {
+    handleOpenPaths(p as OpenPathItem[])
+  })
+
   window.muse?.on('menu:action', (payload: unknown) => {
     const { action, path } = payload as { action: string; path?: string }
     if (action === 'new') void createDoc()
@@ -314,7 +323,7 @@ onMounted(() => {
     } else if (e.key === 'Escape' && search.isOpen.value) {
       e.preventDefault()
       search.close()
-      if (sidebar.value.tab === 'search') sidebar.value.tab = 'outline'
+      if (sidebar.value.tab === 'search') sidebar.value.tab = 'ai'
     }
   })
 })
@@ -352,11 +361,35 @@ watch(workspaceTree, (nodes) => {
   if (!existsInTree(nodes, path)) closeDoc()
 })
 
+interface OpenPathItem {
+  path: string
+  isDir: boolean
+}
+
+/** macOS Dock / Finder「打开方式」：文件夹 → 作为工作区，md 文件 → 打开文档 */
+function handleOpenPaths(items: OpenPathItem[]): void {
+  const list = Array.isArray(items) ? items : []
+  if (!list.length) return
+  const dirs = list.filter((i) => i.isDir)
+  const files = list.filter((i) => !i.isDir && /\.(md|markdown|mdx|txt)$/i.test(i.path))
+  void (async () => {
+    // 先切工作区（若同时拖了文件夹），再打开排在最前的文档
+    if (dirs.length) await setWorkspaceRoot(dirs[0].path)
+    if (files.length) await openPath(files[0].path)
+  })()
+}
+
 function onDrop(e: DragEvent): void {
   const f = e.dataTransfer?.files?.[0]
   if (!f) return
   const path = window.muse?.getPathForFile(f)
-  if (path) void openPath(path)
+  if (!path) return
+  // 文件夹 → 作为工作区打开；文件 → 直接打开文档（VSCode 式拖放）
+  void (async () => {
+    const isDir = (await window.muse?.invoke('fs:isDir', path)) as boolean
+    if (isDir) await setWorkspaceRoot(path)
+    else void openPath(path)
+  })()
 }
 
 // ===== 大纲：点击跳转 + 滚动高亮当前章节 =====
@@ -427,94 +460,109 @@ const getDocContext = (): string => doc.value
 <template>
   <ConfigProvider :theme="themeConfig">
     <ThemeProvider :appearance="appearance">
-      <div class="flex h-full bg-bg" @dragover.prevent @drop.prevent="onDrop">
-        <!-- 左栏：菜单 + 工作区文件树（含主题 / 设置入口） -->
-        <FileSidebar
-          v-show="!railCollapsed"
-          :current="currentPath"
+      <div class="h-full flex flex-col bg-bg" @dragover.prevent @drop.prevent="onDrop">
+        <!-- 三栏工作区 -->
+        <div class="flex flex-1 min-h-0">
+          <!-- 左栏：菜单 + 工作区文件树（宽度折叠动画） -->
+          <Transition name="rail">
+            <FileSidebar
+              v-show="!railCollapsed"
+              :current="currentPath"
+              :is-mac="isMac"
+              @open="openPath"
+              @renamed="setPath"
+              @removed="closeDoc"
+              @new="createDoc"
+            />
+          </Transition>
+
+          <!-- 中栏：顶栏 + Markdown 编辑区 -->
+          <main class="flex-1 min-w-0 flex flex-col bg-bg">
+            <TitleBar
+              :filename="filename"
+              :dirty="dirty"
+              :saving="saving"
+              :started="started"
+              :rail-collapsed="railCollapsed"
+              :is-mac="isMac"
+            />
+
+            <!-- 未打开任何文档：欢迎页 / 选文件提示 -->
+            <div v-if="!started" class="flex-1 min-h-0 flex">
+              <EntryScreen
+                v-if="!workspaceRoot"
+                :recent="recentFiles"
+                @new="createDoc"
+                @open="open"
+                @open-folder="pickWorkspaceFolder()"
+                @open-recent="openPath"
+              />
+              <div v-else class="flex-1 flex items-center justify-center text-sm text-fg-dim">
+                从左侧选择一个文件
+              </div>
+            </div>
+
+            <!-- 编辑器：内部滚动，正文限宽居中；右侧贴 waku 式导航竖轨 -->
+            <div v-else class="flex-1 min-h-0 relative">
+              <div
+                ref="editorScrollRef"
+                class="absolute inset-0 overflow-y-auto editor-scroll"
+                @scroll.passive="onEditorScroll"
+              >
+                <MilkdownEditor v-model="doc" class="mx-auto max-w-[46rem] px-12 pt-6 pb-32" />
+              </div>
+              <!-- 文章右侧导航竖轨：hover 预览 / 点击跳转 / 当前章节常亮 -->
+              <OutlinePanel
+                v-if="headings.length >= 2"
+                :headings="headings"
+                :active="activeHeading"
+                @jump="scrollToHeading"
+              />
+            </div>
+          </main>
+
+          <!-- 右栏：AI / 大纲（常驻挂载，聊天草稿与流式不丢；宽度折叠动画） -->
+          <Transition name="sidebar">
+            <SidePanel
+              v-show="sidebar.open"
+              :tab="sidebar.tab"
+              :width="sidebar.width"
+              @update:tab="onPanelTab"
+              @resize="onSidebarResize"
+            >
+              <template #search>
+                <SearchPanel />
+              </template>
+              <template #ai>
+                <XProvider :theme="themeConfig" :locale="chatLocale">
+                  <ChatPanel
+                    :is-dark="isDark"
+                    :get-doc-context="getDocContext"
+                    @manage="showSettings = true"
+                    @insert="insertIntoDoc"
+                    @replace-selection="replaceFromChat"
+                  />
+                </XProvider>
+              </template>
+            </SidePanel>
+          </Transition>
+        </div>
+
+        <!-- 整窗底部工具条：一排 icon，左右 justify-between（Zed 式） -->
+        <StatusBar
+          :stats="stats"
+          :location="docLocation"
+          :path="currentPath"
+          :rail-collapsed="railCollapsed"
+          :ai-open="sidebar.open"
           :is-dark="isDark"
-          :is-mac="isMac"
-          @open="openPath"
-          @renamed="setPath"
-          @removed="closeDoc"
-          @new="createDoc"
           @find="openSearch"
+          @toggle-rail="toggleRail"
+          @toggle-ai="sidebar.open = !sidebar.open"
           @toggle-theme="toggle"
           @settings="showSettings = true"
+          @open-folder="pickWorkspaceFolder()"
         />
-
-        <!-- 中栏：顶栏 + Markdown 编辑区 + 信息条 -->
-        <main class="flex-1 min-w-0 flex flex-col bg-bg">
-          <TitleBar
-            :filename="filename"
-            :dirty="dirty"
-            :saving="saving"
-            :started="started"
-            :rail-collapsed="railCollapsed"
-            :ai-open="sidebar.open"
-            :is-mac="isMac"
-            @find="openSearch"
-            @toggle-rail="toggleRail"
-            @toggle-ai="sidebar.open = !sidebar.open"
-          />
-
-          <!-- 未打开任何文档：欢迎页 / 选文件提示 -->
-          <div v-if="!started" class="flex-1 min-h-0 flex">
-            <EntryScreen
-              v-if="!workspaceRoot"
-              :recent="recentFiles"
-              @new="createDoc"
-              @open="open"
-              @open-folder="pickWorkspaceFolder()"
-              @open-recent="openPath"
-            />
-            <div v-else class="flex-1 flex items-center justify-center text-sm text-fg-dim">
-              从左侧选择一个文件
-            </div>
-          </div>
-
-          <!-- 编辑器：内部滚动，正文限宽居中 -->
-          <div
-            v-else
-            ref="editorScrollRef"
-            class="flex-1 min-h-0 overflow-y-auto editor-scroll"
-            @scroll.passive="onEditorScroll"
-          >
-            <MilkdownEditor v-model="doc" class="mx-auto max-w-[46rem] px-12 pt-6 pb-32" />
-          </div>
-
-          <StatusBar :stats="stats" :location="docLocation" :path="currentPath" />
-        </main>
-
-        <!-- 右栏：AI / 大纲（常驻挂载，聊天草稿与流式不丢；宽度折叠动画） -->
-        <Transition name="sidebar">
-          <SidePanel
-            v-show="sidebar.open"
-            :tab="sidebar.tab"
-            :width="sidebar.width"
-            @update:tab="onPanelTab"
-            @close="sidebar.open = false"
-            @resize="onSidebarResize"
-          >
-            <template #outline>
-              <OutlinePanel :headings="headings" :active="activeHeading" @jump="scrollToHeading" />
-            </template>
-            <template #search>
-              <SearchPanel />
-            </template>
-            <template #ai>
-              <XProvider :theme="themeConfig" :locale="chatLocale">
-                <ChatPanel
-                  :is-dark="isDark"
-                  :get-doc-context="getDocContext"
-                  @manage="showSettings = true"
-                  @insert="insertIntoDoc"
-                  @replace-selection="replaceFromChat"
-                />
-              </XProvider>
-            </template>
-          </SidePanel>
-        </Transition>
 
         <SettingsModal :open="showSettings" @close="showSettings = false" />
       </div>

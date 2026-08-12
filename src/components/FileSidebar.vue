@@ -2,33 +2,27 @@
 /**
  * 左侧菜单栏（结构对齐参考稿）。
  * 自上而下：
- *   顶部操作行（macOS 下红绿灯落在这里，右侧是折叠 / 打开文件夹图标）
- *   主导航（新建文档 / 搜索）——大字号带图标的行，是全栏的视觉重心
+ *   顶部拖拽区（macOS 下红绿灯落在这里；工具按钮已统一收到底部工具条）
+ *   主导航（新建文档）——唯一的大字号带图标行
  *   分组标题（工作区名）+ 该组的新建 / 刷新
  *   文件树（滚动区）
- *   底部：主题 / 设置
+ * 搜索 / 打开文件夹 / 收起侧栏 / 主题 / 设置 均在底部工具条（StatusBar）。
  * 右边缘可拖拽调宽；宽度、折叠与展开状态由 useWorkspace 持久化。
  */
 import { computed, ref } from 'vue'
 import {
   FilePlus,
-  FolderOpen,
+  FolderInput,
   FolderPlus,
-  PanelLeft,
   RefreshCw,
-  Search,
-  Settings as SettingsIcon,
   SquarePen,
-  Sun,
-  Moon,
 } from '@lucide/vue'
 import FileTree from './FileTree.vue'
-import { useWorkspace, MIN_WIDTH, MAX_WIDTH, type TreeNode } from '../composables/useWorkspace'
+import { useWorkspace, type TreeNode } from '../composables/useWorkspace'
 
 const props = defineProps<{
   /** 当前打开的文件路径（高亮用） */
   current: string | null
-  isDark: boolean
   isMac: boolean
 }>()
 
@@ -40,10 +34,6 @@ const emit = defineEmits<{
   removed: []
   /** 主导航：新建文档（工作区内落真实文件，交给 App 决定） */
   new: []
-  /** 主导航：查找 */
-  find: []
-  'toggle-theme': []
-  settings: []
 }>()
 
 const {
@@ -51,7 +41,6 @@ const {
   rootName,
   tree,
   width,
-  toggleCollapsed,
   refresh,
   pickFolder,
   isExpanded,
@@ -168,56 +157,41 @@ function startDrag(e: MouseEvent): void {
 <template>
   <aside
     class="relative shrink-0 flex flex-col bg-bg-soft border-r border-border-strong"
-    :style="{ width: `${width}px`, minWidth: `${MIN_WIDTH}px`, maxWidth: `${MAX_WIDTH}px` }"
+    :style="{ width: `${width}px` }"
   >
-    <!-- 顶部操作行：mac 下红绿灯浮在左侧，故左侧留白，图标靠右排 -->
+    <!-- 顶部拖拽区：mac 下红绿灯浮在左侧，整条可拖动窗口（按钮已收到底部） -->
     <div
-      class="h-12 shrink-0 flex items-center gap-0.5 pr-2 app-drag"
+      class="h-12 shrink-0 flex items-center pr-2 app-drag"
       :class="isMac ? 'pl-[84px]' : 'pl-2'"
-    >
-      <a-tooltip title="收起侧栏">
-        <button type="button" class="rail-icon-btn" @click="toggleCollapsed">
-          <PanelLeft :size="16" />
-        </button>
-      </a-tooltip>
-      <a-tooltip title="打开文件夹">
-        <button type="button" class="rail-icon-btn" @click="pickFolder()">
-          <FolderOpen :size="16" />
-        </button>
-      </a-tooltip>
-    </div>
+    />
 
-    <!-- 主导航：新建 / 搜索 -->
-    <nav class="shrink-0 px-2 pt-1 pb-2">
+    <!-- 主导航：新建文档 -->
+    <nav class="shrink-0 px-2.5 pt-1 pb-2">
       <button type="button" class="rail-nav" @click="emit('new')">
-        <SquarePen :size="17" class="rail-nav-icon" />
+        <SquarePen :size="16" class="rail-nav-icon" />
         <span>新建文档</span>
-      </button>
-      <button type="button" class="rail-nav" @click="emit('find')">
-        <Search :size="17" class="rail-nav-icon" />
-        <span>搜索</span>
       </button>
     </nav>
 
-    <!-- 分组标题：工作区名 + 该组操作 -->
-    <div v-if="root" class="shrink-0 h-8 flex items-center gap-0.5 pl-4 pr-2">
-      <span class="flex-1 min-w-0 truncate text-[12.5px] text-fg-dim" :title="root">
+    <!-- 分组标题：工作区名 + 该组操作（waku 分组标题：28px 高、12.5px medium、与内容左对齐） -->
+    <div v-if="root" class="shrink-0 h-7 flex items-center gap-0.5 px-2.5">
+      <span class="flex-1 min-w-0 truncate text-[12.5px] font-medium text-fg-dim" :title="root">
         {{ rootName }}
       </span>
       <a-tooltip title="新建文件">
         <button type="button" class="rail-icon-btn sm" @click="newFileAtRoot">
-          <FilePlus :size="14" />
+          <FilePlus :size="13" />
         </button>
       </a-tooltip>
       <a-tooltip title="刷新">
         <button type="button" class="rail-icon-btn sm" @click="refresh()">
-          <RefreshCw :size="13" />
+          <RefreshCw :size="12" />
         </button>
       </a-tooltip>
     </div>
 
     <!-- 文件树 -->
-    <div class="flex-1 min-h-0 overflow-y-auto px-2 pb-2">
+    <div class="flex-1 min-h-0 overflow-y-auto px-2.5 pb-2">
       <FileTree
         v-if="root && !isEmpty"
         :nodes="tree"
@@ -240,24 +214,9 @@ function startDrag(e: MouseEvent): void {
         class="rail-empty"
         @click="pickFolder()"
       >
-        <FolderOpen :size="15" class="shrink-0" />
+        <FolderInput :size="15" class="shrink-0" />
         <span>打开文件夹</span>
       </button>
-    </div>
-
-    <!-- 底部：主题 / 设置 -->
-    <div class="h-12 shrink-0 flex items-center gap-0.5 px-2">
-      <a-tooltip title="设置">
-        <button type="button" class="rail-icon-btn" @click="emit('settings')">
-          <SettingsIcon :size="16" />
-        </button>
-      </a-tooltip>
-      <a-tooltip :title="isDark ? '浅色模式' : '深色模式'">
-        <button type="button" class="rail-icon-btn" @click="emit('toggle-theme')">
-          <Sun v-if="isDark" :size="16" />
-          <Moon v-else :size="16" />
-        </button>
-      </a-tooltip>
     </div>
 
     <!-- 右边缘拖拽把手 -->

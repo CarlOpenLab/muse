@@ -13,7 +13,8 @@
   --bg-hover: #ececed; /* 行 hover 与选中态 */
   --fg: #1f1f21;
   --fg-soft: #6b6b70; /* 次要文字：路径 / 时间 / 元信息 */
-  --fg-dim: #9a9aa0; /* 三级文字：分组标题 / 占位 */
+  --fg-dim: #858585; /* 三级文字：分组标题 / 占位（对齐 waku text_tertiary） */
+  --fg-ghost: #a4a4a4; /* 四级文字：最弱的提示 / 状态徽标（对齐 waku text_ghost） */
   --border: #e6e6e8; /* 卡片 / 内部分隔线 */
   --border-strong: #dcdcdf; /* 分栏线：比内部分隔略重 */
   --border-subtle: #f0f0f1;
@@ -34,7 +35,8 @@
   --bg-hover: #2a2a2a;
   --fg: #e2e2e2;
   --fg-soft: #a3a3a3;
-  --fg-dim: #6e6e70;
+  --fg-dim: #7d7d7d; /* 对齐 waku text_tertiary */
+  --fg-ghost: #575757; /* 对齐 waku text_ghost */
   --border: #282828;
   --border-strong: #363637;
   --border-subtle: #232323;
@@ -352,6 +354,19 @@ body {
   border-left-width: 0;
 }
 
+/* 左侧栏：宽度折叠动画，与右栏同速（border 在右侧，故动画 border-right-width） */
+.rail-enter-active,
+.rail-leave-active {
+  transition: width 0.22s ease, opacity 0.22s ease, border-right-width 0.22s ease;
+  overflow: hidden;
+}
+.rail-enter-from,
+.rail-leave-to {
+  width: 0 !important;
+  opacity: 0;
+  border-right-width: 0;
+}
+
 /* 编辑区滚动条隐藏（Notion 风格：滚轮 / 键盘 / 拖选滚动不受影响，避免与右上角按钮冲突） */
 .editor-scroll {
   scrollbar-width: none; /* Firefox */
@@ -535,16 +550,17 @@ body {
 }
 
 /* ===== 左侧菜单栏 ===== */
-/* 图标按钮：顶部操作行 / 分组标题右侧 / 底部设置共用 */
+/* 图标按钮：顶部操作行 / 分组标题右侧 / 底部设置共用。
+ * 尺寸对齐 waku 侧栏按钮：26×26、圆角 6px（顶栏按钮同为 26px 规格）。 */
 .rail-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--fg-soft);
   cursor: pointer;
@@ -555,9 +571,9 @@ body {
   color: var(--fg);
 }
 .rail-icon-btn.sm {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
 }
 /* 常开状态（如 AI 栏开关）：底色常亮提示 */
 .rail-icon-btn.on {
@@ -565,20 +581,22 @@ body {
   color: var(--fg);
 }
 
-/* 主导航行（新建 / 搜索）：参考稿里全栏最重的一层，图标与文字都放大 */
+/* 主导航行（新建 / 搜索）：waku 侧栏操作行同款——32px 高、图标 16px；
+ * 文字统一 13.5px（比文件行 13px 略大，恢复主操作入口的层级；与 waku 会话标题同档）、
+ * secondary 色、不加粗；hover 只变底色。 */
 .rail-nav {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   width: 100%;
-  height: 36px;
-  padding: 0 8px;
+  height: 32px;
+  padding: 0 4px;
   border: none;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
-  color: var(--fg);
+  color: var(--fg-soft);
   font: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.12s ease;

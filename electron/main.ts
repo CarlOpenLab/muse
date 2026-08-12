@@ -1,4 +1,5 @@
-import { app, BrowserWindow, shell, Menu, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, shell, Menu, ipcMain, type MenuItemConstructorOptions } from 'electron'
+import { statSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { registerFileService, setRebuildMenu, isDirty, shouldForceClose, resetForceClose, getRecent } from './services/fs'
 import { registerAiService } from './services/ai'
@@ -9,6 +10,50 @@ const isDev = !app.isPackaged
 // - dev：用于 macOS Dock 图标（BrowserWindow 的 icon 在 mac 上不生效）
 // - 打包后：由 electron-builder 的 icon.icns / icon.png 配置提供
 const APP_ICON = join(__dirname, '../../resources/icon.png')
+
+// ---- macOS：文件/文件夹拖到 Dock 图标（或 Finder「打开方式」） ----
+// open-file 由 AppleEvent 驱动，必须在 app ready 之前挂监听，才能收到
+// 「应用尚未启动时拖入」的路径。收到后先暂存，等渲染进程就绪（通过
+// app:get-open-paths 握手）一次性派发；运行中拖入则直接推给当前窗口。
+interface OpenPathItem {
+  path: string
+  isDir: boolean
+}
+let pendingOpenPaths: string[] = []
+let rendererReady = false
+
+function isDirectory(p: string): boolean {
+  try {
+    return statSync(p).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+/** 取走并清空暂存路径，附上「是否目录」标记 */
+function takeOpenPaths(): OpenPathItem[] {
+  const items = pendingOpenPaths.map((p) => ({ path: p, isDir: isDirectory(p) }))
+  pendingOpenPaths = []
+  return items
+}
+
+function flushOpenPaths(): void {
+  if (!rendererReady || !pendingOpenPaths.length) return
+  const win = BrowserWindow.getAllWindows()[0]
+  if (win) win.webContents.send('app:open-paths', takeOpenPaths())
+}
+
+app.on('open-file', (e, path) => {
+  e.preventDefault()
+  pendingOpenPaths.push(path)
+  flushOpenPaths()
+})
+
+// 渲染进程启动握手：先注册事件监听再 invoke，保证事件推送与启动拉取互不丢失
+ipcMain.handle('app:get-open-paths', () => {
+  rendererReady = true
+  return takeOpenPaths()
+})
 
 function buildMenu(win: BrowserWindow): void {
   const recent = getRecent()

@@ -25,8 +25,8 @@ function basename(p: string): string {
         class="w-16 h-16 mb-5 rounded-2xl select-none shadow-sm"
         draggable="false"
       />
-      <a-typography-title :level="3" class="!mb-1">Muse</a-typography-title>
-      <a-typography-text type="secondary" class="!mb-6 block">
+      <a-typography-title :level="4" class="!mb-1 !font-medium">Muse</a-typography-title>
+      <a-typography-text type="secondary" class="!mb-6 block !text-[12.5px]">
         打开一个文件夹开始写作，左侧会列出其中的 Markdown。
       </a-typography-text>
 

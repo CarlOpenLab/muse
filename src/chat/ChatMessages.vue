@@ -205,7 +205,7 @@ const markdownClassName = computed(() =>
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 13.5px;
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
 /* 消息底部操作区（@antdv-next/x Actions）：复制 / 插入正文 / 替换选中 / 重新生成 */
@@ -222,7 +222,7 @@ const markdownClassName = computed(() =>
   min-width: 0;
   color: var(--fg);
   font-size: 13.5px;
-  line-height: 1.8;
+  line-height: 1.7;
   overflow-wrap: anywhere;
 }
 .chat-markdown :deep(p) {
@@ -327,12 +327,13 @@ const markdownClassName = computed(() =>
 .chat-welcome :deep(.antd-welcome-title) {
   margin: 0 0 8px;
   color: var(--fg);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 .chat-welcome :deep(.antd-welcome-description) {
   color: var(--fg-soft);
-  font-size: 13px;
+  font-size: 12.5px;
+  line-height: 1.7;
 }
 </style>
