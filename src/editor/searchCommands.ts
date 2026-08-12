@@ -4,17 +4,38 @@ import type { EditorState, Transaction } from '@milkdown/prose/state'
 import type { EditorView } from '@milkdown/prose/view'
 import type { Node as PMNode } from '@milkdown/prose/model'
 import { searchPluginKey } from './searchPlugin'
-import { useSearch, type SearchAction } from '../composables/useSearch'
+import { useSearch, type SearchAction, type SearchMatch } from '../composables/useSearch'
 
-function findMatches(doc: PMNode, query: string): { from: number; to: number }[] {
-  const result: { from: number; to: number }[] = []
+// 结果列表片段：命中词前后各留一点上下文
+const SNIPPET_BEFORE = 20
+const SNIPPET_AFTER = 60
+
+/** 取命中词所在段落的一小段文本，供右栏结果列表展示 */
+function snippetAt(doc: PMNode, from: number, len: number): { text: string; hit: number } {
+  const $from = doc.resolve(from)
+  const full = $from.parent.textContent
+  const off = Math.min($from.parentOffset, full.length)
+  const start = Math.max(0, off - SNIPPET_BEFORE)
+  const end = Math.min(full.length, off + len + SNIPPET_AFTER)
+  const head = start > 0 ? '…' : ''
+  // 软换行（hard_break 的 leafText）在单行列表里会撑出空白，等长换成空格不影响 hit 下标
+  const body = full.slice(start, end).replace(/\n/g, ' ')
+  return {
+    text: head + body + (end < full.length ? '…' : ''),
+    hit: head.length + (off - start)
+  }
+}
+
+function findMatches(doc: PMNode, query: string): SearchMatch[] {
+  const result: SearchMatch[] = []
   const lower = query.toLowerCase()
   doc.descendants((node, pos) => {
     if (node.isText && node.text) {
       const text = node.text.toLowerCase()
       let idx = text.indexOf(lower)
       while (idx !== -1) {
-        result.push({ from: pos + idx, to: pos + idx + query.length })
+        const from = pos + idx
+        result.push({ from, to: from + query.length, ...snippetAt(doc, from, query.length) })
         idx = text.indexOf(lower, idx + query.length)
       }
     }
@@ -23,11 +44,15 @@ function findMatches(doc: PMNode, query: string): { from: number; to: number }[]
   return result
 }
 
-function gotoMatch(v: EditorView, m: { from: number; to: number }): void {
+/**
+ * 滚到某个命中处。focus 仅在「点结果列表」这种明确的跳转意图下为 true——
+ * 边输入边搜时抢走焦点会把后续按键打进正文。
+ */
+function gotoMatch(v: EditorView, m: SearchMatch, focus = false): void {
   v.dispatch(
     v.state.tr.setSelection(TextSelection.create(v.state.doc, m.from, m.to)).scrollIntoView()
   )
-  v.focus()
+  if (focus) v.focus()
 }
 
 function runSearch(v: EditorView): void {
@@ -64,9 +89,10 @@ export const searchCommand = $command<SearchAction, 'muse-search'>('muse-search'
       }
 
       const n = search.matches.value.length
-      if (action === 'next' || action === 'prev') {
+      // next / prev 是相对当前项移动，goto 直接用 SearchPanel 已经写好的 current
+      if (action === 'next' || action === 'prev' || action === 'goto') {
         if (!n) return false
-        const dir = action === 'next' ? 1 : -1
+        const dir = action === 'next' ? 1 : action === 'prev' ? -1 : 0
         const next = (search.current.value + dir + n) % n
         search.current.value = next
         view.dispatch(
@@ -76,7 +102,7 @@ export const searchCommand = $command<SearchAction, 'muse-search'>('muse-search'
             current: next
           })
         )
-        gotoMatch(view, search.matches.value[next])
+        gotoMatch(view, search.matches.value[next], action === 'goto')
         return true
       }
 

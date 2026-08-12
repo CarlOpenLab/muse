@@ -22,20 +22,56 @@ const title = computed(() => `${dirty.value ? '● ' : ''}${filename.value} - Mu
 
 // 草稿自动保存定时器（仅未命名文档）
 let draftTimer: ReturnType<typeof setTimeout> | undefined
+// 正式文件自动保存定时器（已有路径的文档）
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+const AUTOSAVE_DELAY = 800
+// 正在写盘（状态栏显示「保存中…」）
+const saving = ref(false)
 
-// 内容变化 -> 脏 + 草稿防抖写入
+/**
+ * 把当前内容写回已有路径。
+ * 写盘期间用户可能继续输入，故对比快照：内容已变则保留脏标记，
+ * 交给下一次防抖，不会把新改动误标成「已保存」。
+ */
+async function writeCurrent(): Promise<void> {
+  const path = currentPath.value
+  if (!path) return
+  const snapshot = doc.value
+  saving.value = true
+  try {
+    await window.muse?.invoke('fs:save', path, snapshot)
+    if (doc.value === snapshot) syncDirty(false)
+  } finally {
+    saving.value = false
+  }
+}
+
+// 内容变化 -> 脏 + 防抖落盘（已命名走真实文件，未命名走草稿）
 watch(doc, () => {
   if (suppress) return
   dirty.value = true
   void window.muse?.invoke('app:set-dirty', true)
-  // 未命名文档：防抖写草稿，避免每键一次 IO
   if (currentPath.value === null) {
+    // 未命名文档：防抖写草稿，避免每键一次 IO
     clearTimeout(draftTimer)
     draftTimer = setTimeout(() => {
       void window.muse?.invoke('fs:writeDraft', doc.value)
     }, 1500)
+  } else {
+    // 已命名文档：自动保存（Typora / Obsidian 式），切文件与关窗前另有兜底 flush
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => void writeCurrent(), AUTOSAVE_DELAY)
   }
 })
+
+/** 立即写掉防抖中的改动（切文件 / 关窗前调用） */
+async function flushPending(): Promise<void> {
+  clearTimeout(saveTimer)
+  clearTimeout(draftTimer)
+  if (!dirty.value) return
+  if (currentPath.value) await writeCurrent()
+  else await window.muse?.invoke('fs:writeDraft', doc.value)
+}
 
 function syncDirty(v: boolean): void {
   dirty.value = v
@@ -46,6 +82,7 @@ function syncDirty(v: boolean): void {
 function loadContent(path: string | null, content: string): void {
   suppress = true
   clearTimeout(draftTimer)
+  clearTimeout(saveTimer)
   doc.value = content
   currentPath.value = path
   syncDirty(false)
@@ -66,8 +103,23 @@ async function confirmDiscard(): Promise<boolean> {
   return true // discard
 }
 
+/**
+ * 切换文档前的收尾：已有路径的文档静默落盘（不打断），
+ * 只有「未命名且有改动」才弹确认框——那种情况下没有可写回的路径。
+ * 返回是否可以继续切换。
+ */
+async function flushBeforeSwitch(): Promise<boolean> {
+  if (!dirty.value) return true
+  if (currentPath.value) {
+    clearTimeout(saveTimer)
+    await writeCurrent()
+    return true
+  }
+  return confirmDiscard()
+}
+
 async function newFile(): Promise<void> {
-  if (!(await confirmDiscard())) return
+  if (!(await flushBeforeSwitch())) return
   // 新建后清掉旧草稿，避免下次启动恢复到已废弃内容
   void window.muse?.invoke('fs:clearDraft')
   // 初始内容为一个空 H1（标题位）：placeholderPlugin 会在其上显示「无标题」占位；
@@ -77,13 +129,14 @@ async function newFile(): Promise<void> {
 }
 
 async function open(): Promise<void> {
-  if (!(await confirmDiscard())) return
+  if (!(await flushBeforeSwitch())) return
   const r = (await window.muse?.invoke('fs:open')) as { path: string; content: string } | null
   if (r) loadContent(r.path, r.content)
 }
 
 async function openPath(path: string): Promise<void> {
-  if (!(await confirmDiscard())) return
+  if (path === currentPath.value) return // 点当前文件不重载，避免打断编辑
+  if (!(await flushBeforeSwitch())) return
   const r = (await window.muse?.invoke('fs:openPath', path)) as { path: string; content: string } | null
   if (r) loadContent(r.path, r.content)
 }
@@ -91,8 +144,8 @@ async function openPath(path: string): Promise<void> {
 /** 保存：有路径直接存，无路径走另存为。返回是否成功 */
 async function save(): Promise<boolean> {
   if (currentPath.value) {
-    await window.muse?.invoke('fs:save', currentPath.value, doc.value)
-    syncDirty(false)
+    clearTimeout(saveTimer) // 手动保存后作废排队中的自动保存
+    await writeCurrent()
     void window.muse?.invoke('fs:clearDraft') // 已落盘，清草稿
     return true
   }
@@ -110,8 +163,32 @@ async function saveAs(): Promise<boolean> {
   return false
 }
 
-/** main 触发的关闭请求：脏则确认，再决定关闭或放弃 */
+/** 文件在外部被重命名后同步路径（内容未变，不重载） */
+function setPath(path: string): void {
+  currentPath.value = path
+}
+
+/** 关掉当前文档，回到欢迎页（当前文件被删除时用） */
+function closeDoc(): void {
+  suppress = true
+  clearTimeout(draftTimer)
+  clearTimeout(saveTimer)
+  doc.value = ''
+  currentPath.value = null
+  syncDirty(false)
+  started.value = false
+  void nextTick(() => {
+    suppress = false
+  })
+}
+
+/** main 触发的关闭请求：已命名文档直接落盘关闭；未命名有改动才确认 */
 async function handleCloseRequest(): Promise<void> {
+  if (currentPath.value) {
+    await flushPending()
+    void window.muse?.invoke('app:close')
+    return
+  }
   if (!dirty.value) {
     void window.muse?.invoke('app:close')
     return
@@ -149,6 +226,7 @@ export function useFile() {
     doc,
     currentPath,
     dirty,
+    saving,
     started,
     filename,
     title,
@@ -158,6 +236,10 @@ export function useFile() {
     openPath,
     save,
     saveAs,
+    setPath,
+    closeDoc,
+    flushPending,
+    flushBeforeSwitch,
     handleCloseRequest,
     restoreDraft
   }

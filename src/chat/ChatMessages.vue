@@ -192,11 +192,12 @@ const markdownClassName = computed(() =>
   box-shadow: 0 1px 2px rgba(9, 9, 11, 0.06);
 }
 .chat-avatar-assistant {
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--bg-elev);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
 }
 .chat-avatar-user {
-  background: var(--bg-soft);
+  background: var(--bg-elev);
   color: var(--fg-soft);
   border: 1px solid var(--border);
 }
@@ -315,20 +316,20 @@ const markdownClassName = computed(() =>
 .chat-welcome :deep(.antd-welcome-icon) {
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
-  margin: 0 auto 18px;
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 16px;
   border-radius: 14px;
-  background: var(--accent);
-  color: var(--bg);
-  box-shadow: 0 8px 24px rgba(9, 9, 11, 0.14);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg-soft);
 }
 .chat-welcome :deep(.antd-welcome-title) {
   margin: 0 0 8px;
   color: var(--fg);
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .chat-welcome :deep(.antd-welcome-description) {
   color: var(--fg-soft);

@@ -256,8 +256,8 @@ const activeLabel = computed(() => activeConversation.value?.label ?? '新对话
 
 <template>
   <div class="chat-panel flex-1 min-h-0 flex flex-col">
-    <!-- 头部：会话切换 + 新对话 -->
-    <header class="shrink-0 h-12 flex items-center gap-1.5 px-3 border-b border-border-subtle">
+    <!-- 会话行：紧贴在侧栏标签下方的一条轻量条（不再画分割线，靠芯片本身分层） -->
+    <header class="shrink-0 h-9 flex items-center gap-1.5 pl-3 pr-2">
       <div ref="convRootRef" class="min-w-0 flex-1">
         <button
           type="button"
@@ -402,14 +402,13 @@ const activeLabel = computed(() => activeConversation.value?.label ?? '新对话
   align-items: center;
   gap: 6px;
   max-width: 100%;
-  height: 30px;
+  height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg-soft);
+  background: var(--bg-elev);
   color: var(--fg);
   font-size: 12.5px;
-  font-weight: 500;
   line-height: 1;
   cursor: pointer;
   transition:
@@ -417,8 +416,8 @@ const activeLabel = computed(() => activeConversation.value?.label ?? '新对话
     background 160ms ease;
 }
 .conv-trigger:hover {
-  border-color: var(--fg-soft);
-  background: color-mix(in srgb, var(--bg-soft) 75%, var(--fg-soft) 10%);
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
 }
 .conv-trigger-label {
   overflow: hidden;

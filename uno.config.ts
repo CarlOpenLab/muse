@@ -14,9 +14,13 @@ export default defineConfig({
     colors: {
       bg: 'var(--bg)',
       'bg-soft': 'var(--bg-soft)',
+      'bg-elev': 'var(--bg-elev)',
+      'bg-hover': 'var(--bg-hover)',
       fg: 'var(--fg)',
       'fg-soft': 'var(--fg-soft)',
+      'fg-dim': 'var(--fg-dim)',
       border: 'var(--border)',
+      'border-strong': 'var(--border-strong)',
       'border-subtle': 'var(--border-subtle)',
       accent: 'var(--accent)',
       'code-bg': 'var(--code-bg)',

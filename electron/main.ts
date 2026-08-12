@@ -63,6 +63,7 @@ function buildMenu(win: BrowserWindow): void {
 }
 
 function createWindow(): void {
+  const isMac = process.platform === 'darwin'
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -73,6 +74,11 @@ function createWindow(): void {
     title: 'Muse',
     icon: isDev ? APP_ICON : undefined,
     backgroundColor: '#ffffff',
+    // macOS：隐藏标题栏、红绿灯浮在内容上（落进左侧文件栏顶部的拖拽条里）。
+    // Windows / Linux 保持系统边框——自绘最小化/最大化/关闭按钮不在本次范围内。
+    ...(isMac
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 15 } }
+      : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

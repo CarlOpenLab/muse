@@ -1,38 +1,47 @@
-/* 语义颜色变量：对齐 shadcn-admin。
- * - 亮色：slate 色板（白卡 + slate-50 画布，编辑器「纸张」隐喻）；
- * - 暗色：近黑中性灰（card 略浮于 zinc-950 画布，白 10% 柔边 + 阴影）。
+/* 语义颜色变量：三栏工作台（左栏 / 编辑区 / AI 栏）共用一套。
+ * 暗色取自参考稿的「近黑单色」体系——三栏同底 #1a1a1a，靠 1px 细线分栏，
+ * 只有输入框（--bg-elev）与代码 / 输出块（--code-bg）在底色上下浮一档；
+ * 亮色是同一结构的反相：三栏同底白，灰阶细线分栏。
  * 自定义区域（编辑器 / 代码块 / 大纲 / 查找高亮 等）直接引用这些变量，
  * 与 App.vue 的 ConfigProvider token 保持统一。
  * useTheme 的 apply() 另动态设置 color-scheme（跟 .dark 同步）。 */
 :root {
   color-scheme: light;
-  --bg: #ffffff;
-  --bg-soft: #f8fafc; /* slate-50：活动栏 / 状态栏等次要面，与画布同色保持扁平 */
-  --fg: #0f172a; /* slate-900 */
-  --fg-soft: #64748b; /* slate-500 */
-  --border: #e2e8f0; /* slate-200 */
-  --border-subtle: #f1f5f9; /* slate-100：卡片 / 面板上的极淡分隔线 */
-  --accent: #000000; /* shadcn 品牌主色：近黑 */
-  --code-bg: #f1f5f9; /* slate-100 */
-  --code-inline-bg: #f1f5f9; /* slate-100 */
-  --page-bg: #f8fafc; /* slate-50：画布背景，衬托白色卡片 */
+  --bg: #ffffff; /* 编辑区 / AI 栏底色 */
+  --bg-soft: #fafafa; /* 左栏：与主区几乎同色，仅差一档 */
+  --bg-elev: #f4f4f5; /* 上浮面：输入框 / 芯片 / 悬浮卡 */
+  --bg-hover: #ececed; /* 行 hover 与选中态 */
+  --fg: #1f1f21;
+  --fg-soft: #6b6b70; /* 次要文字：路径 / 时间 / 元信息 */
+  --fg-dim: #9a9aa0; /* 三级文字：分组标题 / 占位 */
+  --border: #e6e6e8; /* 卡片 / 内部分隔线 */
+  --border-strong: #dcdcdf; /* 分栏线：比内部分隔略重 */
+  --border-subtle: #f0f0f1;
+  --accent: #1f1f21;
+  --code-bg: #f6f6f7; /* 代码块 / 输出块：低于底色一档 */
+  --code-inline-bg: #f0f0f1;
+  --page-bg: #ffffff;
   --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
     'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
-/* 暗黑模式：shadcn 近黑中性灰（zinc），与暗色 Shiki 代码主题配套 */
+/* 暗黑模式：参考稿取色（#1a1a1a 底 / #212121 输入 / #151515 代码 / #2a2a2a 选中） */
 :root.dark {
   color-scheme: dark;
-  --bg: #0c0c0e; /* shadcn card：比画布略亮的中性近黑，靠边框+阴影浮起 */
-  --bg-soft: #09090b; /* zinc-950：活动栏 / 状态栏与画布同色（对齐 shadcn sidebar=bg） */
-  --fg: #fafafa; /* zinc-50 */
-  --fg-soft: #a1a1aa; /* zinc-400 */
-  --border: rgba(255, 255, 255, 0.1); /* shadcn：白 10%，近黑底上的柔和分割 */
-  --border-subtle: rgba(255, 255, 255, 0.06); /* 更淡的内部分隔 */
-  --accent: #fafafa; /* 近白：暗色品牌主色反相 */
-  --code-bg: #18181b; /* zinc-900：代码块略浮于卡片 */
-  --code-inline-bg: #27272a; /* zinc-800：行内代码 */
-  --page-bg: #09090b; /* zinc-950：画布背景，卡片浮于其上 */
+  --bg: #1a1a1a;
+  --bg-soft: #1c1c1d;
+  --bg-elev: #212121;
+  --bg-hover: #2a2a2a;
+  --fg: #e2e2e2;
+  --fg-soft: #a3a3a3;
+  --fg-dim: #6e6e70;
+  --border: #282828;
+  --border-strong: #363637;
+  --border-subtle: #232323;
+  --accent: #e2e2e2;
+  --code-bg: #151515;
+  --code-inline-bg: #262626;
+  --page-bg: #1a1a1a;
 }
 
 * {
@@ -415,6 +424,15 @@ body {
   margin-block: 0;
 }
 
+/* 列表项内的段落不再吃 p 的块间距，否则每个 li 之间会撑开一个空行的高度 */
+.milkdown-theme-nord.prose li p {
+  margin-block: 0;
+}
+
+.milkdown-theme-nord.prose li + li {
+  margin-top: calc(var(--spacing) * 1);
+}
+
 /* ===== 大纲列表（Notion 风格右侧边栏） =====
  * 扁平标题列表，按层级缩进，无折叠箭头；hover / active 用 --fg 半透明叠加，
  * 亮暗模式同向着色（亮色变浅灰、暗色变浅白）。active 由 App 滚动监听驱动，
@@ -438,12 +456,12 @@ body {
 }
 
 .outline-item:hover {
-  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  background: var(--bg-hover);
   color: var(--fg);
 }
 
 .outline-item.active {
-  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  background: var(--bg-hover);
   color: var(--fg);
 }
 
@@ -464,6 +482,246 @@ body {
 .outline-item[data-level='6'] {
   padding-left: 62px;
   font-size: 12px;
+}
+
+/* ===== 右栏搜索结果 ===== */
+/* 与大纲同一套行观感，但允许两行、命中词高亮 */
+.search-item {
+  width: 100%;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-soft);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.search-item:hover,
+.search-item.active {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.search-hit {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--fg) 22%, transparent);
+  color: var(--fg);
+}
+
+.search-item.active .search-hit {
+  background: color-mix(in srgb, var(--fg) 40%, transparent);
+}
+
+/* ===== 窗口拖拽区（macOS 无边框窗口）=====
+ * 顶栏整条可拖动窗口；其中的按钮 / 输入必须显式排除，否则点不动。 */
+.app-drag {
+  -webkit-app-region: drag;
+}
+.app-no-drag,
+.app-drag button,
+.app-drag input,
+.app-drag a {
+  -webkit-app-region: no-drag;
+}
+
+/* ===== 左侧菜单栏 ===== */
+/* 图标按钮：顶部操作行 / 分组标题右侧 / 底部设置共用 */
+.rail-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-soft);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.rail-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+.rail-icon-btn.sm {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+/* 常开状态（如 AI 栏开关）：底色常亮提示 */
+.rail-icon-btn.on {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* 主导航行（新建 / 搜索）：参考稿里全栏最重的一层，图标与文字都放大 */
+.rail-nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  height: 36px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.rail-nav:hover {
+  background: var(--bg-hover);
+}
+.rail-nav-icon {
+  flex-shrink: 0;
+  color: var(--fg-soft);
+}
+
+/* 无工作区时的占位入口 */
+.rail-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.rail-empty:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* 文件 / 目录行：与 .outline-item 同一套 hover / active 手感 */
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 30px;
+  padding-right: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--fg-soft);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.file-item:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+.file-item.active {
+  background: var(--bg-hover);
+  color: var(--fg);
+  font-weight: 500;
+}
+
+/* 目录展开箭头：折叠 ▸ / 展开 ▾ */
+.file-chevron {
+  opacity: 0.55;
+  transition: transform 0.15s ease;
+}
+.file-chevron.open {
+  transform: rotate(90deg);
+}
+
+/* 行内重命名输入框：顶替整行，视觉尺寸与 .file-item 对齐 */
+.file-rename-input {
+  width: 100%;
+  height: 30px;
+  padding-right: 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  outline: none;
+}
+
+/* 左栏右边缘拖拽把手（与 SidePanel 的 .sidebar-resizer 分开，方向相反） */
+.rail-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 6px;
+  z-index: 30;
+  cursor: col-resize;
+}
+.rail-resizer:hover {
+  background: color-mix(in srgb, var(--fg-soft) 18%, transparent);
+}
+
+/* ===== 文件树右键菜单（Teleport 到 body 的轻量浮层）===== */
+.ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 168px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.35);
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--fg);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.ctx-item:hover {
+  background: var(--bg-hover);
+}
+.ctx-item.danger {
+  color: #cf222e;
+}
+:root.dark .ctx-item.danger {
+  color: #f85149;
+}
+.ctx-item.danger:hover {
+  background: color-mix(in srgb, #cf222e 12%, transparent);
+}
+
+.ctx-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border-subtle);
 }
 
 /* 通用淡入淡出（工具提示条等） */

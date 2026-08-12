@@ -32,11 +32,15 @@ declare module 'vue' {
     ATypographyText: typeof import('antdv-next')['TypographyText']
     ATypographyTitle: typeof import('antdv-next')['TypographyTitle']
     EntryScreen: typeof import('./components/EntryScreen.vue')['default']
+    FileSidebar: typeof import('./components/FileSidebar.vue')['default']
+    FileTree: typeof import('./components/FileTree.vue')['default']
     OutlinePanel: typeof import('./components/OutlinePanel.vue')['default']
     ProviderSettings: typeof import('./components/ProviderSettings.vue')['default']
     SearchBar: typeof import('./components/SearchBar.vue')['default']
+    SearchPanel: typeof import('./components/SearchPanel.vue')['default']
     SettingsModal: typeof import('./components/SettingsModal.vue')['default']
     SidePanel: typeof import('./components/SidePanel.vue')['default']
     StatusBar: typeof import('./components/StatusBar.vue')['default']
+    TitleBar: typeof import('./components/TitleBar.vue')['default']
   }
 }

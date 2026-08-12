@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { FilePlus, FolderOpen, FileText } from '@lucide/vue'
+import { FilePlus, FolderOpen, FileText, FolderTree } from '@lucide/vue'
 import logoUrl from '../../resources/icon.png'
 
 defineProps<{ recent: string[] }>()
-const emit = defineEmits<{ new: []; open: []; 'open-recent': [path: string] }>()
+const emit = defineEmits<{
+  new: []
+  open: []
+  'open-folder': []
+  'open-recent': [path: string]
+}>()
 
 // 渲染进程无 node:path，自备 basename
 function basename(p: string): string {
@@ -22,19 +27,24 @@ function basename(p: string): string {
       />
       <a-typography-title :level="3" class="!mb-1">Muse</a-typography-title>
       <a-typography-text type="secondary" class="!mb-6 block">
-        一个 Typora 式的 Markdown 编辑器，所见即所得。
+        打开一个文件夹开始写作，左侧会列出其中的 Markdown。
       </a-typography-text>
 
-      <a-space :size="10" class="mb-7">
-        <a-button type="primary" size="large" @click="emit('new')">
+      <a-space :size="10" class="mb-3">
+        <a-button type="primary" size="large" @click="emit('open-folder')">
+          <template #icon><FolderTree :size="16" /></template>
+          打开文件夹
+        </a-button>
+        <a-button size="large" @click="emit('new')">
           <template #icon><FilePlus :size="16" /></template>
           新建文件
         </a-button>
-        <a-button size="large" @click="emit('open')">
-          <template #icon><FolderOpen :size="16" /></template>
-          打开文件
-        </a-button>
       </a-space>
+
+      <a-button type="link" size="small" class="!text-fg-soft mb-6" @click="emit('open')">
+        <template #icon><FolderOpen :size="13" /></template>
+        打开单个文件
+      </a-button>
 
       <div v-if="recent.length" class="w-full text-left">
         <div class="text-xs text-fg-soft uppercase tracking-wide mb-2 px-1">最近打开</div>

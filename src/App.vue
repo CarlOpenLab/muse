@@ -1,24 +1,26 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { Sun, Moon, PanelRightOpen, PanelRightClose, Settings as SettingsIcon } from '@lucide/vue'
 import { ConfigProvider, theme as antdTheme } from 'antdv-next'
 import { ThemeProvider } from 'antdv-style'
 import { XProvider } from '@antdv-next/x'
 import type { XProviderProps } from '@antdv-next/x'
 import MilkdownEditor from './editor/MilkdownEditor.vue'
 import EntryScreen from './components/EntryScreen.vue'
-import ChatPanel from './chat/ChatPanel.vue'
+import FileSidebar from './components/FileSidebar.vue'
+import TitleBar from './components/TitleBar.vue'
 import SidePanel from './components/SidePanel.vue'
+import OutlinePanel from './components/OutlinePanel.vue'
+import ChatPanel from './chat/ChatPanel.vue'
 import { useTheme } from './composables/useTheme'
 import { useFile } from './composables/useFile'
+import { useWorkspace, type TreeNode } from './composables/useWorkspace'
 import { useDocStats } from './composables/useDocStats'
 import { useOutline } from './composables/useOutline'
 import { useSearch } from './composables/useSearch'
 import { useSettings } from './composables/useSettings'
 import { dispatchEditorInsert, dispatchEditorReplaceSelection } from './composables/useEditorControl'
-import OutlinePanel from './components/OutlinePanel.vue'
 import StatusBar from './components/StatusBar.vue'
-import SearchBar from './components/SearchBar.vue'
+import SearchPanel from './components/SearchPanel.vue'
 import SettingsModal from './components/SettingsModal.vue'
 
 const { isDark, toggle } = useTheme()
@@ -27,12 +29,12 @@ const { isDark, toggle } = useTheme()
 // algorithm 驱动 ConfigProvider 的暗色 token 派生。isDark 仍是单一真相源。
 const appearance = computed(() => (isDark.value ? 'dark' : 'light'))
 
-// shadcn 主题 token：让 antd 组件对齐 shadcn-admin 质感，与 base.css 语义变量统一。
-// - 亮色：slate 色板，主色近黑（#000），主按钮黑底白字；
-// - 暗色：近黑中性灰画布（zinc-950）+ 略浮卡片（zinc-900）。antd 主按钮文字 /
+// antd token：与 base.css 的语义变量同一套取色（参考稿的近黑单色体系）。
+// - 亮色：白底 + 中性灰阶细线，主色近黑，主按钮黑底白字；
+// - 暗色：#1a1a1a 底 + #212121 浮层 + #363637 分栏线。antd 主按钮文字 /
 //   复选框勾选色硬编码为 #fff（colorTextLightSolid），故暗色主色不能用近白（白字
-//   不可见），改用比卡片更浅的 zinc-700 作主色——主按钮浅灰底白字、勾选色可读，
-//   且比近黑卡片更亮从而「浮」出来；链接等「主色文字」单独覆盖为浅 zinc 保证可读。
+//   不可见），改用比底色浅一档的 #3a3a3b——主按钮浅灰底白字、勾选色可读；
+//   链接等「主色文字」单独覆盖为浅灰保证可读。
 const SHADCN_FONT =
   "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
 const shadcnLight = {
@@ -41,12 +43,12 @@ const shadcnLight = {
   colorWarning: '#f59e0b',
   colorError: '#ef4444',
   colorInfo: '#3b82f6',
-  colorTextBase: '#0f172a',
+  colorTextBase: '#1f1f21',
   colorBgBase: '#ffffff',
-  colorPrimaryBg: '#f1f5f9',
-  colorPrimaryBgHover: '#e2e8f0',
-  colorPrimaryBorder: '#cbd5e1',
-  colorPrimaryBorderHover: '#94a3b8',
+  colorPrimaryBg: '#f4f4f5',
+  colorPrimaryBgHover: '#ececed',
+  colorPrimaryBorder: '#dcdcdf',
+  colorPrimaryBorderHover: '#b4b4b8',
   colorPrimaryHover: '#334155',
   colorPrimaryActive: '#1e293b',
   colorPrimaryText: '#0f172a',
@@ -88,18 +90,18 @@ const shadcnLight = {
   colorInfoText: '#3b82f6',
   colorInfoTextHover: '#60a5fa',
   colorInfoTextActive: '#1d4ed8',
-  colorText: 'rgba(15, 23, 42, 0.95)',
-  colorTextSecondary: 'rgba(15, 23, 42, 0.75)',
-  colorTextTertiary: 'rgba(15, 23, 42, 0.55)',
-  colorTextQuaternary: 'rgba(15, 23, 42, 0.25)',
-  colorTextDisabled: 'rgba(15, 23, 42, 0.25)',
+  colorText: '#1f1f21',
+  colorTextSecondary: '#6b6b70',
+  colorTextTertiary: '#9a9aa0',
+  colorTextQuaternary: 'rgba(31, 31, 33, 0.25)',
+  colorTextDisabled: 'rgba(31, 31, 33, 0.25)',
   colorBgContainer: '#ffffff',
   colorBgElevated: '#ffffff',
-  colorBgLayout: '#f8fafc',
-  colorBgSpotlight: 'rgba(15, 23, 42, 0.9)',
-  colorBgMask: 'rgba(15, 23, 42, 0.4)',
-  colorBorder: '#e2e8f0',
-  colorBorderSecondary: '#f1f5f9',
+  colorBgLayout: '#ffffff',
+  colorBgSpotlight: 'rgba(31, 31, 33, 0.9)',
+  colorBgMask: 'rgba(31, 31, 33, 0.4)',
+  colorBorder: '#dcdcdf',
+  colorBorderSecondary: '#e6e6e8',
   borderRadius: 8,
   borderRadiusXS: 4,
   borderRadiusSM: 6,
@@ -115,34 +117,34 @@ const shadcnLight = {
   fontFamily: SHADCN_FONT,
 }
 const shadcnDark = {
-  colorPrimary: '#3f3f46',
-  colorPrimaryHover: '#52525b',
-  colorPrimaryActive: '#27272a',
-  colorPrimaryText: '#e4e4e7',
-  colorPrimaryTextHover: '#fafafa',
-  colorPrimaryTextActive: '#d4d4d8',
-  colorPrimaryBg: '#27272a',
-  colorPrimaryBgHover: '#3f3f46',
-  colorPrimaryBorder: '#3f3f46',
-  colorPrimaryBorderHover: '#52525b',
+  colorPrimary: '#3a3a3b',
+  colorPrimaryHover: '#4a4a4c',
+  colorPrimaryActive: '#2a2a2a',
+  colorPrimaryText: '#e2e2e2',
+  colorPrimaryTextHover: '#f5f5f5',
+  colorPrimaryTextActive: '#c8c8c8',
+  colorPrimaryBg: '#2a2a2a',
+  colorPrimaryBgHover: '#333334',
+  colorPrimaryBorder: '#363637',
+  colorPrimaryBorderHover: '#4a4a4c',
   colorSuccess: '#4ade80',
   colorWarning: '#fbbf24',
   colorError: '#f87171',
   colorInfo: '#60a5fa',
-  colorTextBase: '#fafafa',
-  colorBgBase: '#09090b',
-  colorText: 'rgba(255, 255, 255, 0.95)',
-  colorTextSecondary: 'rgba(255, 255, 255, 0.7)',
-  colorTextTertiary: 'rgba(255, 255, 255, 0.5)',
-  colorTextQuaternary: 'rgba(255, 255, 255, 0.25)',
-  colorTextDisabled: 'rgba(255, 255, 255, 0.25)',
-  colorBgContainer: '#0c0c0e',
-  colorBgElevated: '#18181b',
-  colorBgLayout: '#09090b',
-  colorBgSpotlight: '#000000',
-  colorBgMask: 'rgba(0, 0, 0, 0.5)',
-  colorBorder: '#27272a',
-  colorBorderSecondary: 'rgba(255, 255, 255, 0.1)',
+  colorTextBase: '#e2e2e2',
+  colorBgBase: '#1a1a1a',
+  colorText: '#e2e2e2',
+  colorTextSecondary: '#a3a3a3',
+  colorTextTertiary: '#6e6e70',
+  colorTextQuaternary: 'rgba(255, 255, 255, 0.22)',
+  colorTextDisabled: 'rgba(255, 255, 255, 0.22)',
+  colorBgContainer: '#1a1a1a',
+  colorBgElevated: '#212121',
+  colorBgLayout: '#1a1a1a',
+  colorBgSpotlight: '#2a2a2a',
+  colorBgMask: 'rgba(0, 0, 0, 0.55)',
+  colorBorder: '#363637',
+  colorBorderSecondary: '#282828',
   borderRadius: 8,
   borderRadiusXS: 4,
   borderRadiusSM: 6,
@@ -165,6 +167,7 @@ const {
   doc,
   currentPath,
   dirty,
+  saving,
   started,
   filename,
   title,
@@ -173,9 +176,20 @@ const {
   openPath,
   save,
   saveAs,
+  setPath,
+  closeDoc,
   handleCloseRequest,
   restoreDraft
 } = useFile()
+
+const {
+  root: workspaceRoot,
+  tree: workspaceTree,
+  collapsed: railCollapsed,
+  toggleCollapsed: toggleRail,
+  pickFolder: pickWorkspaceFolder,
+  createFile: createWorkspaceFile
+} = useWorkspace()
 
 const stats = useDocStats(doc)
 const headings = useOutline(doc)
@@ -185,10 +199,14 @@ const { settings } = useSettings()
 const showSettings = ref(false)
 const recentFiles = ref<string[]>([])
 
-// ===== 右侧辅助侧栏：大纲 / AI 在同一位置切换（写文档时的贴身助手）=====
+// macOS 无边框窗口：红绿灯浮在内容上，左栏顶部要预留一条拖拽区
+const isMac = window.muse?.platform === 'darwin'
+
+// ===== 右侧辅助栏：大纲 / 搜索 / AI 在同一位置切换（写文档时的贴身助手）=====
+type PanelTab = 'ai' | 'outline' | 'search'
 interface SidebarState {
   open: boolean
-  tab: 'ai' | 'outline'
+  tab: PanelTab
   width: number
 }
 const SIDEBAR_KEY = 'muse:sidebar:v1'
@@ -199,14 +217,15 @@ function loadSidebar(): SidebarState {
       const p = JSON.parse(raw) as Partial<SidebarState>
       return {
         open: p.open !== false,
-        tab: p.tab === 'ai' ? 'ai' : 'outline',
+        // 搜索是临时态，重启后回到大纲，避免开机看到一个空搜索框
+        tab: p.tab === 'outline' || p.tab === 'search' ? 'outline' : 'ai',
         width: Math.min(560, Math.max(300, Number(p.width) || 380)),
       }
     }
   } catch {
     /* 忽略损坏的持久化数据 */
   }
-  return { open: true, tab: 'outline', width: 380 }
+  return { open: true, tab: 'ai', width: 380 }
 }
 const sidebar = ref<SidebarState>(loadSidebar())
 watch(
@@ -221,12 +240,20 @@ watch(
   { deep: true }
 )
 
-/** 侧栏开合：标签切换交给侧栏头部（大纲 / AI 相邻），左侧只留一个总开关 */
-function toggleSidebar(): void {
-  sidebar.value.open = !sidebar.value.open
-}
 function onSidebarResize(width: number): void {
   sidebar.value.width = width
+}
+
+/** ⌘F / 菜单 / 顶栏放大镜：展开右栏并切到搜索页，焦点落进查找框 */
+function openSearch(): void {
+  sidebar.value.open = true
+  sidebar.value.tab = 'search'
+  search.open()
+}
+
+function onPanelTab(tab: PanelTab): void {
+  sidebar.value.tab = tab
+  if (tab === 'search') search.open()
 }
 
 // @antdv-next/x 组件库中文文案
@@ -235,6 +262,21 @@ const chatLocale: XProviderProps['locale'] = {
   Conversations: { create: '新对话' },
   Sender: { stopLoading: '停止请求', speechRecording: '正在录音' },
   Bubble: { editableOk: '确认', editableCancel: '取消' },
+}
+
+/**
+ * 新建：有工作区就在工作区里落一个真实文件（左栏能立刻看到并重命名），
+ * 没有工作区才退回「未命名草稿 + 另存为」的老路径。
+ */
+async function createDoc(): Promise<void> {
+  if (workspaceRoot.value) {
+    const p = await createWorkspaceFile()
+    if (p) {
+      await openPath(p)
+      return
+    }
+  }
+  await newFile()
 }
 
 // 启动：先拉最近文件供 Entry 页展示；再尝试恢复未命名草稿。
@@ -247,12 +289,12 @@ void restoreDraft()
 onMounted(() => {
   window.muse?.on('menu:action', (payload: unknown) => {
     const { action, path } = payload as { action: string; path?: string }
-    if (action === 'new') void newFile()
+    if (action === 'new') void createDoc()
     else if (action === 'open') void open()
     else if (action === 'open-recent' && path) void openPath(path)
     else if (action === 'save') void save()
     else if (action === 'saveAs') void saveAs()
-    else if (action === 'find') search.open()
+    else if (action === 'find') openSearch()
   })
 
   window.muse?.on('app:request-close', () => {
@@ -265,13 +307,14 @@ onMounted(() => {
     const key = e.key.toLowerCase()
     if (mod && key === 'f') {
       e.preventDefault()
-      search.open()
+      openSearch()
     } else if (mod && key === 'g') {
       e.preventDefault()
       search.request(e.shiftKey ? 'prev' : 'next')
     } else if (e.key === 'Escape' && search.isOpen.value) {
       e.preventDefault()
       search.close()
+      if (sidebar.value.tab === 'search') sidebar.value.tab = 'outline'
     }
   })
 })
@@ -280,6 +323,43 @@ watch(title, (t) => {
   document.title = t
 }, { immediate: true })
 
+/** 状态栏左侧：工作区内文件显示相对路径，工作区外显示完整路径 */
+const docLocation = computed(() => {
+  const path = currentPath.value
+  if (!path) return started.value ? '未保存的草稿' : ''
+  const root = workspaceRoot.value
+  if (root && path.startsWith(root)) return path.slice(root.length).replace(/^[\\/]/, '')
+  return path
+})
+
+/**
+ * 树刷新后与当前文档对账：当前文件若已从工作区消失（在访达里删了 / 移走了），
+ * 关掉它回到空态。不然自动保存会用 writeFileSync 把它凭空写回来。
+ * 只管工作区内的文件——⌘O 打开的外部文件本来就不在树里。
+ */
+function existsInTree(nodes: TreeNode[], path: string): boolean {
+  return nodes.some((n) =>
+    n.type === 'file' ? n.path === path : (n.children ? existsInTree(n.children, path) : false)
+  )
+}
+
+watch(workspaceTree, (nodes) => {
+  const path = currentPath.value
+  const root = workspaceRoot.value
+  if (!path || !root) return
+  const sep = path.includes('\\') ? '\\' : '/'
+  if (!path.startsWith(root + sep)) return
+  if (!existsInTree(nodes, path)) closeDoc()
+})
+
+function onDrop(e: DragEvent): void {
+  const f = e.dataTransfer?.files?.[0]
+  if (!f) return
+  const path = window.muse?.getPathForFile(f)
+  if (path) void openPath(path)
+}
+
+// ===== 大纲：点击跳转 + 滚动高亮当前章节 =====
 const editorScrollRef = ref<HTMLElement | null>(null)
 const activeHeading = ref(-1)
 
@@ -292,7 +372,7 @@ function scrollToHeading(index: number): void {
   heads?.[index]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-/** 滚动时同步「当前章节」高亮（Notion 风格）：取越过顶部阈值线的最后一个标题 */
+/** 滚动时同步「当前章节」高亮：取越过顶部阈值线的最后一个标题 */
 let scrollRaf = 0
 function onEditorScroll(): void {
   if (scrollRaf) return
@@ -320,15 +400,8 @@ function onEditorScroll(): void {
 // 文档变化（打开 / 新建 / 编辑标题）后重置高亮并重算
 watch(headings, () => {
   activeHeading.value = headings.value.length ? 0 : -1
-  nextTick(onEditorScroll)
+  void nextTick(onEditorScroll)
 })
-
-function onDrop(e: DragEvent): void {
-  const f = e.dataTransfer?.files?.[0]
-  if (!f) return
-  const path = window.muse?.getPathForFile(f)
-  if (path) void openPath(path)
-}
 
 /** AI 回答 → 插入到正文（按 markdown 解析后落到光标处） */
 function insertIntoDoc(text: string): void {
@@ -354,111 +427,96 @@ const getDocContext = (): string => doc.value
 <template>
   <ConfigProvider :theme="themeConfig">
     <ThemeProvider :appearance="appearance">
-      <div class="flex flex-col h-full bg-page-bg" @dragover.prevent @drop.prevent="onDrop">
-        <div class="flex flex-1 overflow-hidden">
-          <!-- 左侧活动栏：主题 / 设置（侧栏开合按钮常驻编辑卡片右上角） -->
-          <aside
-            class="w-10 shrink-0 flex flex-col items-center gap-3 py-2 bg-bg-soft border-r border-border-subtle"
+      <div class="flex h-full bg-bg" @dragover.prevent @drop.prevent="onDrop">
+        <!-- 左栏：菜单 + 工作区文件树（含主题 / 设置入口） -->
+        <FileSidebar
+          v-show="!railCollapsed"
+          :current="currentPath"
+          :is-dark="isDark"
+          :is-mac="isMac"
+          @open="openPath"
+          @renamed="setPath"
+          @removed="closeDoc"
+          @new="createDoc"
+          @find="openSearch"
+          @toggle-theme="toggle"
+          @settings="showSettings = true"
+        />
+
+        <!-- 中栏：顶栏 + Markdown 编辑区 + 信息条 -->
+        <main class="flex-1 min-w-0 flex flex-col bg-bg">
+          <TitleBar
+            :filename="filename"
+            :dirty="dirty"
+            :saving="saving"
+            :started="started"
+            :rail-collapsed="railCollapsed"
+            :ai-open="sidebar.open"
+            :is-mac="isMac"
+            @find="openSearch"
+            @toggle-rail="toggleRail"
+            @toggle-ai="sidebar.open = !sidebar.open"
+          />
+
+          <!-- 未打开任何文档：欢迎页 / 选文件提示 -->
+          <div v-if="!started" class="flex-1 min-h-0 flex">
+            <EntryScreen
+              v-if="!workspaceRoot"
+              :recent="recentFiles"
+              @new="createDoc"
+              @open="open"
+              @open-folder="pickWorkspaceFolder()"
+              @open-recent="openPath"
+            />
+            <div v-else class="flex-1 flex items-center justify-center text-sm text-fg-dim">
+              从左侧选择一个文件
+            </div>
+          </div>
+
+          <!-- 编辑器：内部滚动，正文限宽居中 -->
+          <div
+            v-else
+            ref="editorScrollRef"
+            class="flex-1 min-h-0 overflow-y-auto editor-scroll"
+            @scroll.passive="onEditorScroll"
           >
-            <!-- 底部：主题 / 设置 -->
-            <div class="mt-auto flex flex-col items-center gap-3">
-              <a-button type="text" shape="circle" size="small" @click="toggle">
-                <template #icon>
-                  <Sun v-if="isDark" :size="16" />
-                  <Moon v-else :size="16" />
-                </template>
-              </a-button>
-              <a-button type="text" shape="circle" size="small" @click="showSettings = true">
-                <template #icon><SettingsIcon :size="16" /></template>
-              </a-button>
-            </div>
-          </aside>
+            <MilkdownEditor v-model="doc" class="mx-auto max-w-[46rem] px-12 pt-6 pb-32" />
+          </div>
 
-          <!-- 右侧内容区：编辑器常驻主区域（AI / 大纲 收进右侧辅助侧栏） -->
-          <main class="flex-1 overflow-auto bg-page-bg">
-            <div class="px-3 py-3 h-full flex flex-col">
-              <div
-                class="relative rounded-xl card-shadow flex-1 flex flex-col overflow-hidden bg-bg"
-              >
-                <div class="flex-1 min-h-0 flex flex-col">
-                  <!-- Entry 欢迎页：未新建 / 打开任何文档时显示 -->
-                  <div v-if="!started" class="flex-1 flex">
-                    <EntryScreen
-                      :recent="recentFiles"
-                      @new="newFile"
-                      @open="open"
-                      @open-recent="openPath"
-                    />
-                  </div>
+          <StatusBar :stats="stats" :location="docLocation" :path="currentPath" />
+        </main>
 
-                  <!-- 编辑器（内部滚动，卡片高度固定，对齐 Notion） -->
-                  <div v-else class="relative flex-1 flex min-h-0">
-                    <!-- 侧栏开合：常驻卡片右上角（大纲 / AI 标签切换在侧栏头部） -->
-                    <div class="absolute top-2 right-2 z-20">
-                      <a-button
-                        type="text"
-                        shape="circle"
-                        size="small"
-                        :title="sidebar.open ? '收起侧栏' : '打开侧栏'"
-                        @click="toggleSidebar"
-                      >
-                        <template #icon>
-                          <PanelRightClose v-if="sidebar.open" :size="16" />
-                          <PanelRightOpen v-else :size="16" />
-                        </template>
-                      </a-button>
-                    </div>
-                    <div class="flex-1 min-w-0 flex flex-col">
-                      <div
-                        ref="editorScrollRef"
-                        class="flex-1 overflow-y-auto editor-scroll"
-                        @scroll.passive="onEditorScroll"
-                      >
-                        <MilkdownEditor v-model="doc" class="px-6 pt-6 pb-24" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </main>
-
-          <!-- 右侧辅助侧栏：大纲 / AI 同一位置切换（常驻挂载，聊天草稿与流式不丢；宽度折叠动画） -->
-          <Transition name="sidebar">
-            <SidePanel
-              v-show="sidebar.open"
-              :tab="sidebar.tab"
-              :width="sidebar.width"
-              @update:tab="sidebar.tab = $event"
-              @close="sidebar.open = false"
-              @resize="onSidebarResize"
-            >
-              <template #outline>
-                <OutlinePanel :headings="headings" :active="activeHeading" @jump="scrollToHeading" />
-              </template>
-              <template #ai>
-                <XProvider :theme="themeConfig" :locale="chatLocale">
-                  <ChatPanel
-                    :is-dark="isDark"
-                    :get-doc-context="getDocContext"
-                    @manage="showSettings = true"
-                    @insert="insertIntoDoc"
-                    @replace-selection="replaceFromChat"
-                  />
-                </XProvider>
-              </template>
-            </SidePanel>
-          </Transition>
-        </div>
+        <!-- 右栏：AI / 大纲（常驻挂载，聊天草稿与流式不丢；宽度折叠动画） -->
+        <Transition name="sidebar">
+          <SidePanel
+            v-show="sidebar.open"
+            :tab="sidebar.tab"
+            :width="sidebar.width"
+            @update:tab="onPanelTab"
+            @close="sidebar.open = false"
+            @resize="onSidebarResize"
+          >
+            <template #outline>
+              <OutlinePanel :headings="headings" :active="activeHeading" @jump="scrollToHeading" />
+            </template>
+            <template #search>
+              <SearchPanel />
+            </template>
+            <template #ai>
+              <XProvider :theme="themeConfig" :locale="chatLocale">
+                <ChatPanel
+                  :is-dark="isDark"
+                  :get-doc-context="getDocContext"
+                  @manage="showSettings = true"
+                  @insert="insertIntoDoc"
+                  @replace-selection="replaceFromChat"
+                />
+              </XProvider>
+            </template>
+          </SidePanel>
+        </Transition>
 
         <SettingsModal :open="showSettings" @close="showSettings = false" />
-        <SearchBar />
-        <StatusBar
-          :stats="stats"
-          :filename="filename"
-          :dirty="dirty"
-          :path="currentPath"
-        />
       </div>
     </ThemeProvider>
   </ConfigProvider>
