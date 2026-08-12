@@ -180,16 +180,22 @@ function clone<T>(value: T): T {
         <div class="p-4">
           <a-form layout="vertical" class="!mb-0">
             <a-row :gutter="16">
-              <a-col :span="16">
+              <a-col :span="24">
                 <a-form-item label="Base URL">
                   <a-input v-model:value="provider.baseUrl" placeholder="https://api.example.com/v1" />
                 </a-form-item>
               </a-col>
-              <a-col :span="8">
+              <a-col :span="24">
                 <a-form-item label="API Key">
                   <div class="flex gap-2">
-                    <a-input v-model:value="provider.apiKey" placeholder="sk-…" class="flex-1 min-w-0" />
-                    <a-button :loading="cardTesting" @click="testProvider"><Wifi :size="14" /></a-button>
+                    <a-input-password
+                      v-model:value="provider.apiKey"
+                      placeholder="sk-…"
+                      class="flex-1 min-w-0"
+                    />
+                    <a-button :loading="cardTesting" @click="testProvider" class="shrink-0">
+                      <Wifi :size="14" />测试联通
+                    </a-button>
                   </div>
                   <template #extra>
                     <span v-if="cardTest">
@@ -198,7 +204,7 @@ function clone<T>(value: T): T {
                       </a-tag>
                       {{ cardTest.message }}
                     </span>
-                    <span v-else>填写后点击测试联通，验证 Base URL 与密钥。</span>
+                    <span v-else>填写后点击「测试联通」，验证 Base URL 与密钥。</span>
                   </template>
                 </a-form-item>
               </a-col>
@@ -309,8 +315,8 @@ function clone<T>(value: T): T {
           </a-form-item>
           <a-form-item label="API Key" :extra="testResult ? undefined : '填写后点击「测试联通」验证配置。'">
             <div class="flex gap-2">
-              <a-input v-model:value="draftApiKey" placeholder="sk-…" class="flex-1 min-w-0" />
-              <a-button :loading="testing" @click="runTest(draftBaseUrl, draftApiKey)">
+              <a-input-password v-model:value="draftApiKey" placeholder="sk-…" class="flex-1 min-w-0" />
+              <a-button :loading="testing" @click="runTest(draftBaseUrl, draftApiKey)" class="shrink-0">
                 <Wifi :size="14" />测试联通
               </a-button>
             </div>
