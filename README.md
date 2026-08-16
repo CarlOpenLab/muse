@@ -83,6 +83,17 @@ npm run build:win  # 打包 Windows nsis
 npm run build:linux# 打包 Linux AppImage / deb
 ```
 
+### GitHub Actions 发布
+
+推送与 `package.json` 版本一致的标签（例如 `v0.1.2`）即可自动构建并发布 macOS 和 Windows 安装包：
+
+```bash
+git tag v0.1.2
+git push origin v0.1.2
+```
+
+工作流位于 `.github/workflows/release.yml`。它会在 macOS runner 上生成 x64 的 `dmg` / `zip`，在 Windows runner 上生成 x64 的 `nsis` 安装程序，然后将所有产物上传到同一个 GitHub Release。仓库的 Actions 设置需要允许 workflow 写入 Releases（工作流已声明 `contents: write` 权限）。
+
 ## 📁 目录结构
 
 ```
@@ -177,6 +188,17 @@ npm run build:mac  # package macOS dmg / zip
 npm run build:win  # package Windows nsis
 npm run build:linux# package Linux AppImage / deb
 ```
+
+### GitHub Actions Releases
+
+Push a tag matching the version in `package.json` (for example, `v0.1.2`) to build and publish macOS and Windows installers automatically:
+
+```bash
+git tag v0.1.2
+git push origin v0.1.2
+```
+
+The workflow is `.github/workflows/release.yml`. It builds x64 `dmg` / `zip` packages on macOS and an x64 NSIS installer on Windows, then uploads all artifacts to one GitHub Release. Repository Actions settings must allow workflows to write Releases (the workflow requests `contents: write`).
 
 ## 📁 Project Structure
 
