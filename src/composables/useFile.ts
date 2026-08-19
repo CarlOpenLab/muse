@@ -28,6 +28,11 @@ const AUTOSAVE_DELAY = 800
 // 正在写盘（状态栏显示「保存中…」）
 const saving = ref(false)
 
+/** 让主进程只监听当前已打开文件；未命名草稿无需监听。 */
+function syncDocumentWatch(path: string | null): void {
+  void window.muse?.invoke(path ? 'fs:watchFile' : 'fs:unwatchFile', ...(path ? [path] : []))
+}
+
 /**
  * 把当前内容写回已有路径。
  * 写盘期间用户可能继续输入，故对比快照：内容已变则保留脏标记，
@@ -85,6 +90,7 @@ function loadContent(path: string | null, content: string): void {
   clearTimeout(saveTimer)
   doc.value = content
   currentPath.value = path
+  syncDocumentWatch(path)
   syncDirty(false)
   started.value = true
   void nextTick(() => {
@@ -156,6 +162,7 @@ async function saveAs(): Promise<boolean> {
   const p = (await window.muse?.invoke('fs:saveAs', doc.value)) as string | null
   if (p) {
     currentPath.value = p
+    syncDocumentWatch(p)
     syncDirty(false)
     void window.muse?.invoke('fs:clearDraft')
     return true
@@ -166,6 +173,7 @@ async function saveAs(): Promise<boolean> {
 /** 文件在外部被重命名后同步路径（内容未变，不重载） */
 function setPath(path: string): void {
   currentPath.value = path
+  syncDocumentWatch(path)
 }
 
 /** 关掉当前文档，回到欢迎页（当前文件被删除时用） */
@@ -175,6 +183,7 @@ function closeDoc(): void {
   clearTimeout(saveTimer)
   doc.value = ''
   currentPath.value = null
+  syncDocumentWatch(null)
   syncDirty(false)
   started.value = false
   void nextTick(() => {
@@ -220,6 +229,27 @@ async function restoreDraft(): Promise<boolean> {
   }
   return false
 }
+
+// 外部编辑器改写（或原子替换）当前文件后，读取磁盘的最新内容。
+// 若用户正有本地未保存输入，绝不直接覆盖，以免造成数据丢失；其余情况下自动同步。
+let externalReloadTimer: ReturnType<typeof setTimeout> | undefined
+window.muse?.on('fs:document-changed', (path: unknown) => {
+  if (typeof path !== 'string' || path !== currentPath.value) return
+  clearTimeout(externalReloadTimer)
+  externalReloadTimer = setTimeout(() => {
+    void (async () => {
+      if (path !== currentPath.value || dirty.value) return
+      const r = (await window.muse?.invoke('fs:readFile', path)) as { path: string; content: string } | null
+      // 读取期间可能切换了文件或开始输入，需再次确认才可替换正文。
+      if (path !== currentPath.value || dirty.value) return
+      if (!r) {
+        closeDoc()
+      } else if (r.content !== doc.value) {
+        loadContent(path, r.content)
+      }
+    })()
+  }, 120)
+})
 
 export function useFile() {
   return {

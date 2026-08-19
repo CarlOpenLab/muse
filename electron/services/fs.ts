@@ -11,11 +11,13 @@
 //   fs:rename        重命名文件 / 目录 -> newPath | null
 //   fs:trash         移入废纸篓（可恢复）-> boolean
 //   fs:watchWorkspace / fs:unwatchWorkspace  目录监听 -> 变更时推 'fs:tree-changed'
+//   fs:watchFile / fs:unwatchFile             当前文档监听 -> 变更时推 'fs:document-changed'
+//   fs:readFile                               按路径读取（供外部变更后的无副作用重载）
 //   fs:revealInFolder 在系统文件管理器中显示
 //   app:set-dirty   渲染进程同步脏标记（main 关窗时用）
 //   app:close        渲染进程确认后请求强制关闭
 //   dialog:confirm-unsaved  未保存确认框 -> 'save' | 'discard' | 'cancel'
-import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
+import { ipcMain, dialog, app, shell, BrowserWindow, type WebContents } from 'electron'
 import {
   readFileSync,
   writeFileSync,
@@ -98,6 +100,18 @@ let workspaceRoot: string | null = null
 let watcher: FSWatcher | null = null
 let watchTimer: ReturnType<typeof setTimeout> | undefined
 
+/**
+ * 每个渲染窗口只监听它当前打开的那一份文档。监听父目录而非文件本身，
+ * 因为 VS Code 等程序常以「写临时文件后 rename 替换」的方式保存，文件级
+ * watcher 会在替换后失效。
+ */
+interface DocumentWatcher {
+  path: string
+  watcher: FSWatcher
+  timer?: ReturnType<typeof setTimeout>
+}
+const documentWatchers = new Map<number, DocumentWatcher>()
+
 /** 目标是否位于工作区之内（防止渲染层传来越界路径） */
 function insideWorkspace(target: string): boolean {
   if (!workspaceRoot) return false
@@ -166,6 +180,37 @@ function stopWatch(): void {
   clearTimeout(watchTimer)
 }
 
+function stopDocumentWatch(senderId: number): void {
+  const active = documentWatchers.get(senderId)
+  if (!active) return
+  active.watcher.close()
+  clearTimeout(active.timer)
+  documentWatchers.delete(senderId)
+}
+
+function startDocumentWatch(sender: WebContents, path: string): void {
+  stopDocumentWatch(sender.id)
+  const target = resolve(path)
+  const parent = dirname(target)
+  try {
+    const fileWatcher = watch(parent, { persistent: false }, (_event, changed) => {
+      // filename 缺失时宁可通知一次，让渲染层重新读取并确认；否则只关心当前文件。
+      if (changed && resolve(parent, changed.toString()) !== target) return
+      const active = documentWatchers.get(sender.id)
+      if (!active || active.path !== target) return
+      clearTimeout(active.timer)
+      active.timer = setTimeout(() => {
+        // 窗口销毁后不能再向它发 IPC 消息。
+        if (!sender.isDestroyed()) sender.send('fs:document-changed', target)
+      }, 180)
+    })
+    documentWatchers.set(sender.id, { path: target, watcher: fileWatcher })
+    sender.once('destroyed', () => stopDocumentWatch(sender.id))
+  } catch {
+    // 目录被移除或没有权限时不抛给渲染层；下一次打开会重新尝试监听。
+  }
+}
+
 function startWatch(root: string): void {
   stopWatch()
   try {
@@ -176,7 +221,10 @@ function startWatch(root: string): void {
   }
 }
 
-app.on('before-quit', stopWatch)
+app.on('before-quit', () => {
+  stopWatch()
+  for (const senderId of documentWatchers.keys()) stopDocumentWatch(senderId)
+})
 
 function readPath(path: string): { path: string; content: string } | null {
   try {
@@ -209,6 +257,21 @@ export function registerFileService(): void {
   })
 
   ipcMain.handle('fs:openPath', (_e, path: string) => readPath(path))
+
+  // 外部程序改写当前文档后使用：不更新最近文件，也不触发打开流程。
+  ipcMain.handle('fs:readFile', (_e, path: string) => {
+    try {
+      return { path, content: readFileSync(path, 'utf-8') }
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('fs:watchFile', (e, path: string) => {
+    if (typeof path === 'string' && path) startDocumentWatch(e.sender, path)
+  })
+
+  ipcMain.handle('fs:unwatchFile', (e) => stopDocumentWatch(e.sender.id))
 
   // 判断路径是否为目录（窗口内拖入文件夹时区分「工作区」与「文档」）
   ipcMain.handle('fs:isDir', (_e, path: string) => {
