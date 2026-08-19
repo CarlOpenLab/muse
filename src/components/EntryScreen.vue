@@ -27,7 +27,7 @@ function basename(p: string): string {
       />
       <a-typography-title :level="4" class="!mb-1 !font-medium">Muse</a-typography-title>
       <a-typography-text type="secondary" class="!mb-6 block !text-[12.5px]">
-        打开一个文件夹开始写作，左侧会列出其中的 Markdown。
+        打开一个文件夹作为工作区，或直接新建 / 打开一篇文档。
       </a-typography-text>
 
       <a-space :size="10" class="mb-3">

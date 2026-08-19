@@ -6,7 +6,6 @@ import { XProvider } from '@antdv-next/x'
 import type { XProviderProps } from '@antdv-next/x'
 import MilkdownEditor from './editor/MilkdownEditor.vue'
 import EntryScreen from './components/EntryScreen.vue'
-import FileSidebar from './components/FileSidebar.vue'
 import TitleBar from './components/TitleBar.vue'
 import SidePanel from './components/SidePanel.vue'
 import OutlinePanel from './components/OutlinePanel.vue'
@@ -212,11 +211,10 @@ const {
 const {
   root: workspaceRoot,
   tree: workspaceTree,
-  collapsed: railCollapsed,
-  toggleCollapsed: toggleRail,
   pickFolder: pickWorkspaceFolder,
   setRoot: setWorkspaceRoot,
-  createFile: createWorkspaceFile
+  createFile: createWorkspaceFile,
+  revealInFolder
 } = useWorkspace()
 
 const stats = useDocStats(doc)
@@ -503,21 +501,8 @@ const getDocContext = (): string => doc.value
   <ConfigProvider :theme="themeConfig">
     <ThemeProvider :appearance="appearance">
       <div class="h-full flex flex-col bg-bg" @dragover.prevent @drop.prevent="onDrop">
-        <!-- 三栏工作区 -->
+        <!-- 编辑器区：顶栏 + Markdown 编辑区（无左栏文件树，所有操作收到底部工具条） -->
         <div class="flex flex-1 min-h-0">
-          <!-- 左栏：菜单 + 工作区文件树（宽度折叠动画） -->
-          <Transition name="rail">
-            <FileSidebar
-              v-show="!railCollapsed"
-              :current="currentPath"
-              :is-mac="isMac"
-              @open="openPath"
-              @renamed="setPath"
-              @removed="closeDoc"
-              @new="createDoc"
-            />
-          </Transition>
-
           <!-- 中栏：顶栏 + Markdown 编辑区 -->
           <main class="flex-1 min-w-0 flex flex-col bg-bg">
             <TitleBar
@@ -525,8 +510,10 @@ const getDocContext = (): string => doc.value
               :dirty="dirty"
               :saving="saving"
               :started="started"
-              :rail-collapsed="railCollapsed"
               :is-mac="isMac"
+              :location="docLocation"
+              :path="currentPath"
+              @reveal="revealInFolder(currentPath)"
             />
 
             <!-- 未打开任何文档：欢迎页 / 选文件提示 -->
@@ -540,7 +527,7 @@ const getDocContext = (): string => doc.value
                 @open-recent="openPath"
               />
               <div v-else class="flex-1 flex items-center justify-center text-sm text-fg-dim">
-                从左侧选择一个文件
+                新建或打开一篇 Markdown 即可开始书写
               </div>
             </div>
 
@@ -592,19 +579,17 @@ const getDocContext = (): string => doc.value
         <!-- 整窗底部工具条：一排 icon，左右 justify-between（Zed 式） -->
         <StatusBar
           :stats="stats"
-          :location="docLocation"
-          :path="currentPath"
-          :rail-collapsed="railCollapsed"
           :ai-open="sidebar.open && sidebar.tab === 'ai'"
           :search-open="sidebar.open && sidebar.tab === 'search'"
           :is-dark="isDark"
           :theme-name="currentTheme.name"
+          @new="createDoc"
           @toggle-search="toggleSearch"
-          @toggle-rail="toggleRail"
           @toggle-ai="toggleAi"
           @toggle-theme="toggle"
           @settings="showSettings = true"
           @open-folder="pickWorkspaceFolder()"
+          @open-file="open()"
         />
 
         <SettingsModal :open="showSettings" @close="showSettings = false" />

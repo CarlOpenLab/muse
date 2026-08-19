@@ -91,6 +91,8 @@ export interface TreeNode {
 }
 
 const MD_EXT = new Set(['.md', '.markdown', '.mdx'])
+// 可直接在 Muse 中打开的文本文件扩展名（用于「打开文件」的校验：拒绝 doc / pdf 等二进制）
+const TEXT_EXT = new Set(['.md', '.markdown', '.mdx', '.txt'])
 const SKIP_DIR = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
 const MAX_DEPTH = 8
 const MAX_ENTRIES = 5000
@@ -236,6 +238,25 @@ function readPath(path: string): { path: string; content: string } | null {
   }
 }
 
+/** 是否允许在 Muse 中打开：仅限文本类文件（Markdown / .txt）。doc / pdf 等二进制一律拒绝。 */
+function isTextFile(path: string): boolean {
+  return TEXT_EXT.has(extname(path).toLowerCase())
+}
+
+/** 选了非文本文件（doc / pdf 等）时，弹一个温和的提示。 */
+async function warnUnsupported(win: BrowserWindow | null, path: string): Promise<void> {
+  const target = win ?? BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  if (!target) return
+  await dialog.showMessageBox(target, {
+    type: 'warning',
+    message: `无法打开「${basename(path)}」`,
+    detail: 'Muse 只能打开文本类文件（Markdown 或 .txt）。请选择 .md / .markdown / .mdx / .txt 文件。',
+    buttons: ['知道了'],
+    defaultId: 0,
+    noLink: true
+  })
+}
+
 export function registerFileService(): void {
   loadRecent()
 
@@ -253,10 +274,20 @@ export function registerFileService(): void {
           properties: ['openFile']
         })
     if (res.canceled || !res.filePaths.length) return null
-    return readPath(res.filePaths[0])
+    const filePath = res.filePaths[0]
+    // 拒绝 doc / pdf 等非文本文件：弹窗提示且不打开
+    if (!isTextFile(filePath)) {
+      await warnUnsupported(win, filePath)
+      return null
+    }
+    return readPath(filePath)
   })
 
-  ipcMain.handle('fs:openPath', (_e, path: string) => readPath(path))
+  ipcMain.handle('fs:openPath', (_e, path: string) => {
+    // 拖拽 / 最近文件 / 外部「打开方式」落到路径打开时，同样只接受文本类文件
+    if (!isTextFile(path)) return null
+    return readPath(path)
+  })
 
   // 外部程序改写当前文档后使用：不更新最近文件，也不触发打开流程。
   ipcMain.handle('fs:readFile', (_e, path: string) => {

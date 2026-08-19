@@ -202,7 +202,7 @@ async function remove(path: string): Promise<boolean> {
   return ok
 }
 
-function revealInFolder(path: string): void {
+function revealInFolder(path: string | null): void {
   void window.muse?.invoke('fs:revealInFolder', path)
 }
 
