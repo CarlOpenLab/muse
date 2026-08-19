@@ -12,8 +12,10 @@ icon: icon.png
 mac:
   icon: icon.icns
   category: public.app-category.productivity
-  # Finder「打开方式」里注册 Muse 为 Markdown 编辑器（Alternate：不抢默认）
+  # 覆盖默认名称，确保 Dock 悬停、强制退出、关于面板都显示 Muse 而非 Electron
   extendInfo:
+    CFBundleName: Muse
+    CFBundleDisplayName: Muse
     CFBundleDocumentTypes:
       - CFBundleTypeName: Markdown Document
         CFBundleTypeRole: Editor

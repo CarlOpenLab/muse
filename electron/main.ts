@@ -4,6 +4,10 @@ import { basename, join } from 'node:path'
 import { registerFileService, setRebuildMenu, isDirty, shouldForceClose, resetForceClose, getRecent } from './services/fs'
 import { registerAiService } from './services/ai'
 
+// 关键：覆盖 Electron 默认的 app 名称，否则 macOS Dock hover 会显示 "Electron"
+// 必须在 app ready 之前设置，dev 模式下尤其生效（打包后由 Info.plist 的 CFBundleDisplayName 决定）
+app.setName('Muse')
+
 const isDev = !app.isPackaged
 
 // 项目 logo（resources/icon.png，1024px 透明底）
