@@ -1,6 +1,6 @@
 {
   "name": "muse",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Muse · Typora 式所见即所得 Markdown 编辑器（Shiki 高亮 + Milkdown 7）",
   "main": "./out/main/index.js",
   "author": "",

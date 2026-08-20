@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Palette, Server, Globe, Type, Wifi } from '@lucide/vue'
+import { Palette, Server, Globe, Type, Wifi, FileText, FolderOpen } from '@lucide/vue'
 import { useSettings } from '../composables/useSettings'
 import { useTheme } from '../composables/useTheme'
 import ProviderSettings from './ProviderSettings.vue'
@@ -13,7 +13,7 @@ defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 /** 左侧分组导航：基础设置 / Agent 能力 */
-const activeTab = ref<'basic' | 'theme' | 'providers' | 'search'>('basic')
+const activeTab = ref<'basic' | 'theme' | 'startup' | 'providers' | 'search'>('basic')
 
 const NAV_ITEMS = [
   {
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
     items: [
       { key: 'theme', label: '主题', icon: Palette },
       { key: 'basic', label: '排版', icon: Type },
+      { key: 'startup', label: '启动文档', icon: FileText },
     ],
   },
   {
@@ -57,6 +58,11 @@ async function testSearch(): Promise<void> {
   } finally {
     searchTesting.value = false
   }
+}
+
+async function pickDefaultDir(): Promise<void> {
+  const dir = (await window.muse?.invoke('fs:pickFolder')) as string | null
+  if (dir) settings.value.defaultFileDir = dir
 }
 </script>
 
@@ -164,11 +170,34 @@ async function testSearch(): Promise<void> {
                 </a-form>
               </div>
 
+              <!-- 基础设置：启动文档 -->
+              <div v-else-if="activeTab === 'startup'">
+                <div class="text-lg font-semibold">启动文档</div>
+                <p class="text-xs text-fg-soft mt-1 mb-6">每次启动在固定位置打开同一文件（Typora 式），可在下方自定义目录与文件名。</p>
+                <a-form layout="vertical">
+                  <a-form-item label="默认目录（留空则为 ~/Documents）">
+                    <div class="flex gap-2">
+                      <a-input v-model:value="settings.defaultFileDir" placeholder="~/Documents" class="flex-1 min-w-0" allow-clear />
+                      <a-button @click="pickDefaultDir"><FolderOpen :size="14" />选择</a-button>
+                    </div>
+                    <template #extra>启动时在此目录下创建/打开默认文件，不会自动递增。</template>
+                  </a-form-item>
+                  <a-form-item label="默认文件名">
+                    <a-input v-model:value="settings.defaultFileName" placeholder="Untitled.md" allow-clear />
+                    <template #extra>始终以此文件名为主，如 Untitled.md；需包含 .md 后缀。</template>
+                  </a-form-item>
+                </a-form>
+                <a-alert type="info" show-icon class="mt-2">
+                  <template #message>当前生效路径</template>
+                  <template #description>{{ (settings.defaultFileDir || '~/Documents') + '/' + (settings.defaultFileName || 'Untitled.md') }}</template>
+                </a-alert>
+              </div>
+
               <!-- Agent 能力：模型供应商 -->
               <ProviderSettings v-else-if="activeTab === 'providers'" />
 
               <!-- Agent 能力：联网搜索 -->
-              <div v-else>
+              <div v-else-if="activeTab === 'search'">
                 <div class="text-lg font-semibold">联网搜索</div>
                 <p class="text-xs text-fg-soft mt-1 mb-6">
                   对话开启「联网搜索」后，AI 会先检索网络资料再回答。搜索走

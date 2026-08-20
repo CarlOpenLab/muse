@@ -319,18 +319,69 @@ export function registerFileService(): void {
     return path
   })
 
+  // 保存对话框强互斥 + 冷却：渲染层 5 连发、HMR 重复注册、长按 Cmd+S 全部只弹 1 次
+  let saveAsPending: Promise<string | null> | null = null
+  let lastSaveAsAt = 0
+  const FS_SAVE_THROTTLE = 1500
   ipcMain.handle('fs:saveAs', async (_e, content: string) => {
-    const win = BrowserWindow.getFocusedWindow()
-    const opts = {
-      title: '保存 Markdown',
-      defaultPath: 'Untitled.md',
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdx'] }]
+    const now = Date.now()
+    if (now - lastSaveAsAt < FS_SAVE_THROTTLE) return null
+    if (saveAsPending) return saveAsPending
+    const p = (async () => {
+      lastSaveAsAt = Date.now()
+      const win = BrowserWindow.getFocusedWindow()
+      const opts = {
+        title: '保存 Markdown',
+        defaultPath: 'Untitled.md',
+        filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdx'] }]
+      }
+      const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+      if (res.canceled || !res.filePath) return null
+      writeFileSync(res.filePath, content, 'utf-8')
+      addRecent(res.filePath)
+      return res.filePath
+    })()
+    saveAsPending = p
+    try { return await p } finally { saveAsPending = null }
+  })
+
+  // Typora 式：启动即在固定目录打开同一文件（可配置，不自动递增）
+  ipcMain.handle('fs:createDefault', (_e, dir?: string, name?: string) => {
+    const rawDir = typeof dir === 'string' ? dir.trim() : ''
+    const rawName = typeof name === 'string' ? name.trim() : ''
+    const baseDir = (() => {
+      if (rawDir && existsSync(rawDir)) return rawDir
+      try {
+        const docs = app.getPath('documents')
+        if (docs) return docs
+      } catch {}
+      return app.getPath('temp')
+    })()
+    const fileName = (() => {
+      let n = rawName || 'Untitled.md'
+      if (!n.toLowerCase().endsWith('.md')) n += '.md'
+      // 去掉路径分隔符，仅保留文件名
+      n = basename(n)
+      return n || 'Untitled.md'
+    })()
+    try {
+      if (!existsSync(baseDir)) mkdirSync(baseDir, { recursive: true })
+      const p = join(baseDir, fileName)
+      if (existsSync(p)) {
+        try {
+          const content = readFileSync(p, 'utf-8')
+          addRecent(p)
+          return { path: p, content }
+        } catch {
+          return { path: p, content: '' }
+        }
+      }
+      writeFileSync(p, '', 'utf-8')
+      addRecent(p)
+      return { path: p, content: '' }
+    } catch {
+      return null
     }
-    const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
-    if (res.canceled || !res.filePath) return null
-    writeFileSync(res.filePath, content, 'utf-8')
-    addRecent(res.filePath)
-    return res.filePath
   })
 
   ipcMain.handle('fs:readRecent', () => getRecent())

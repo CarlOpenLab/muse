@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { FilePlus, FolderOpen, FileText, FileUp } from '@lucide/vue'
+import { FilePlus, FileText, FileUp } from '@lucide/vue'
 import logoUrl from '../../resources/icon.png'
 
 defineProps<{ recent: string[] }>()
 const emit = defineEmits<{
   new: []
   open: []
-  'open-folder': []
   'open-recent': [path: string]
 }>()
 
@@ -27,24 +26,19 @@ function basename(p: string): string {
       />
       <a-typography-title :level="4" class="!mb-1 !font-medium">Muse</a-typography-title>
       <a-typography-text type="secondary" class="!mb-6 block !text-[12.5px]">
-        打开一个文件夹作为工作区，或直接新建 / 打开一篇文档。
+        直接新建或打开一篇文档开始写作。
       </a-typography-text>
 
-      <a-space :size="10" class="mb-3">
-        <a-button type="primary" size="large" @click="emit('open-folder')">
-          <template #icon><FolderOpen :size="16" /></template>
-          打开文件夹
-        </a-button>
-        <a-button size="large" @click="emit('new')">
+      <a-space :size="10" class="mb-6">
+        <a-button type="primary" size="large" @click="emit('new')">
           <template #icon><FilePlus :size="16" /></template>
           新建文件
         </a-button>
+        <a-button size="large" @click="emit('open')">
+          <template #icon><FileUp :size="13" /></template>
+          打开文件
+        </a-button>
       </a-space>
-
-      <a-button type="link" size="small" class="!text-fg-soft mb-6" @click="emit('open')">
-        <template #icon><FileUp :size="13" /></template>
-        打开单个文件
-      </a-button>
 
       <div v-if="recent.length" class="w-full text-left">
         <div class="text-xs text-fg-soft uppercase tracking-wide mb-2 px-1">最近打开</div>

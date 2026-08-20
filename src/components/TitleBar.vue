@@ -23,26 +23,33 @@ defineProps<{
 const emit = defineEmits<{
   /** 点击路径：在系统文件管理器中打开所在文件夹 */
   reveal: []
+  /** 点击文件名：Typora 式交互（已保存文件可重命名，未命名则聚焦标题） */
+  editTitle: []
 }>()
 </script>
 
 <template>
   <header
-    class="h-12 shrink-0 flex items-center gap-2 pr-2 app-drag"
+    class="h-12 shrink-0 flex items-center justify-center gap-2 pr-2 app-drag relative"
     :class="isMac ? 'pl-[84px]' : 'pl-4'"
   >
     <template v-if="started">
-      <span class="text-[13px] font-medium text-fg truncate max-w-[42%]">{{ filename }}</span>
-      <span class="text-[11.5px] text-fg-ghost shrink-0 tabular-nums">
-        {{ saving ? '保存中…' : dirty ? '未保存' : '已保存' }}
-      </span>
-      <span
-        v-if="path"
-        class="app-no-drag text-[11.5px] text-fg-dim truncate max-w-[42%] cursor-pointer transition-colors hover:text-fg"
-        @click="emit('reveal')"
-      >{{ location }}</span>
+      <div class="flex items-center justify-center gap-2 max-w-[70%] mx-auto">
+        <span
+          class="app-no-drag text-[13px] font-medium text-fg truncate cursor-pointer hover:opacity-70 transition-opacity text-center"
+          title="点击编辑标题/重命名"
+          @click="emit('editTitle')"
+        >{{ filename }}</span>
+        <span
+          v-if="saving"
+          class="text-[11.5px] text-fg-ghost shrink-0 tabular-nums"
+        >保存中…</span>
+        <span
+          v-if="path"
+          class="app-no-drag text-[11.5px] text-fg-dim truncate cursor-pointer transition-colors hover:text-fg"
+          @click="emit('reveal')"
+        >{{ location }}</span>
+      </div>
     </template>
-
-    <div class="flex-1" />
   </header>
 </template>

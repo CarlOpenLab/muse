@@ -1,5 +1,6 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { dispatchEditorAction } from './useEditorControl'
+import { useSettings } from './useSettings'
 
 // 渲染进程无 node:path，自备 basename（兼容 / 与 \）
 function basename(p: string): string {
@@ -8,8 +9,24 @@ function basename(p: string): string {
   return p.slice(Math.max(i, j) + 1) || p
 }
 
+// ---- 标题 / 正文分离：标题为单行输入框，正文为 Milkdown 编辑器 ----
+function splitTitleBody(markdown: string): { title: string; body: string } {
+  const m = markdown.match(/^#\s+(.*)(?:\n|$)/)
+  if (m) {
+    const title = (m[1] ?? '').trim()
+    const body = markdown.slice(m[0].length).replace(/^\n+/, '')
+    return { title, body }
+  }
+  return { title: '', body: markdown }
+}
+function joinTitleBody(title: string, body: string): string {
+  const t = title.trim() ? `# ${title.trim()}\n\n` : ''
+  return t + body
+}
+
 // ---- 单例文件状态 ----
-const doc = ref('')
+const titleText = ref('')
+const doc = ref('') // 正文（不含标题）
 const currentPath = ref<string | null>(null)
 const dirty = ref(false)
 // 是否已进入编辑（新建 / 打开 / 恢复草稿后为 true）。未进入时显示 Entry 欢迎页。
@@ -19,6 +36,8 @@ let suppress = false
 
 const filename = computed(() => (currentPath.value ? basename(currentPath.value) : '未命名'))
 const title = computed(() => `${dirty.value ? '● ' : ''}${filename.value} - Muse`)
+// 存盘用完整 markdown（标题 + 正文）
+const fullContent = computed(() => joinTitleBody(titleText.value, doc.value))
 
 // 草稿自动保存定时器（仅未命名文档）
 let draftTimer: ReturnType<typeof setTimeout> | undefined
@@ -27,6 +46,13 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined
 const AUTOSAVE_DELAY = 800
 // 正在写盘（状态栏显示「保存中…」）
 const saving = ref(false)
+
+// 启动文档的固定路径（通过 fs:createDefault 创建的 Untitled）。
+// 这类文档首次 Cmd+S 应弹“另存为”让用户自选位置，而不是静默覆盖 ~/Documents/Untitled.md
+let startupPath: string | null = null
+function isStartupDoc(path: string | null): boolean {
+  return !!path && !!startupPath && path === startupPath
+}
 
 /** 让主进程只监听当前已打开文件；未命名草稿无需监听。 */
 function syncDocumentWatch(path: string | null): void {
@@ -41,26 +67,26 @@ function syncDocumentWatch(path: string | null): void {
 async function writeCurrent(): Promise<void> {
   const path = currentPath.value
   if (!path) return
-  const snapshot = doc.value
+  const snapshot = fullContent.value
   saving.value = true
   try {
     await window.muse?.invoke('fs:save', path, snapshot)
-    if (doc.value === snapshot) syncDirty(false)
+    if (fullContent.value === snapshot) syncDirty(false)
   } finally {
     saving.value = false
   }
 }
 
 // 内容变化 -> 脏 + 防抖落盘（已命名走真实文件，未命名走草稿）
-watch(doc, () => {
+watch([doc, titleText], () => {
   if (suppress) return
   dirty.value = true
   void window.muse?.invoke('app:set-dirty', true)
-  if (currentPath.value === null) {
-    // 未命名文档：防抖写草稿，避免每键一次 IO
+  if (currentPath.value === null || isStartupDoc(currentPath.value)) {
+    // 未命名 / 启动文档：防抖写草稿，不直接落到 Documents/Untitled.md，让用户通过保存自选位置
     clearTimeout(draftTimer)
     draftTimer = setTimeout(() => {
-      void window.muse?.invoke('fs:writeDraft', doc.value)
+      void window.muse?.invoke('fs:writeDraft', fullContent.value)
     }, 1500)
   } else {
     // 已命名文档：自动保存（Typora / Obsidian 式），切文件与关窗前另有兜底 flush
@@ -74,8 +100,8 @@ async function flushPending(): Promise<void> {
   clearTimeout(saveTimer)
   clearTimeout(draftTimer)
   if (!dirty.value) return
-  if (currentPath.value) await writeCurrent()
-  else await window.muse?.invoke('fs:writeDraft', doc.value)
+  if (currentPath.value && !isStartupDoc(currentPath.value)) await writeCurrent()
+  else await window.muse?.invoke('fs:writeDraft', fullContent.value)
 }
 
 function syncDirty(v: boolean): void {
@@ -88,7 +114,9 @@ function loadContent(path: string | null, content: string): void {
   suppress = true
   clearTimeout(draftTimer)
   clearTimeout(saveTimer)
-  doc.value = content
+  const { title, body } = splitTitleBody(content)
+  titleText.value = title
+  doc.value = body
   currentPath.value = path
   syncDocumentWatch(path)
   syncDirty(false)
@@ -116,7 +144,7 @@ async function confirmDiscard(): Promise<boolean> {
  */
 async function flushBeforeSwitch(): Promise<boolean> {
   if (!dirty.value) return true
-  if (currentPath.value) {
+  if (currentPath.value && !isStartupDoc(currentPath.value)) {
     clearTimeout(saveTimer)
     await writeCurrent()
     return true
@@ -126,53 +154,109 @@ async function flushBeforeSwitch(): Promise<boolean> {
 
 async function newFile(): Promise<void> {
   if (!(await flushBeforeSwitch())) return
-  // 新建后清掉旧草稿，避免下次启动恢复到已废弃内容
   void window.muse?.invoke('fs:clearDraft')
-  // 初始内容为一个空 H1（标题位）：placeholderPlugin 会在其上显示「无标题」占位；
-  // focus-after-title 动作会在标题后补一个空段落并聚焦其起始，让用户从「标题下一行」落笔。
-  loadContent(null, '# \n')
-  dispatchEditorAction('focus-after-title')
+  // Typora 式：直接落盘到可配置的固定文件（默认 ~/Documents/Untitled.md），始终同一文件
+  try {
+    const { settings } = useSettings()
+    const dir = settings.value.defaultFileDir?.trim() || ''
+    const name = settings.value.defaultFileName?.trim() || 'Untitled.md'
+    const res = (await window.muse?.invoke('fs:createDefault', dir, name)) as { path: string; content: string } | null
+    if (res && res.path) {
+      loadContent(res.path, res.content)
+      // 已有实质内容的启动文件视为普通文件（直接覆盖保存）；空文件才需“保存即另存为”
+      startupPath = isDraftEmpty(res.content) ? res.path : null
+      return
+    }
+  } catch {}
+  // 回退：内存稿（极少数权限异常）
+  startupPath = null
+  suppress = true
+  titleText.value = ''
+  doc.value = ''
+  currentPath.value = null
+  syncDocumentWatch(null)
+  syncDirty(false)
+  started.value = true
+  clearTimeout(draftTimer)
+  clearTimeout(saveTimer)
+  void nextTick(() => {
+    suppress = false
+  })
 }
 
 async function open(): Promise<void> {
   if (!(await flushBeforeSwitch())) return
   const r = (await window.muse?.invoke('fs:open')) as { path: string; content: string } | null
-  if (r) loadContent(r.path, r.content)
+  if (r) {
+    startupPath = null
+    loadContent(r.path, r.content)
+  }
 }
 
 async function openPath(path: string): Promise<void> {
   if (path === currentPath.value) return // 点当前文件不重载，避免打断编辑
   if (!(await flushBeforeSwitch())) return
   const r = (await window.muse?.invoke('fs:openPath', path)) as { path: string; content: string } | null
-  if (r) loadContent(r.path, r.content)
+  if (r) {
+    startupPath = null
+    loadContent(r.path, r.content)
+  }
 }
 
-/** 保存：有路径直接存，无路径走另存为。返回是否成功 */
+// 保存互斥 + 节流：彻底根治 5 连弹对话框
+// - saveLock：并发调用共享同一个 Promise（5 连发只弹 1 次）
+// - lastSaveAt：800ms 内二次触发直接丢弃（长按 Cmd+S / 菜单重复）
+let saveLock: Promise<boolean> | null = null
+let lastSaveAt = 0
+const SAVE_THROTTLE = 1500
 async function save(): Promise<boolean> {
+  const now = Date.now()
+  if (now - lastSaveAt < SAVE_THROTTLE) return false
+  if (saveLock) return saveLock
+  // 启动文档：保存即另存为，让用户选择落盘位置
+  if (currentPath.value && isStartupDoc(currentPath.value)) {
+    return saveAs()
+  }
   if (currentPath.value) {
-    clearTimeout(saveTimer) // 手动保存后作废排队中的自动保存
-    await writeCurrent()
-    void window.muse?.invoke('fs:clearDraft') // 已落盘，清草稿
-    return true
+    const p = (async () => {
+      lastSaveAt = Date.now()
+      clearTimeout(saveTimer)
+      await writeCurrent()
+      void window.muse?.invoke('fs:clearDraft')
+      return true
+    })()
+    saveLock = p
+    try { return await p } finally { saveLock = null }
   }
   return saveAs()
 }
 
 async function saveAs(): Promise<boolean> {
-  const p = (await window.muse?.invoke('fs:saveAs', doc.value)) as string | null
-  if (p) {
-    currentPath.value = p
-    syncDocumentWatch(p)
-    syncDirty(false)
-    void window.muse?.invoke('fs:clearDraft')
-    return true
-  }
-  return false
+  const now = Date.now()
+  if (now - lastSaveAt < SAVE_THROTTLE) return false
+  if (saveLock) return saveLock
+  const p = (async () => {
+    lastSaveAt = Date.now()
+    const path = (await window.muse?.invoke('fs:saveAs', fullContent.value)) as string | null
+    if (path) {
+      currentPath.value = path
+      startupPath = null
+      syncDocumentWatch(path)
+      syncDirty(false)
+      void window.muse?.invoke('fs:clearDraft')
+      return true
+    }
+    return false
+  })()
+  saveLock = p
+  try { return await p } finally { saveLock = null }
 }
 
 /** 文件在外部被重命名后同步路径（内容未变，不重载） */
 function setPath(path: string): void {
   currentPath.value = path
+  // 重命名后不再视为启动文档（已有了明确落盘位置）
+  startupPath = null
   syncDocumentWatch(path)
 }
 
@@ -181,6 +265,8 @@ function closeDoc(): void {
   suppress = true
   clearTimeout(draftTimer)
   clearTimeout(saveTimer)
+  startupPath = null
+  titleText.value = ''
   doc.value = ''
   currentPath.value = null
   syncDocumentWatch(null)
@@ -191,9 +277,9 @@ function closeDoc(): void {
   })
 }
 
-/** main 触发的关闭请求：已命名文档直接落盘关闭；未命名有改动才确认 */
+/** main 触发的关闭请求：已命名非启动文档直接落盘关闭；启动文档/未命名有改动才确认 */
 async function handleCloseRequest(): Promise<void> {
-  if (currentPath.value) {
+  if (currentPath.value && !isStartupDoc(currentPath.value)) {
     await flushPending()
     void window.muse?.invoke('app:close')
     return
@@ -244,7 +330,7 @@ window.muse?.on('fs:document-changed', (path: unknown) => {
       if (path !== currentPath.value || dirty.value) return
       if (!r) {
         closeDoc()
-      } else if (r.content !== doc.value) {
+      } else if (r.content !== fullContent.value) {
         loadContent(path, r.content)
       }
     })()
@@ -254,6 +340,8 @@ window.muse?.on('fs:document-changed', (path: unknown) => {
 export function useFile() {
   return {
     doc,
+    titleText,
+    fullContent,
     currentPath,
     dirty,
     saving,

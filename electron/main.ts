@@ -59,6 +59,8 @@ ipcMain.handle('app:get-open-paths', () => {
   return takeOpenPaths()
 })
 
+let lastMenuActionAt = 0
+let lastMenuAction = ''
 function buildMenu(win: BrowserWindow): void {
   const recent = getRecent()
   const recentSub: MenuItemConstructorOptions[] = recent.length
@@ -70,6 +72,11 @@ function buildMenu(win: BrowserWindow): void {
     : [{ label: '无最近文件', enabled: false }]
 
   const send = (action: string): void => {
+    const now = Date.now()
+    // 800ms 内同动作节流：防止 Accelerator 重复派发导致 5 连弹
+    if (action === lastMenuAction && now - lastMenuActionAt < 800) return
+    lastMenuAction = action
+    lastMenuActionAt = now
     win.webContents.send('menu:action', { action })
   }
 

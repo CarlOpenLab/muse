@@ -49,29 +49,41 @@ function plistBuddy(cmd) {
   }
 }
 
+function getPlistString(key) {
+  try {
+    return execFileSync(PB, ['-c', `Print :${key}`, plist], { encoding: 'utf8' }).trim()
+  } catch {
+    return null
+  }
+}
+
 function setPlistString(key, value) {
-  // 已存在则 Set，不存在则 Add；两种都尝试
-  if (plistBuddy(`Print :${key}`)) {
+  if (getPlistString(key) !== null) {
     plistBuddy(`Set :${key} ${value}`)
   } else {
     plistBuddy(`Add :${key} string ${value}`)
   }
 }
 
-// ---- 1) 修正 Dock 悬停名称：Electron -> Muse ----
-setPlistString('CFBundleName', 'Muse')
-setPlistString('CFBundleDisplayName', 'Muse')
+let dirty = false
 
-// 同步检查是否改成功
-let okName = false
-try {
-  const out = execFileSync(PB, ['-c', 'Print :CFBundleDisplayName', plist], { encoding: 'utf8' })
-  okName = out.trim() === 'Muse'
-} catch {}
-if (okName) console.log('[dock-types] 已修正 Electron.app 名称为 Muse')
-else console.log('[dock-types] 修正名称失败，请检查权限')
+// ---- 1) 修正 Dock 悬停名称：Electron -> Muse（仅当值不一致时才写入） ----
+for (const key of ['CFBundleName', 'CFBundleDisplayName']) {
+  const cur = getPlistString(key)
+  if (cur !== 'Muse') {
+    setPlistString(key, 'Muse')
+    dirty = true
+  }
+}
 
-// ---- 2) 声明 Markdown 文件 + 文件夹（幂等：已存在则跳过）----
+// 校验是否改成功
+if (dirty) {
+  const okName = getPlistString('CFBundleDisplayName') === 'Muse'
+  if (okName) console.log('[dock-types] 已修正 Electron.app 名称为 Muse')
+  else console.log('[dock-types] 修正名称失败，请检查权限')
+}
+
+// ---- 2) 声明 Markdown 文件 + 文件夹（仅首次缺失时写入）----
 if (!plistBuddy('Print :CFBundleDocumentTypes')) {
   const cmds = [
     'Add :CFBundleDocumentTypes array',
@@ -96,12 +108,17 @@ if (!plistBuddy('Print :CFBundleDocumentTypes')) {
     'Add :CFBundleDocumentTypes:1:LSItemContentTypes:0 string public.folder'
   ]
   for (const c of cmds) plistBuddy(c)
+  dirty = true
   console.log('[dock-types] 已为 Electron.app 声明 Markdown/Folder 类型')
-} else {
-  console.log('[dock-types] Electron.app 已声明文档类型，跳过')
 }
 
-// 重新注册 LaunchServices，Dock 才能立刻用上新名称/类型
+// 无变更则直接跳过，避免每次启动都 killall Dock / lsregister
+if (!dirty) {
+  console.log('[dock-types] 已是最新，跳过 Dock 刷新')
+  process.exit(0)
+}
+
+// 仅当 Info.plist 真正发生变更时，才重新注册 LaunchServices 并刷新 Dock
 const lsregister =
   '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
 try {

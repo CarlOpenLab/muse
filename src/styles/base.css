@@ -193,6 +193,23 @@ body {
   pointer-events: none;
 }
 
+/* 正文占位：常驻显示，效果同 input placeholder（非 hover 才出现） */
+.milkdown-theme-nord.prose p[data-body-placeholder] {
+  position: relative;
+  min-height: 1.6em;
+}
+.milkdown-theme-nord.prose p[data-body-placeholder]::before {
+  content: attr(data-body-placeholder);
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--fg-soft);
+  opacity: 0.55;
+  pointer-events: none;
+  font-style: normal;
+  font-weight: 400;
+}
+
 /* ===== Milkdown 编辑器：在 Nord 排版骨架上让配色跟随 shadcn 变量 =====
  * 编辑器仍用 @milkdown/theme-nord 提供排版（字号 / 间距 / 列表等），但其蓝色
  * marker / 行内代码 / 表格边框等被下面更高特异性的选择器（.prose 双类 + 元素

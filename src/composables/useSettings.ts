@@ -28,6 +28,9 @@ export interface Settings {
   activeModel?: string
   /** 联网搜索（Brave Search API）密钥 */
   searchApiKey?: string
+  /** 启动默认文件：目录与文件名（可配置，默认 ~/Documents/Untitled.md） */
+  defaultFileDir?: string
+  defaultFileName?: string
 }
 
 const STORAGE_KEY = 'muse:settings'
@@ -36,6 +39,8 @@ const DEFAULTS: Settings = {
   fontSize: 16,
   lineHeight: 1.7,
   providers: [],
+  defaultFileDir: '',
+  defaultFileName: 'Untitled.md',
 }
 
 function load(): Settings {

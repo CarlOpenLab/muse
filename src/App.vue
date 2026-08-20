@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ConfigProvider, theme as antdTheme } from 'antdv-next'
 import { ThemeProvider } from 'antdv-style'
 import { XProvider } from '@antdv-next/x'
 import type { XProviderProps } from '@antdv-next/x'
 import MilkdownEditor from './editor/MilkdownEditor.vue'
-import EntryScreen from './components/EntryScreen.vue'
 import TitleBar from './components/TitleBar.vue'
 import SidePanel from './components/SidePanel.vue'
 import OutlinePanel from './components/OutlinePanel.vue'
@@ -191,6 +190,8 @@ const themeConfig = computed(() => {
 })
 const {
   doc,
+  titleText,
+  fullContent,
   currentPath,
   dirty,
   saving,
@@ -211,19 +212,26 @@ const {
 const {
   root: workspaceRoot,
   tree: workspaceTree,
-  pickFolder: pickWorkspaceFolder,
-  setRoot: setWorkspaceRoot,
   createFile: createWorkspaceFile,
   revealInFolder
 } = useWorkspace()
 
-const stats = useDocStats(doc)
-const headings = useOutline(doc)
+const stats = useDocStats(fullContent)
+const headings = useOutline(fullContent)
 const search = useSearch()
 const { settings } = useSettings()
 
 const showSettings = ref(false)
 const recentFiles = ref<string[]>([])
+const titleInputRef = ref<HTMLInputElement | null>(null)
+function focusTitleInput(): void {
+  titleInputRef.value?.focus()
+  titleInputRef.value?.select()
+}
+function handleTitleBarEdit(): void {
+  // Typora 式：点击文件名即聚焦标题输入（标题与文件名分离，文件重命名走右键/另存为）
+  focusTitleInput()
+}
 
 // macOS 无边框窗口：红绿灯浮在内容上，左栏顶部要预留一条拖拽区
 const isMac = window.muse?.platform === 'darwin'
@@ -320,23 +328,36 @@ async function createDoc(): Promise<void> {
   await newFile()
 }
 
-// 启动：先拉最近文件供 Entry 页展示；再尝试恢复未命名草稿。
-// 没有草稿则停在 Entry 欢迎页（started 仍为 false），不再自动填入默认示例文档。
+// 启动：Typora 式 mac/win 一致 — 无外部打开文件时，默认在文稿中落盘一个 Untitled.md 真实文件
+// 无“未保存”概念，自动保存直接写该文件；最近文件仅作记录
 void window.muse?.invoke('fs:readRecent').then((r) => {
   recentFiles.value = Array.isArray(r) ? (r as string[]) : []
 })
-void restoreDraft()
+void (async () => {
+  try {
+    const pending = (await window.muse?.invoke('app:get-open-paths')) as OpenPathItem[] | null
+    if (pending && pending.length) {
+      await handleOpenPaths(pending)
+      if (started.value) return
+    }
+  } catch {}
+  // 不再恢复草稿，直接新建落盘文件（mac/win 行为一致）
+  void window.muse?.invoke('fs:clearDraft')
+  await newFile()
+})()
 
+let offOpenPaths: (() => void) | null = null
+let offMenu: (() => void) | null = null
+let offRequestClose: (() => void) | null = null
 onMounted(() => {
-  // macOS：Dock / Finder 拖入的文件或文件夹（先注册监听，再拉启动期暂存的路径，避免丢事件）
-  window.muse?.on('app:open-paths', (payload: unknown) => {
-    handleOpenPaths(payload as OpenPathItem[])
-  })
-  void window.muse?.invoke('app:get-open-paths').then((p) => {
-    handleOpenPaths(p as OpenPathItem[])
-  })
+  // macOS：Dock / Finder 拖入的文件（运行中拖入直接打开）
+  offOpenPaths?.()
+  offOpenPaths = window.muse?.on('app:open-paths', (payload: unknown) => {
+    void handleOpenPaths(payload as OpenPathItem[])
+  }) ?? null
 
-  window.muse?.on('menu:action', (payload: unknown) => {
+  offMenu?.()
+  offMenu = window.muse?.on('menu:action', (payload: unknown) => {
     const { action, path } = payload as { action: string; path?: string }
     if (action === 'new') void createDoc()
     else if (action === 'open') void open()
@@ -344,11 +365,12 @@ onMounted(() => {
     else if (action === 'save') void save()
     else if (action === 'saveAs') void saveAs()
     else if (action === 'find') openSearch()
-  })
+  }) ?? null
 
-  window.muse?.on('app:request-close', () => {
+  offRequestClose?.()
+  offRequestClose = window.muse?.on('app:request-close', () => {
     void handleCloseRequest()
-  })
+  }) ?? null
 
   // 查找快捷键：⌘F 打开、⌘G / ⇧⌘G 下一个/上一个、Esc 关闭
   window.addEventListener('keydown', (e) => {
@@ -366,6 +388,12 @@ onMounted(() => {
       if (sidebar.value.tab === 'search') sidebar.value.tab = 'ai'
     }
   })
+})
+
+onUnmounted(() => {
+  offOpenPaths?.()
+  offMenu?.()
+  offRequestClose?.()
 })
 
 watch(title, (t) => {
@@ -398,7 +426,13 @@ watch(workspaceTree, (nodes) => {
   if (!path || !root) return
   const sep = path.includes('\\') ? '\\' : '/'
   if (!path.startsWith(root + sep)) return
-  if (!existsInTree(nodes, path)) closeDoc()
+  if (!existsInTree(nodes, path)) {
+    closeDoc()
+    // 去除 empty 页面：文件被外部删除后直接新建空白文档
+    void nextTick(() => {
+      if (!started.value) void newFile()
+    })
+  }
 })
 
 interface OpenPathItem {
@@ -406,17 +440,12 @@ interface OpenPathItem {
   isDir: boolean
 }
 
-/** macOS Dock / Finder「打开方式」：文件夹 → 作为工作区，md 文件 → 打开文档 */
-function handleOpenPaths(items: OpenPathItem[]): void {
+/** macOS Dock / Finder「打开方式」：仅打开文档，文件夹拖入不再作为工作区 */
+async function handleOpenPaths(items: OpenPathItem[]): Promise<void> {
   const list = Array.isArray(items) ? items : []
   if (!list.length) return
-  const dirs = list.filter((i) => i.isDir)
   const files = list.filter((i) => !i.isDir && /\.(md|markdown|mdx|txt)$/i.test(i.path))
-  void (async () => {
-    // 先切工作区（若同时拖了文件夹），再打开排在最前的文档
-    if (dirs.length) await setWorkspaceRoot(dirs[0].path)
-    if (files.length) await openPath(files[0].path)
-  })()
+  if (files.length) await openPath(files[0].path)
 }
 
 function onDrop(e: DragEvent): void {
@@ -424,12 +453,8 @@ function onDrop(e: DragEvent): void {
   if (!f) return
   const path = window.muse?.getPathForFile(f)
   if (!path) return
-  // 文件夹 → 作为工作区打开；文件 → 直接打开文档（VSCode 式拖放）
-  void (async () => {
-    const isDir = (await window.muse?.invoke('fs:isDir', path)) as boolean
-    if (isDir) await setWorkspaceRoot(path)
-    else void openPath(path)
-  })()
+  // 仅打开文件，文件夹拖放不再处理（当前布局为单文档模式）
+  void openPath(path)
 }
 
 // ===== 大纲：点击跳转 + 滚动高亮当前章节 =====
@@ -494,7 +519,7 @@ function replaceFromChat(payload: {
 }
 
 /** 惰性取正文：仅在「引用当前文档」提问时调用，避免每键重渲染聊天树 */
-const getDocContext = (): string => doc.value
+const getDocContext = (): string => fullContent.value
 </script>
 
 <template>
@@ -514,31 +539,26 @@ const getDocContext = (): string => doc.value
               :location="docLocation"
               :path="currentPath"
               @reveal="revealInFolder(currentPath)"
+              @editTitle="handleTitleBarEdit"
             />
 
-            <!-- 未打开任何文档：欢迎页 / 选文件提示 -->
-            <div v-if="!started" class="flex-1 min-h-0 flex">
-              <EntryScreen
-                v-if="!workspaceRoot"
-                :recent="recentFiles"
-                @new="createDoc"
-                @open="open"
-                @open-folder="pickWorkspaceFolder()"
-                @open-recent="openPath"
-              />
-              <div v-else class="flex-1 flex items-center justify-center text-sm text-fg-dim">
-                新建或打开一篇 Markdown 即可开始书写
-              </div>
-            </div>
-
-            <!-- 编辑器：内部滚动，正文限宽居中；右侧贴 waku 式导航竖轨 -->
-            <div v-else class="flex-1 min-h-0 relative">
+            <!-- 编辑器：标题与正文分离，各自独立输入 + 常驻 placeholder -->
+            <div class="flex-1 min-h-0 relative">
               <div
                 ref="editorScrollRef"
                 class="absolute inset-0 overflow-y-auto editor-scroll"
                 @scroll.passive="onEditorScroll"
               >
-                <MilkdownEditor v-model="doc" class="mx-auto max-w-[46rem] px-12 pt-6 pb-32" />
+                <div class="mx-auto max-w-[46rem] px-12 pt-8 pb-32">
+                  <input
+                    ref="titleInputRef"
+                    v-model="titleText"
+                    placeholder="无标题"
+                    class="title-input w-full bg-transparent outline-none border-none text-[30px] font-bold leading-tight placeholder:text-[var(--fg-soft)] placeholder:opacity-60 mb-4 text-left"
+                    spellcheck="false"
+                  />
+                  <MilkdownEditor v-model="doc" />
+                </div>
               </div>
               <!-- 文章右侧导航竖轨：hover 预览 / 点击跳转 / 当前章节常亮 -->
               <OutlinePanel
@@ -588,7 +608,6 @@ const getDocContext = (): string => doc.value
           @toggle-ai="toggleAi"
           @toggle-theme="toggle"
           @settings="showSettings = true"
-          @open-folder="pickWorkspaceFolder()"
           @open-file="open()"
         />
 
