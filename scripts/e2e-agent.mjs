@@ -42,14 +42,18 @@ async function run() {
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
       const log = []
 
-      // 1) 新建文档（Entry 欢迎页）
+      // 1) 确保进入编辑器：当前启动会自动新建文档；若无 ProseMirror 则找新建按钮兜底
+      for (let i = 0; i < 20 && !document.querySelector('.ProseMirror'); i++) await sleep(250)
       const newBtn = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('新建文件'))
-      if (!newBtn) return { ok: false, log, err: '未找到新建按钮' }
-      newBtn.click()
-      await sleep(1500)
+      if (newBtn && !document.querySelector('.ProseMirror')) {
+        newBtn.click()
+        await sleep(1500)
+      }
+      for (let i = 0; i < 20 && !document.querySelector('.ProseMirror'); i++) await sleep(250)
+      if (!document.querySelector('.ProseMirror')) return { ok: false, log, err: '编辑器未挂载' }
 
       // 2) 打开 AI 侧栏（左侧活动栏 Sparkles）
-      const sparkles = document.querySelector('button[title="AI 对话"]')
+      const sparkles = document.querySelector('button[aria-label="AI 助手"]') || document.querySelector('button[title="AI 对话"]')
       if (!sparkles) return { ok: false, log, err: '未找到 AI 活动栏按钮' }
       sparkles.click()
       await sleep(800)

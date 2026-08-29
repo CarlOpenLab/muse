@@ -20,6 +20,13 @@ import { dispatchEditorInsert, dispatchEditorReplaceSelection } from './composab
 import StatusBar from './components/StatusBar.vue'
 import SearchPanel from './components/SearchPanel.vue'
 import SettingsModal from './components/SettingsModal.vue'
+import EditorContextMenu from './components/EditorContextMenu.vue'
+import LinkModal from './components/LinkModal.vue'
+import SourceEditor from './components/SourceEditor.vue'
+import FileTreePanel from './components/FileTreePanel.vue'
+import { useViewMode, type ViewModeState } from './composables/useViewMode'
+import { dispatchFormat, dispatchSelectCell, dispatchInsertImage } from './composables/useEditorControl'
+import type { FormatAction } from './editor/formatCommands'
 
 const { isDark, toggle, themeId, currentTheme } = useTheme()
 
@@ -213,13 +220,64 @@ const {
   root: workspaceRoot,
   tree: workspaceTree,
   createFile: createWorkspaceFile,
-  revealInFolder
+  revealInFolder,
+  pickFolder,
+  setRoot
 } = useWorkspace()
 
 const stats = useDocStats(fullContent)
 const headings = useOutline(fullContent)
 const search = useSearch()
 const { settings } = useSettings()
+
+// ===== 视图模式（Typora「视图」菜单）：源代码 / 专注 / 打字机 / 大纲 =====
+const { viewMode, toggle: toggleViewMode } = useViewMode()
+
+/** 切换视图模式并广播（打字机插件监听此事件即时对齐光标） */
+function setViewMode<K extends keyof ViewModeState>(key: K, value?: ViewModeState[K]): void {
+  viewMode.value[key] = value === undefined ? !viewMode.value[key] : value
+  window.dispatchEvent(new CustomEvent('muse:viewmode-changed'))
+}
+
+/** 源代码模式：进入时取整篇 markdown（含标题行），输入按「首行 # 标题 + 正文」拆回 */
+const sourceText = ref('')
+watch(
+  () => viewMode.value.source,
+  (on) => {
+    if (on) sourceText.value = fullContent.value
+  }
+)
+function onSourceChange(text: string): void {
+  const m = text.match(/^#\s+(.*)(?:\n|$)/)
+  if (m) {
+    titleText.value = (m[1] ?? '').trim()
+    doc.value = text.slice(m[0].length).replace(/^\n+/, '')
+  } else {
+    titleText.value = ''
+    doc.value = text
+  }
+}
+
+function toggleSourceMode(): void {
+  setViewMode('source')
+}
+
+// ===== 文件树侧栏（Typora「文件」面板）：打开文件夹 / 打开文件 / 重命名同步 =====
+function toggleFilesSidebar(): void {
+  setViewMode('files')
+}
+
+/** 「打开文件夹…」（菜单 ⌘⇧O / 底部工具条按钮共用）：选目录 + 设为工作区 + 展开文件树侧栏 */
+async function openFolderFlow(): Promise<void> {
+  const ok = await pickFolder()
+  if (ok) viewMode.value.files = true
+}
+
+/** 树内重命名后，若改名的是当前文档则同步路径（沿用原监听，不重载内容） */
+function onTreeRenamed(e: Event): void {
+  const { oldPath, newPath } = (e as CustomEvent<{ oldPath: string; newPath: string }>).detail
+  if (oldPath === currentPath.value) setPath(newPath)
+}
 
 const showSettings = ref(false)
 const recentFiles = ref<string[]>([])
@@ -358,13 +416,25 @@ onMounted(() => {
 
   offMenu?.()
   offMenu = window.muse?.on('menu:action', (payload: unknown) => {
-    const { action, path } = payload as { action: string; path?: string }
+    const { action, path, format } = payload as { action: string; path?: string; format?: FormatAction }
     if (action === 'new') void createDoc()
     else if (action === 'open') void open()
     else if (action === 'open-recent' && path) void openPath(path)
     else if (action === 'save') void save()
     else if (action === 'saveAs') void saveAs()
     else if (action === 'find') openSearch()
+    // ---- Typora 对齐：段落 / 格式 / 视图 / 导出 ----
+    else if (action === 'format' && format) dispatchFormat(format)
+    else if (action === 'link') openLinkModal()
+    else if (action === 'insert-image') void insertImageFromDialog()
+    else if (action === 'source-mode') toggleSourceMode()
+    else if (action === 'focus-mode') setViewMode('focus')
+    else if (action === 'typewriter-mode') setViewMode('typewriter')
+    else if (action === 'toggle-outline') setViewMode('outline')
+    else if (action === 'toggle-files') toggleFilesSidebar()
+    else if (action === 'open-folder') void openFolderFlow()
+    else if (action === 'export-pdf') void exportPdf()
+    else if (action === 'export-html') void exportHtml()
   }) ?? null
 
   offRequestClose?.()
@@ -372,7 +442,11 @@ onMounted(() => {
     void handleCloseRequest()
   }) ?? null
 
+  // 树内重命名当前文档 → 同步路径（原文件监听跟随新路径）
+  window.addEventListener('muse:tree-renamed', onTreeRenamed)
+
   // 查找快捷键：⌘F 打开、⌘G / ⇧⌘G 下一个/上一个、Esc 关闭
+  // Typora 视图快捷键：⌘/ 源代码模式、F8 专注、F9 打字机
   window.addEventListener('keydown', (e) => {
     const mod = e.metaKey || e.ctrlKey
     const key = e.key.toLowerCase()
@@ -382,6 +456,15 @@ onMounted(() => {
     } else if (mod && key === 'g') {
       e.preventDefault()
       search.request(e.shiftKey ? 'prev' : 'next')
+    } else if (mod && key === '/') {
+      e.preventDefault()
+      toggleSourceMode()
+    } else if (e.key === 'F8') {
+      e.preventDefault()
+      setViewMode('focus')
+    } else if (e.key === 'F9') {
+      e.preventDefault()
+      setViewMode('typewriter')
     } else if (e.key === 'Escape' && search.isOpen.value) {
       e.preventDefault()
       search.close()
@@ -394,6 +477,7 @@ onUnmounted(() => {
   offOpenPaths?.()
   offMenu?.()
   offRequestClose?.()
+  window.removeEventListener('muse:tree-renamed', onTreeRenamed)
 })
 
 watch(title, (t) => {
@@ -448,12 +532,20 @@ async function handleOpenPaths(items: OpenPathItem[]): Promise<void> {
   if (files.length) await openPath(files[0].path)
 }
 
-function onDrop(e: DragEvent): void {
+async function onDrop(e: DragEvent): Promise<void> {
   const f = e.dataTransfer?.files?.[0]
   if (!f) return
+  // 图片交给编辑器 drop 插件（拷入 assets/ 后插入），这里只负责打开文档 / 文件夹
+  if (f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i.test(f.name)) return
   const path = window.muse?.getPathForFile(f)
   if (!path) return
-  // 仅打开文件，文件夹拖放不再处理（当前布局为单文档模式）
+  const isDir = (await window.muse?.invoke('fs:isDir', path)) as boolean
+  if (isDir) {
+    // 拖入文件夹 → 作为工作区打开并展开文件栏（Typora 行为）
+    await setRoot(path)
+    viewMode.value.files = true
+    return
+  }
   void openPath(path)
 }
 
@@ -501,6 +593,93 @@ watch(headings, () => {
   void nextTick(onEditorScroll)
 })
 
+// ===== 右键上下文菜单（Typora 式）=====
+const ctxMenu = ref({ open: false, x: 0, y: 0, inTable: false })
+
+function onEditorContextmenu(e: MouseEvent): void {
+  const target = e.target as HTMLElement
+  const inTable = !!target.closest('.ProseMirror table')
+  ctxMenu.value = { open: true, x: e.clientX, y: e.clientY, inTable }
+  // 表格内：先把点击处单元格设为选区，行列命令才能作用到正确位置
+  if (inTable) dispatchSelectCell(e.clientX, e.clientY)
+}
+
+function onCtxFormat(action: FormatAction): void {
+  dispatchFormat(action)
+}
+
+function onCtxClipboard(op: 'cut' | 'copy' | 'paste'): void {
+  void window.muse?.invoke('app:webctx', op)
+}
+
+// ===== 链接弹窗（⌘K / 菜单 / 右键）=====
+const linkModalOpen = ref(false)
+const linkText = ref('')
+
+function openLinkModal(): void {
+  linkText.value = String(window.getSelection() ?? '').trim()
+  linkModalOpen.value = true
+}
+
+function applyLinkHref(href: string): void {
+  dispatchFormat('link', href)
+}
+
+// ===== 插入图片：选文件 → 拷入 assets/ → 光标处插入 =====
+async function insertImageFromDialog(): Promise<void> {
+  const rel = (await window.muse?.invoke('fs:pickAndSaveImage', currentPath.value ?? '')) as string | null
+  if (rel) dispatchInsertImage(rel)
+}
+
+// ===== 导出（Typora「文件 > 导出」）=====
+async function exportPdf(): Promise<void> {
+  // exporting 类：隐藏侧栏/状态栏，正文占满页宽（见 base.css）
+  document.body.classList.add('exporting')
+  try {
+    await nextTick()
+    await window.muse?.invoke('app:export-pdf', filename.value || '未命名.md')
+  } finally {
+    document.body.classList.remove('exporting')
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c)
+}
+
+const EXPORT_CSS = `
+  body{margin:0;padding:48px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#1f2328;background:#fff;line-height:1.7}
+  article{max-width:46rem;margin:0 auto}
+  h1,h2,h3,h4,h5,h6{margin:1.2em 0 .6em;line-height:1.3}
+  h1{font-size:2em;border-bottom:1px solid #eaecef;padding-bottom:.3em}
+  pre{background:#f6f8fa;padding:12px 16px;border-radius:8px;overflow:auto}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em}
+  p code,li code{background:#f6f8fa;padding:2px 5px;border-radius:4px}
+  blockquote{margin:0;padding:0 1em;color:#6a737d;border-left:.25em solid #dfe2e5}
+  table{border-collapse:collapse;width:100%}
+  th,td{border:1px solid #dfe2e5;padding:6px 12px}
+  img{max-width:100%}
+  hr{border:none;border-top:2px solid #eaecef;margin:2em 0}
+  .katex{font-size:1.05em}
+`
+
+async function exportHtml(): Promise<void> {
+  const bodyHtml = editorScrollRef.value?.querySelector('.ProseMirror')?.innerHTML ?? ''
+  const titleHtml = titleText.value.trim() ? `<h1>${escapeHtml(titleText.value.trim())}</h1>` : ''
+  const html = `<!doctype html>
+<html lang="zh-cn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(titleText.value.trim() || filename.value)}</title>
+<style>${EXPORT_CSS}</style>
+</head>
+<body><article>${titleHtml}
+${bodyHtml}</article></body>
+</html>`
+  await window.muse?.invoke('app:export-html', html, filename.value || '未命名.md')
+}
+
 /** AI 回答 → 插入到正文（按 markdown 解析后落到光标处） */
 function insertIntoDoc(text: string): void {
   if (!text.trim()) return
@@ -526,54 +705,72 @@ const getDocContext = (): string => fullContent.value
   <ConfigProvider :theme="themeConfig">
     <ThemeProvider :appearance="appearance">
       <div class="h-full flex flex-col bg-bg" @dragover.prevent @drop.prevent="onDrop">
-        <!-- 编辑器区：顶栏 + Markdown 编辑区（无左栏文件树，所有操作收到底部工具条） -->
-        <div class="flex flex-1 min-h-0">
-          <!-- 中栏：顶栏 + Markdown 编辑区 -->
-          <main class="flex-1 min-w-0 flex flex-col bg-bg">
-            <TitleBar
-              :filename="filename"
-              :dirty="dirty"
-              :saving="saving"
-              :started="started"
-              :is-mac="isMac"
-              :location="docLocation"
-              :path="currentPath"
-              @reveal="revealInFolder(currentPath)"
-              @editTitle="handleTitleBarEdit"
-            />
+        <!-- 编辑器区：顶栏 + 左栏文件树 + 中栏编辑区 + 右栏辅助面板 -->
+        <div class="flex flex-1 min-h-0 flex-col">
+          <TitleBar
+            data-export-hide
+            :filename="filename"
+            :dirty="dirty"
+            :saving="saving"
+            :started="started"
+            :is-mac="isMac"
+            :location="docLocation"
+            :path="currentPath"
+            @reveal="revealInFolder(currentPath)"
+            @editTitle="handleTitleBarEdit"
+          />
 
-            <!-- 编辑器：标题与正文分离，各自独立输入 + 常驻 placeholder -->
-            <div class="flex-1 min-h-0 relative">
+          <div class="flex flex-1 min-h-0">
+            <!-- 左栏：文件树（Typora「文件」面板，⌘⇧L / 底部工具条切换） -->
+            <FileTreePanel v-show="viewMode.files" :active-path="currentPath" @open="openPath" />
+
+            <!-- 中栏：顶栏下方是 Markdown 编辑区 -->
+            <main class="flex-1 min-w-0 flex flex-col bg-bg">
+              <!-- 编辑器：标题与正文分离，各自独立输入 + 常驻 placeholder -->
+              <div class="flex-1 min-h-0 relative" @contextmenu.prevent="onEditorContextmenu">
               <div
                 ref="editorScrollRef"
                 class="absolute inset-0 overflow-y-auto editor-scroll"
+                :class="{ 'focus-mode': viewMode.focus }"
                 @scroll.passive="onEditorScroll"
               >
                 <div class="mx-auto max-w-[46rem] px-12 pt-8 pb-32">
                   <input
+                    v-show="!viewMode.source"
                     ref="titleInputRef"
                     v-model="titleText"
                     placeholder="无标题"
                     class="title-input w-full bg-transparent outline-none border-none text-[30px] font-bold leading-tight placeholder:text-[var(--fg-soft)] placeholder:opacity-60 mb-4 text-left"
                     spellcheck="false"
                   />
-                  <MilkdownEditor v-model="doc" />
+                  <div v-show="!viewMode.source">
+                    <MilkdownEditor v-model="doc" />
+                  </div>
                 </div>
               </div>
-              <!-- 文章右侧导航竖轨：hover 预览 / 点击跳转 / 当前章节常亮 -->
-              <OutlinePanel
-                v-if="headings.length >= 2"
-                :headings="headings"
-                :active="activeHeading"
-                @jump="scrollToHeading"
+              <!-- 源代码模式（⌘/）：整页等宽 markdown 原文 -->
+              <SourceEditor
+                v-if="viewMode.source"
+                :content="sourceText"
+                @change="onSourceChange"
+                @exit="toggleSourceMode"
               />
-            </div>
-          </main>
+                <!-- 文章右侧导航竖轨：hover 预览 / 点击跳转 / 当前章节常亮 -->
+                <OutlinePanel
+                  v-if="viewMode.outline && headings.length >= 2"
+                  data-export-hide
+                  :headings="headings"
+                  :active="activeHeading"
+                  @jump="scrollToHeading"
+                />
+              </div>
+            </main>
 
-          <!-- 右栏：AI / 大纲（常驻挂载，聊天草稿与流式不丢；宽度折叠动画） -->
-          <Transition name="sidebar">
+            <!-- 右栏：AI / 大纲（常驻挂载，聊天草稿与流式不丢；宽度折叠动画） -->
+            <Transition name="sidebar">
             <SidePanel
               v-show="sidebar.open"
+              data-export-hide
               :tab="sidebar.tab"
               :width="sidebar.width"
               @resize="onSidebarResize"
@@ -594,24 +791,46 @@ const getDocContext = (): string => fullContent.value
               </template>
             </SidePanel>
           </Transition>
+          </div>
         </div>
 
         <!-- 整窗底部工具条：一排 icon，左右 justify-between（Zed 式） -->
         <StatusBar
+          data-export-hide
           :stats="stats"
           :ai-open="sidebar.open && sidebar.tab === 'ai'"
           :search-open="sidebar.open && sidebar.tab === 'search'"
+          :files-open="viewMode.files"
           :is-dark="isDark"
           :theme-name="currentTheme.name"
           @new="createDoc"
           @toggle-search="toggleSearch"
           @toggle-ai="toggleAi"
+          @toggle-files="toggleFilesSidebar"
           @toggle-theme="toggle"
           @settings="showSettings = true"
           @open-file="open()"
+          @open-folder="openFolderFlow"
         />
 
         <SettingsModal :open="showSettings" @close="showSettings = false" />
+        <EditorContextMenu
+          :open="ctxMenu.open"
+          :x="ctxMenu.x"
+          :y="ctxMenu.y"
+          :in-table="ctxMenu.inTable"
+          @close="ctxMenu.open = false"
+          @format="onCtxFormat"
+          @clipboard="onCtxClipboard"
+          @link="openLinkModal"
+          @image="insertImageFromDialog"
+        />
+        <LinkModal
+          :open="linkModalOpen"
+          :initial-text="linkText"
+          @close="linkModalOpen = false"
+          @confirm="applyLinkHref"
+        />
       </div>
     </ThemeProvider>
   </ConfigProvider>

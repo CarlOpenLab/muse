@@ -13,6 +13,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test:agent": "node scripts/test-agent.mjs",
     "test:e2e": "npm run build && node scripts/e2e-agent.mjs",
+    "test:e2e-typora": "npm run build && node scripts/e2e-typora.mjs",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:win": "electron-vite build && electron-builder --win",
     "build:linux": "electron-vite build && electron-builder --linux"
@@ -39,6 +40,8 @@
     "@milkdown/vue": "^7.22.0",
     "antdv-next": "^1.5.0",
     "antdv-style": "1.0.0-rc.1",
+    "katex": "^0.18.4",
+    "remark-math": "^6.0.0",
     "shiki": "^4.4.2",
     "unocss": "^66.7.5"
   },

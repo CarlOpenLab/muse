@@ -6,7 +6,9 @@
  */
 import {
   FileUp,
+  FolderOpen,
   Moon,
+  PanelLeft,
   Search,
   Settings as SettingsIcon,
   Sparkles,
@@ -19,6 +21,7 @@ defineProps<{
   stats: DocStats
   aiOpen: boolean
   searchOpen: boolean
+  filesOpen: boolean
   isDark: boolean
   /** 当前主题名（tooltip 展示） */
   themeName: string
@@ -28,9 +31,11 @@ const emit = defineEmits<{
   'new': []
   'toggle-search': []
   'toggle-ai': []
+  'toggle-files': []
   'toggle-theme': []
   settings: []
   'open-file': []
+  'open-folder': []
 }>()
 </script>
 
@@ -56,6 +61,13 @@ const emit = defineEmits<{
 
       <div class="w-px h-4 bg-border-subtle mx-1.5 shrink-0" />
 
+      <a-tooltip :title="filesOpen ? '收起文件栏 (⌘⇧L)' : '文件栏 (⌘⇧L)'">
+        <button type="button" class="rail-icon-btn" :class="{ on: filesOpen }" aria-label="文件栏"
+          @click="emit('toggle-files')">
+          <PanelLeft :size="14" />
+        </button>
+      </a-tooltip>
+
       <a-tooltip :title="searchOpen ? '收起搜索' : '搜索 (⌘F)'">
         <button type="button" class="rail-icon-btn" :class="{ on: searchOpen }" aria-label="搜索"
           @click="emit('toggle-search')">
@@ -71,6 +83,11 @@ const emit = defineEmits<{
       <a-tooltip title="打开文件">
         <button type="button" class="rail-icon-btn" aria-label="打开文件" @click="emit('open-file')">
           <FileUp :size="14" />
+        </button>
+      </a-tooltip>
+      <a-tooltip title="打开文件夹 (⌘⇧O)">
+        <button type="button" class="rail-icon-btn" aria-label="打开文件夹" @click="emit('open-folder')">
+          <FolderOpen :size="14" />
         </button>
       </a-tooltip>
 

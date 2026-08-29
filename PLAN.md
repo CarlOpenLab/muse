@@ -173,3 +173,36 @@ muse/
 > 环境备注：npm 开了 `allow-scripts` 空白名单，已在 `package.json` 持久化批准
 > `electron` / `esbuild` / `electron-winstaller` 的 postinstall，避免 `npm install` 清空二进制。
 
+
+## Phase 4.5 · Typora 交互对齐（2026-08 完成）
+
+目标：在不触碰 AI 链路（ipcProvider / agent loop / editorTools 全部不动）的前提下，
+把编辑器交互与功能对齐 Typora。
+
+* ✅ **格式命令总线**：`src/editor/formatCommands.ts` 用 `FormatAction` 字符串统一描述全部格式化操作
+  （标题 1-6 / 正文 / 引用 / 列表 / 任务列表 / 代码块 / 数学块 / 表格 / 行内格式 / 清除格式 / 表格行列），
+  三条入口汇聚：原生菜单 & 右键菜单（pendingAction）+ 编辑器内快捷键（`muse:format` 窗口事件 → MilkdownCore 执行）
+* ✅ **快捷键与菜单**（Typora macOS 默认）：⌘1-6 / ⌘0 / ⌘= ⌘- / ⌘B ⌘I / ⌘⇧` / ⌃⇧` / ⌘K / ⌘\ /
+  ⌘⌥Q U O C B T / ⌘⇧X / ⌘] ⌘[；原生菜单新增「段落」「格式」「视图」（源代码 ⌘/、专注 F8、打字机 F9、大纲 ⌘⇧L、全屏）
+* ✅ **右键菜单**：`EditorContextMenu.vue`（剪贴板走 `app:webctx` webContents 原生动作；表格内自动追加行列操作，
+  弹出前 `select-cell` 动作把点击处单元格设为 CellSelection）
+* ✅ **表格**：⌘⌥T 插入 3×3；右键增删行列 / 删除表格；Tab / ⇧Tab 表内跳格、列表内缩进（`typoraKeymap.ts`）
+* ✅ **数学公式**：自研 `src/editor/math/mathPlugin.ts`（remark-math 解析 + KaTeX 渲染 + 点击编辑 NodeView，
+  空公式块自动进入编辑态）——未用 `@milkdown/plugin-math`（7.5 旧版与 7.22 存在版本差且 toDOM 不可再编辑）
+* ✅ **图片粘贴 / 拖拽**：`imagePastePlugin.ts` → `fs:saveImage` 写入文档同目录 `assets/`（自动重名加序号），
+  相对路径插入；⌘⌃I / 右键走 `fs:pickAndSaveImage` 选文件拷贝；无落盘路径退化 data URL
+* ✅ **源代码模式**：⌘/ 切换，`SourceEditor.vue` 等宽编辑整篇 markdown（含标题行），双向防抖同步
+* ✅ **专注 / 打字机模式**：`focusModePlugin.ts` 顶层块 decoration 压暗；`typewriterPlugin.ts` 光标保持 45% 高度
+* ✅ **导出**：`electron/services/export.ts` — PDF（printToPDF + `body.exporting` 隐藏外壳）/ HTML（独立模板，图片相对路径）
+* ✅ **细节**：选中粘贴 URL 变链接、清除格式 ⌘\、表格空单元格 `<br />` 序列化噪音清理（仅表格行）
+
+* ✅ **文件夹 / 文件树侧栏（回归）**：早期重构删掉了左栏 UI，但底层 IPC（pickFolder / listTree / rename / trash /
+  目录递归监听）与 useWorkspace 状态模块全部保留——本版重建 `FileTreePanel.vue`（扁平化渲染；展开态持久化、
+  当前文件高亮、行内重命名、右键 新建文件/文件夹·改名·废纸篓·Finder 显示、拖宽把手）；
+  菜单「文件 > 打开文件夹… ⌘⇧O」「视图 > 文件侧栏 ⌘⇧L（大纲改 ⌘⌃1，对齐 Typora）」；底部工具条新增文件栏开关；
+  文件夹拖入窗口恢复为「作为工作区打开」；重命名当前打开的文件经 `muse:tree-renamed` 事件同步 useFile 路径
+
+> 验证：`npm run test:e2e-typora`（23 项断言：标题/回退/加粗/数学块编辑渲染/行内公式/表格/右键/行列/源代码/专注/列表/引用
+> + 文件树 7 项：开栏/列树/打开/嵌套打开/改名/删除/新建，e2e 壳内置临时目录夹具与最小 fs IPC）
+> + `npm run test:e2e`（AI Agent 全链路回归，同时修复了其过期选择器：启动自动建文档后无欢迎页、状态栏 AI 按钮 aria-label）。
+> 已知库行为：Milkdown 把空段落序列化为 `<br />` 以保留空行，本版本仅在表格行内清理，正文空行行为保持原生。

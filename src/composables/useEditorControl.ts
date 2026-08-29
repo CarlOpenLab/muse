@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import type { ToolResult } from '../chat/editorTools'
+import type { FormatAction } from '../editor/formatCommands'
 
 /**
  * 跨组件编辑器控制信号。
@@ -15,6 +16,10 @@ export type EditorActionType =
   | 'insert-text'
   | 'replace-selection'
   | 'tool'
+  | 'format'
+  | 'serialize'
+  | 'insert-image'
+  | 'select-cell'
 export interface EditorAction {
   type: EditorActionType
   /** insert-text / replace-selection 时携带：要按 markdown 解析插入的文本 */
@@ -28,6 +33,17 @@ export interface EditorAction {
   tool?: { name: string; args: unknown }
   /** tool：执行完成后回调（agent loop 需要拿到结果反馈给模型） */
   resolve?: (r: ToolResult) => void
+  /** format：Typora 式格式化动作（标题/列表/表格/行内格式…） */
+  format?: FormatAction
+  /** format: 'link' 时携带的链接地址；serialize / insert-image 的结果回调 */
+  href?: string
+  resolveMd?: (markdown: string) => void
+  /** insert-image：已落盘的图片 src 与替代文本 */
+  imageSrc?: string
+  imageAlt?: string
+  /** select-cell：右键菜单前把点击处表格单元格设为 CellSelection（屏幕坐标） */
+  x?: number
+  y?: number
   /** 自增序号：保证连续发起同类动作时 ref 引用变化、watch 触发 */
   seq: number
 }
@@ -77,4 +93,24 @@ export function dispatchEditorTool(name: string, args: unknown): Promise<ToolRes
 
 export function useEditorControl() {
   return { pendingAction }
+}
+
+/** 请求执行一个 Typora 式格式化动作（菜单 / 右键 / 链接弹窗确认后调用）。 */
+export function dispatchFormat(format: FormatAction, href?: string): void {
+  pendingAction.value = { type: 'format', format, href, seq: ++seq }
+}
+
+/** 请求把当前编辑器内容序列化为 markdown（源代码模式 / 导出用）。 */
+export function dispatchSerialize(resolveMd: (markdown: string) => void): void {
+  pendingAction.value = { type: 'serialize', resolveMd, seq: ++seq }
+}
+
+/** 请求在光标处插入一张已落盘的图片。 */
+export function dispatchInsertImage(src: string, alt = ''): void {
+  pendingAction.value = { type: 'insert-image', imageSrc: src, imageAlt: alt, seq: ++seq }
+}
+
+/** 右键表格前：把点击处的单元格设为当前选区（行列命令依赖它）。 */
+export function dispatchSelectCell(x: number, y: number): void {
+  pendingAction.value = { type: 'select-cell', x, y, seq: ++seq }
 }

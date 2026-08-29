@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { watch, onMounted, onUnmounted } from 'vue'
 import { useEditor, Milkdown } from '@milkdown/vue'
-import { Editor, rootCtx, defaultValueCtx, editorViewCtx, parserCtx, schemaCtx } from '@milkdown/core'
+import { Editor, rootCtx, defaultValueCtx, editorViewCtx, parserCtx, serializerCtx, schemaCtx } from '@milkdown/core'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { gfm } from '@milkdown/preset-gfm'
 import { nord } from '@milkdown/theme-nord'
@@ -12,8 +12,10 @@ import { trailing } from '@milkdown/plugin-trailing'
 import { replaceAll, callCommand } from '@milkdown/utils'
 import { Slice } from '@milkdown/prose/model'
 import { TextSelection } from '@milkdown/prose/state'
+import { CellSelection, cellAround } from '@milkdown/prose/tables'
 import type { EditorView } from '@milkdown/prose/view'
 import '@milkdown/theme-nord/style.css'
+import 'katex/dist/katex.min.css'
 import { shikiCodeBlock } from './shiki/shikiCodeBlock'
 import { codeBlockView } from './codeBlockView'
 import { codeBlockTabKeymap } from './codeBlockKeymap'
@@ -22,6 +24,12 @@ import { selectionPlugin } from './selectionPlugin'
 import { handleEditorTool } from './editorToolHandlers'
 import { searchCommand } from './searchCommands'
 import { placeholderPlugin } from './placeholderPlugin'
+import { typoraKeymap } from './typoraKeymap'
+import { imagePastePlugin } from './imagePastePlugin'
+import { focusModePlugin } from './focusModePlugin'
+import { typewriterPlugin } from './typewriterPlugin'
+import { museMath } from './math/mathPlugin'
+import { runFormat, applyLink, type FormatAction } from './formatCommands'
 import { useSearch } from '../composables/useSearch'
 import { useEditorControl } from '../composables/useEditorControl'
 
@@ -40,13 +48,28 @@ const stripTrailingNL = (s: string): string => s.replace(/\n+$/, '')
 const search = useSearch()
 const { pendingAction } = useEditorControl()
 
+/**
+ * Milkdown 序列化器会把「空段落」写成 <br />（保留空行的内置行为），
+ * 放在表格单元格里就是噪音（Typora 保存空单元格是干净的）。
+ * 仅对形如表格行的行内做清理，不影响正文空行保留。
+ */
+function cleanTableBr(markdown: string): string {
+  return markdown
+    .split('\n')
+    .map((line) =>
+      /^\s*\|.*\|\s*$/.test(line) ? line.replace(/(?:<br\s*\/?>)+/gi, '') : line
+    )
+    .join('\n')
+}
+
 const { get, loading } = useEditor((root) =>
   Editor.make()
     .config((ctx) => {
       ctx.set(rootCtx, root)
       ctx.set(defaultValueCtx, current)
       // 文档变化时序列化为 markdown 回传父组件
-      ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
+      ctx.get(listenerCtx).markdownUpdated((_ctx, raw) => {
+        const markdown = cleanTableBr(raw)
         if (markdown === current) return
         const prev = current
         current = markdown
@@ -61,6 +84,7 @@ const { get, loading } = useEditor((root) =>
     .use(codeBlockView)
     .use(codeBlockTabKeymap)
     .use(gfm)
+    .use(museMath)
     .use(listener)
     .use(history)
     .use(clipboard)
@@ -70,6 +94,10 @@ const { get, loading } = useEditor((root) =>
     .use(selectionPlugin)
     .use(searchCommand)
     .use(placeholderPlugin)
+    .use(typoraKeymap)
+    .use(imagePastePlugin)
+    .use(focusModePlugin)
+    .use(typewriterPlugin)
 )
 
 // 外部修改 markdown（如打开文件）时同步进编辑器
@@ -103,6 +131,40 @@ watch(
         text: action.text,
       })
     }
+    if (action.type === 'format' && action.format) {
+      // Typora 式格式化：统一走 runFormat；link 需 href（弹窗确认后携带）
+      editor.action((ctx) => {
+        if (action.format === 'link' && action.href) applyLink(ctx, action.href)
+        else runFormat(ctx, action.format!)
+      })
+    }
+    if (action.type === 'serialize' && action.resolveMd) {
+      editor.action((ctx) => {
+        // 7.x 的 Serializer 是函数：(doc) => markdown
+        action.resolveMd?.(cleanTableBr(ctx.get(serializerCtx)(ctx.get(editorViewCtx).state.doc)))
+      })
+    }
+    if (action.type === 'insert-image' && action.imageSrc) {
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx) as EditorView
+        const image = view.state.schema.nodes.image
+        if (!image) return
+        const node = image.create({ src: action.imageSrc, alt: action.imageAlt ?? '' })
+        view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView())
+        view.focus()
+      })
+    }
+    if (action.type === 'select-cell') {
+      // 右键表格：把点击处单元格设为 CellSelection（不打断光标所在段落，仅表格选区）
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx) as EditorView
+        const pos = view.posAtCoords({ left: action.x ?? 0, top: action.y ?? 0 })?.pos
+        if (pos == null) return
+        const $cell = cellAround(view.state.doc.resolve(pos))
+        if (!$cell) return
+        view.dispatch(view.state.tr.setSelection(CellSelection.create(view.state.doc, $cell.pos)))
+      })
+    }
     if (action.type === 'tool' && action.tool) {
       // AI 工具调用：在编辑器 action 中执行（持有 view/parser/schema），结果回传 agent loop
       editor.action((ctx) => {
@@ -116,6 +178,16 @@ watch(
     pendingAction.value = null // 消费
   }
 )
+
+// 编辑器内快捷键（typoraKeymap）→ 格式命令
+function onFormatEvent(e: Event): void {
+  const action = (e as CustomEvent<string>).detail as FormatAction
+  const editor = get()
+  if (!editor) return
+  editor.action((ctx) => runFormat(ctx, action))
+}
+onMounted(() => window.addEventListener('muse:format', onFormatEvent))
+onUnmounted(() => window.removeEventListener('muse:format', onFormatEvent))
 
 /**
  * 新建文档后：确保标题（首个 H1）后跟一个空段落，并把光标聚焦到该段落起始，

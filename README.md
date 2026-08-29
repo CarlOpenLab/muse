@@ -36,6 +36,18 @@
 ## ✨ 功能特性
 
 * **所见即所得** — Milkdown 7 内核，边打字边渲染 Markdown（标题 / 加粗 / 列表 / 引用 / 表格 / 任务列表等）
+* **Typora 式交互对齐** — 第一版对齐目标：
+  * **快捷键** — ⌘1-6 标题 / ⌘0 正文 / ⌘= ⌘- 标题升降级 / ⌘B ⌘I 加粗斜体 / ⌘⇧` 行内代码 / ⌃⇧` 删除线 / ⌘K 链接 / ⌘\ 清除格式 / ⌘⌥Q 引用 / ⌘⌥U ⌘⌥O 列表 / ⌘⇧X 任务列表 / ⌘⌥C 代码块 / ⌘⌥B 数学块 / ⌘⌥T 表格 / ⌘] ⌘[ 列表缩进（与 Typora macOS 默认一致）
+  * **原生菜单** — 「段落」「格式」「视图」菜单结构与 Typora 对齐
+  * **右键菜单** — 编辑器内右键：剪贴板 + 行内格式 + 段落 + 表格行列操作（表格内自动追加「插入/删除行列」）
+  * **文件夹 / 文件树侧栏** — 底部工具条「打开文件夹」按钮（或文件 > 打开文件夹… ⌘⇧O、把文件夹拖进窗口），选中即展开左侧 Typora 式文件树：点击打开、当前文件高亮、右键新建文件/文件夹、重命名、移到废纸篓、Finder 显示；外部增删自动刷新（⌘⇧L 或底部工具条切换侧栏）
+  * **表格编辑** — ⌘⌥T 插入表格；右键增删行列 / 删除表格；Tab / ⇧Tab 跳格
+  * **数学公式** — `$…$` 行内、`$$…$$` 块级（remark-math 解析 + KaTeX 渲染），点击公式可编辑；输入 `$$` 回车即转公式块
+  * **图片粘贴 / 拖拽** — 粘贴或拖入图片自动拷贝到文档同目录 `assets/` 并以相对路径插入（Typora 行为）；⌘⌃I / 右键选文件插入
+  * **源代码模式** — ⌘/ 在所见即所得与 markdown 原文间切换，双向同步
+  * **专注模式 / 打字机模式** — F8 压暗非当前段落；F9 光标保持屏幕约 45% 高度
+  * **导出** — 文件 > 导出 PDF（含正文样式）/ 导出 HTML（独立样式文件，图片相对路径可用）
+  * **智能粘贴** — 选中有文字时粘贴纯 URL 直接变成链接
 * **Shiki 代码高亮** — 打字即时变色，采用 ProseMirror inline decoration 方案，光标完全原生、不跳动
   * 26 种常用语言按需加载（lazy chunk）
   * 代码块右上角可直接编辑语言标记
@@ -50,7 +62,7 @@
   * 拖拽打开文件
   * 最近文件列表
   * 未保存标记（●）+ 关闭确认
-  * 未命名文档自动保存草稿，启动自动恢复
+  * 自动保存（Typora / Obsidian 式防抖落盘）
 
 > 📌 截图占位：后续补充
 
@@ -126,7 +138,10 @@ muse/
 | Phase 2 | Shiki 代码块实时高亮                   | ✅     |
 | Phase 3 | 文件 I/O 与应用外壳（菜单 / 拖拽 / 最近文件）    | ✅     |
 | Phase 4 | 编辑体验打磨（主题 / 大纲 / 查找 / 统计 / 设置）  | ✅     |
+| Phase 4.5 | **Typora 交互对齐**（快捷键 / 段落与格式菜单 / 右键菜单 / 表格编辑 / 数学公式 / 图片粘贴 / 源代码模式 / 专注与打字机 / 导出 PDF·HTML） | ✅ |
 | Phase 5 | AI 流式输出（`@shikijs/stream`，未来主线） | ⏳ 规划中 |
+
+Typora 对齐的冒烟测试：`npm run test:e2e-typora`（标题/格式/数学/表格/右键/源代码/专注等）；AI Agent 回归：`npm run test:e2e`。
 
 详见 [PLAN.md](./PLAN.md)。
 
@@ -143,6 +158,18 @@ muse/
 ## ✨ Features
 
 * **WYSIWYG editing** — powered by Milkdown 7; headings, bold, lists, quotes, tables, task lists render as you type
+* **Typora-style interaction parity** — first-milestone goal:
+  * **Shortcuts** — ⌘1-6 headings / ⌘0 paragraph / ⌘= ⌘- promote & demote heading / ⌘B ⌘I bold & italic / ⌘⇧` inline code / ⌃⇧` strikethrough / ⌘K link / ⌘\ clear formatting / ⌘⌥Q quote / ⌘⌥U ⌘⌥O lists / ⌘⇧X task list / ⌘⌥C code fence / ⌘⌥B math block / ⌘⌥T table / ⌘] ⌘[ list indent (matches Typora macOS defaults)
+  * **Native menus** — Paragraph / Format / View menus mirror Typora
+  * **Context menu** — right-click inside the editor: clipboard + inline formatting + paragraph + table row/column ops (table ops appear automatically inside tables)
+  * **Folder / file-tree sidebar** — the status-bar Open Folder button (or File > Open Folder… ⌘⇧O, or drop a folder onto the window) opens a Typora-style file tree on the left: click to open, active-file highlight, right-click for new file/folder, rename, move to trash, reveal in Finder; external changes refresh automatically (⌘⇧L or the status-bar button toggles the sidebar)
+  * **Table editing** — ⌘⌥T to insert; right-click to add/remove rows & columns; Tab / ⇧Tab to jump cells
+  * **Math** — `$…$` inline and `$$…$$` block (remark-math parsing + KaTeX rendering), click a formula to edit it; type `$$` + Enter to convert a paragraph
+  * **Image paste / drop** — pasted or dropped images are copied into an `assets/` folder next to the document and inserted with a relative path (Typora behavior); ⌘⌃I or right-click to pick a file
+  * **Source code mode** — ⌘/ toggles between WYSIWYG and raw markdown, synced both ways
+  * **Focus / typewriter mode** — F8 dims all but the current paragraph; F9 keeps the caret at ~45% viewport height
+  * **Export** — File > Export PDF (styled) / HTML (standalone file; relative image paths work)
+  * **Smart paste** — pasting a plain URL over a selection turns it into a link
 * **Shiki code highlighting** — instant coloring via ProseMirror *inline decorations*; the caret stays native and never jumps
   * 26 common languages loaded on demand (lazy chunks)
   * Editable language tag at the top-right corner of each code block
@@ -156,7 +183,7 @@ muse/
   * Drag & drop to open files
   * Recent files list
   * Unsaved marker (●) + close confirmation
-  * Auto-saved drafts for untitled documents, restored on launch
+  * Auto-save (debounced, Typora / Obsidian style)
 
 > 📌 Screenshot placeholder — to be added.
 
