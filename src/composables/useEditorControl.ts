@@ -9,10 +9,10 @@ import type { FormatAction } from '../editor/formatCommands'
  * 用模块级单例 ref 解耦：useFile 无需拿到 editor 实例即可发起请求，
  * MilkdownCore 在编辑器就绪后读取并执行，执行完清空。
  *
- * 典型用途：新建文档后，请求「聚焦标题下一行」；AI 侧栏请求「把回答插入正文」。
+ * 典型用途：标题输入框回车后，请求「光标落进正文开头」；AI 侧栏请求「把回答插入正文」。
  */
 export type EditorActionType =
-  | 'focus-after-title'
+  | 'focus-body'
   | 'insert-text'
   | 'replace-selection'
   | 'tool'
@@ -54,6 +54,11 @@ let seq = 0
 /** 发起一次编辑器动作请求（编辑器未就绪时会等待就绪后执行）。 */
 export function dispatchEditorAction(type: EditorActionType): void {
   pendingAction.value = { type, seq: ++seq }
+}
+
+/** 请求把光标切进正文编辑器（标题输入框回车 → 正文开头）。 */
+export function dispatchEditorFocusBody(): void {
+  pendingAction.value = { type: 'focus-body', seq: ++seq }
 }
 
 /** 请求把一段 markdown 按语法解析后插入到光标处（AI「插入到正文」）。 */

@@ -136,7 +136,7 @@ watch(
     if (isLoading || !action) return
     const editor = get()
     if (!editor) return
-    if (action.type === 'focus-after-title') focusAfterTitle(editor)
+    if (action.type === 'focus-body') focusBodyStart(editor)
     if (action.type === 'insert-text' && action.text) insertMarkdown(editor, action.text)
     if (action.type === 'replace-selection' && action.text) {
       replaceSelection(editor, {
@@ -205,30 +205,17 @@ onMounted(() => window.addEventListener('muse:format', onFormatEvent))
 onUnmounted(() => window.removeEventListener('muse:format', onFormatEvent))
 
 /**
- * 新建文档后：确保标题（首个 H1）后跟一个空段落，并把光标聚焦到该段落起始，
- * 让用户落笔在「标题下一行」而非标题里（标题留空显示「无标题」占位）。
- * 这步产生的段落插入属载入归一化范畴，不应标脏——由 justLoaded 吸收。
+ * 光标落进正文开头（标题输入框回车触发）。
+ * 编辑器 doc 只有正文、不含标题行（标题是独立单行输入框），故直接定位到首个
+ * 文本块起始；TextSelection.near 对空文档、首块是列表/代码块等结构都安全。
  */
-function focusAfterTitle(editor: Editor): void {
+function focusBodyStart(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx) as EditorView
-    const state = view.state
-    const doc = state.doc
-    const first = doc.firstChild
-    if (!first) {
-      view.focus()
-      return
-    }
-    let tr = state.tr
-    // 标题后若无段落，补一个空段落作为正文起始行
-    if (doc.childCount < 2 || doc.child(1).type.name !== 'paragraph') {
-      const pType = state.schema.nodes.paragraph
-      tr = tr.insert(first.nodeSize, pType.create())
-    }
-    // 光标置于标题后第一段起始（paraStart+1 = 段落内容起点）
-    const $pos = tr.doc.resolve(first.nodeSize + 1)
-    tr = tr.setSelection(TextSelection.near($pos))
-    view.dispatch(tr.scrollIntoView())
+    const { state } = view
+    const $pos = state.doc.resolve(Math.min(1, state.doc.content.size))
+    const tr = state.tr.setSelection(TextSelection.near($pos)).scrollIntoView()
+    view.dispatch(tr)
     view.focus()
   })
 }

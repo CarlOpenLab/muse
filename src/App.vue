@@ -26,7 +26,7 @@ import LinkModal from './components/LinkModal.vue'
 import SourceEditor from './components/SourceEditor.vue'
 import FileTreePanel from './components/FileTreePanel.vue'
 import { useViewMode, type ViewModeState } from './composables/useViewMode'
-import { dispatchFormat, dispatchSelectCell, dispatchInsertImage } from './composables/useEditorControl'
+import { dispatchFormat, dispatchSelectCell, dispatchInsertImage, dispatchEditorFocusBody } from './composables/useEditorControl'
 import { clearBlockRange } from './editor/block/blockSelectionState'
 import type { FormatAction } from './editor/formatCommands'
 
@@ -291,6 +291,13 @@ function focusTitleInput(): void {
 function handleTitleBarEdit(): void {
   // Typora 式：点击文件名即聚焦标题输入（标题与文件名分离，文件重命名走右键/另存为）
   focusTitleInput()
+}
+/** 标题输入框回车：光标切进正文开头（一行标题写完，回车即落笔正文）。 */
+function onTitleEnter(e: KeyboardEvent): void {
+  // 输入法组合中的回车只用于候选上屏，不算「进入正文」
+  if (e.isComposing) return
+  e.preventDefault()
+  dispatchEditorFocusBody()
 }
 
 // macOS 无边框窗口：红绿灯浮在内容上，左栏顶部要预留一条拖拽区
@@ -755,6 +762,7 @@ const getDocContext = (): string => fullContent.value
                     placeholder="无标题"
                     class="title-input w-full bg-transparent outline-none border-none text-[30px] font-bold leading-tight placeholder:text-[var(--fg-soft)] placeholder:opacity-60 mb-4 text-left"
                     spellcheck="false"
+                    @keydown.enter="onTitleEnter"
                   />
                   <div v-show="!viewMode.source">
                     <MilkdownEditor v-model="doc" />
