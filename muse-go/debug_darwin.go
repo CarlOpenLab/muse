@@ -2,17 +2,24 @@
 
 package main
 
-// 调试工具：MUSE_DEBUG_MENU=1 时，窗口打开 5 秒后程序化触发「文件 -> 新建」
-// 菜单项的原生动作，等价于用户点击。用来在不依赖手动操作的情况下验证
+// 调试工具：MUSE_DEBUG_MENU 设置时，窗口打开 5 秒后程序化触发指定菜单项的
+// 原生动作，等价于用户点击。用来在不依赖手动操作的情况下验证
 // macOS 菜单接线（NSMenuItem -> mygoMenuItemClicked: -> Go Click）是否通畅：
-// 触发成功则日志出现 [muse] menu action: new。
+// 触发成功则日志出现 [muse] menu action: <action>。
+//
+//	MUSE_DEBUG_MENU=1                → 「文件 -> 新建」
+//	MUSE_DEBUG_MENU=视图:开发者工具    → 任意「菜单:项」
 
 import (
 	"log"
+	"os"
+	"strings"
 	"time"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
+
+	"muse/services"
 )
 
 var (
@@ -108,9 +115,21 @@ func debugTriggerMenu(menuTitle, itemTitle string) {
 	msgSend1(sub, sel("performActionForItemAtIndex:"), uintptr(idx))
 }
 
-// scheduleDebugMenuTrigger 在 MUSE_DEBUG_MENU=1 时挂一个 5 秒后的自触发。
+// scheduleDebugMenuTrigger 在 MUSE_DEBUG_MENU 设置时挂一个 5 秒后的自触发。
 func scheduleDebugMenuTrigger() {
+	menuTitle, itemTitle := "文件", "新建"
+	if spec := os.Getenv("MUSE_DEBUG_MENU"); spec != "" && spec != "1" {
+		if parts := strings.SplitN(spec, ":", 2); len(parts) == 2 {
+			menuTitle, itemTitle = parts[0], parts[1]
+		}
+	}
 	time.AfterFunc(5*time.Second, func() {
-		debugTriggerMenu("文件", "新建")
+		debugTriggerMenu(menuTitle, itemTitle)
+		// 便于脚本化验证：触发后把 inspector 状态打进日志（inspector 显示是异步的，约 1s）
+		w := services.S.Win
+		if w == nil {
+			return
+		}
+		time.AfterFunc(time.Second, func() { log.Printf("[muse] debug: IsDevToolsOpened=%v", w.IsDevToolsOpened()) })
 	})
 }

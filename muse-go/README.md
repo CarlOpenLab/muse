@@ -31,6 +31,17 @@ pnpm dev:go      # 终端 2：MYGO_DEV_URL=http://localhost:5173 go run ./muse-g
 
 前端改动走 vite HMR 即时生效；Go 改动重启 `pnpm dev:go`。
 
+## 调试
+
+- **Go 侧**：`pnpm dev` 所在终端直接看日志（`[muse] ...`），改代码后重启 `dev:go` 即重编译
+- **前端**：`pnpm dev` 时用菜单「视图 > 开发者工具」（⌥⌘I）打开 Web Inspector，
+  Console / Elements / Network 都在；跑已构建的二进制时加 `MUSE_DEVTOOLS=1`：
+  `MUSE_DEVTOOLS=1 ./muse-go/Muse`
+- **菜单接线自动化**：`MUSE_DEBUG_MENU=1` 启动，5 秒后程序化触发「文件 > 新建」并打印结果，
+  用来验证 NSMenuItem → Go 回调链路；也可以指定任意菜单项，例如
+  `MUSE_DEBUG_MENU=视图:开发者工具`（这条会顺带打印 `IsDevToolsOpened`）
+- **断言式调试**：`pnpm test:e2e`（见下），页面里的 DOM / IPC 断言跑一遍出清单
+
 ## 构建
 
 ```bash

@@ -58,7 +58,7 @@ func main() {
 
 	app.WhenReady(func() {
 		openWindow()
-		if os.Getenv("MUSE_DEBUG_MENU") == "1" {
+		if os.Getenv("MUSE_DEBUG_MENU") != "" {
 			scheduleDebugMenuTrigger()
 		}
 	})
@@ -212,20 +212,27 @@ func buildMenu(win *mygo.Window) {
 	}
 
 	// 视图菜单：源代码 / 专注 / 打字机 / 侧栏 / 大纲 / 全屏
+	viewSub := []*mygo.MenuItem{
+		{Label: "源代码模式", Accelerator: "CmdOrCtrl+/", Click: sendFn("source-mode")},
+		mygo.Separator(),
+		{Label: "专注模式", Accelerator: "F8", Click: sendFn("focus-mode")},
+		{Label: "打字机模式", Accelerator: "F9", Click: sendFn("typewriter-mode")},
+		mygo.Separator(),
+		{Label: "文件侧栏", Accelerator: "Shift+CmdOrCtrl+L", Click: sendFn("toggle-files")},
+		{Label: "大纲", Accelerator: "Ctrl+CmdOrCtrl+1", Click: sendFn("toggle-outline")},
+		mygo.Separator(),
+		{Label: "重新加载", Accelerator: "CmdOrCtrl+R", Click: func(*mygo.MenuItem, *mygo.Window) { win.Reload() }},
+	}
+	// 开发者工具（Web Inspector）：连 vite dev server（pnpm dev / dev:go）时可用，
+	// 或对已构建的二进制显式 MUSE_DEVTOOLS=1 打开
+	if os.Getenv("MYGO_DEV_URL") != "" || os.Getenv("MUSE_DEVTOOLS") == "1" {
+		viewSub = append(viewSub, mygo.Separator(),
+			&mygo.MenuItem{Label: "开发者工具", Accelerator: "Alt+CmdOrCtrl+I", Click: func(*mygo.MenuItem, *mygo.Window) { win.ToggleDevTools() }})
+	}
+	viewSub = append(viewSub, mygo.Separator(), &mygo.MenuItem{Role: mygo.RoleToggleFullScreen, Label: "全屏"})
 	viewMenu := &mygo.MenuItem{
-		Label: "视图",
-		Submenu: []*mygo.MenuItem{
-			{Label: "源代码模式", Accelerator: "CmdOrCtrl+/", Click: sendFn("source-mode")},
-			mygo.Separator(),
-			{Label: "专注模式", Accelerator: "F8", Click: sendFn("focus-mode")},
-			{Label: "打字机模式", Accelerator: "F9", Click: sendFn("typewriter-mode")},
-			mygo.Separator(),
-			{Label: "文件侧栏", Accelerator: "Shift+CmdOrCtrl+L", Click: sendFn("toggle-files")},
-			{Label: "大纲", Accelerator: "Ctrl+CmdOrCtrl+1", Click: sendFn("toggle-outline")},
-			mygo.Separator(),
-			{Label: "重新加载", Accelerator: "CmdOrCtrl+R", Click: func(*mygo.MenuItem, *mygo.Window) { win.Reload() }},
-			{Role: mygo.RoleToggleFullScreen, Label: "全屏"},
-		},
+		Label:   "视图",
+		Submenu: viewSub,
 	}
 
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{

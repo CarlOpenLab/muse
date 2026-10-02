@@ -94,6 +94,9 @@ pnpm test:e2e      # e2e 冒烟（构建 + 启动应用跑 21 项断言，需图
 pnpm test:agent    # agent loop 解析逻辑单测（纯 Node）
 ```
 
+调试：`pnpm dev` 时「视图 > 开发者工具」（⌥⌘I）打开 Web Inspector（前端 Console / Network）；
+详见 [muse-go/README.md](./muse-go/README.md#调试)。
+
 ### GitHub Actions 发布
 
 推送与 `package.json` 版本一致的标签（例如 `v0.1.2`）即可自动构建各平台单二进制并发布：
@@ -215,6 +218,9 @@ pnpm build:web     # frontend only → muse-go/frontend/dist
 pnpm test:e2e      # e2e smoke (build + launch the app, 21 assertions; needs a GUI)
 pnpm test:agent    # agent-loop parsing unit tests (plain Node)
 ```
+
+Debugging: under `pnpm dev`, View > Developer Tools (⌥⌘I) opens the Web Inspector
+(frontend console / network). See [muse-go/README.md](./muse-go/README.md#调试) (Chinese).
 
 ### GitHub Actions Releases
 
