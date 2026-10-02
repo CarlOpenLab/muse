@@ -25,6 +25,7 @@ import BlockLayer from './BlockLayer.vue'
 import {
   closeBlockMenu,
   openBlockMenu,
+  setBlockMenuCloseHook,
   setBlockMenuExecutor,
   type BlockMenuState,
 } from './blockMenuState'
@@ -35,6 +36,7 @@ import {
   duplicateBlock,
   formatAt,
   insertParagraphAfter,
+  releaseStickyNodeSelection,
   topLevelBlockAtY,
 } from './blockOps'
 import type { FormatAction } from '../formatCommands'
@@ -97,6 +99,7 @@ export class BlockHandleView implements PluginView {
     this.#bindDragGuard()
     this.#bindFocusGuard()
     setBlockMenuExecutor((id, s) => this.#runMenuAction(id, s))
+    setBlockMenuCloseHook(() => this.#releaseBlockSelection())
 
     // 源码模式：编辑器本体被 v-show 隐藏，浮层也必须收起
     this.#stopModeWatch = watch(useViewMode().viewMode, (mode) => {
@@ -117,6 +120,7 @@ export class BlockHandleView implements PluginView {
   destroy = (): void => {
     this.#destroyed = true
     setBlockMenuExecutor(null)
+    setBlockMenuCloseHook(null)
     closeBlockMenu()
     this.#stopModeWatch?.()
     this.#cleanup()
@@ -130,6 +134,18 @@ export class BlockHandleView implements PluginView {
   }
 
   // ---- 菜单动作 ----
+
+  /**
+   * 释放 ⠿ 点击留下的块选区（NodeSelection）→ 块首文本光标。
+   *
+   * 官方 block 服务在 mousedown 时就把目标块设成 NodeSelection（拖拽排序需要），
+   * 点 ⠿ 只是顺带。菜单关掉后若还留着它，下一次输入会整块替换 —— 静默丢内容。
+   * Notion 里点手柄只开菜单，并不把块置于「待替换」态，这里对齐。
+   */
+  #releaseBlockSelection(): void {
+    if (this.#destroyed) return
+    if (releaseStickyNodeSelection(this.#view)) this.#view.focus()
+  }
 
   #runMenuAction(id: string, s: BlockMenuState): void {
     const view = this.#view

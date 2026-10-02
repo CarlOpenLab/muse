@@ -15,7 +15,6 @@ import { watch } from 'vue'
 import {
   Plugin,
   PluginKey,
-  NodeSelection,
   TextSelection,
   type EditorState,
   type PluginView,
@@ -33,7 +32,7 @@ import {
   setGroupDragActive,
   type BlockRange,
 } from './blockSelectionState'
-import { topLevelBlockAtY } from './blockOps'
+import { releaseStickyNodeSelection, topLevelBlockAtY } from './blockOps'
 import { setSelectionSnapshot } from '../../composables/useEditorSelection'
 import { useViewMode } from '../../composables/useViewMode'
 
@@ -175,8 +174,12 @@ class BlockSelectionView implements PluginView {
   /** 输入法起手：先把光标落到范围起点（防整块被输入替换），再让 IME 正常走。 */
   #onCompositionStart = (): void => {
     const view = this.#view
-    if (!blockSelectionKey.getState(view.state)) return
-    this.#collapseToStart(view)
+    if (blockSelectionKey.getState(view.state)) {
+      this.#collapseToStart(view)
+      return
+    }
+    // 手柄点选留下的 NodeSelection：中文输入同样会整块替换 → 先释放成文本光标
+    if (releaseStickyNodeSelection(view)) view.focus()
   }
 
   #apply(view: EditorView, range: BlockRange | null, focus = false): void {
@@ -237,16 +240,12 @@ export const blockSelectionPlugin = $prose(
           const r = blockSelectionKey.getState(view.state)
           if (!r) {
             // 拖拽手柄留下的 NodeSelection 很「粘」：不处理的话拖选不回文本选区、
-            // 打字会把整块替换掉。Esc 收回成普通文本光标（Notion 同款）。
-            if (event.key === 'Escape' && view.state.selection instanceof NodeSelection) {
-              const from = view.state.selection.from
-              view.dispatch(
-                view.state.tr.setSelection(
-                  TextSelection.near(view.state.doc.resolve(from + 1))
-                )
-              )
-              return true
-            }
+            // 打字会把整块替换掉。Esc 收回成普通文本光标（Notion 同款）；
+            // 可打印字符同样先释放，再放行本次输入（否则整块被输入替换）。
+            if (event.key === 'Escape' && releaseStickyNodeSelection(view)) return true
+            const printable =
+              event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey
+            if (printable && releaseStickyNodeSelection(view)) return false
             return false
           }
           if (event.key === 'Escape') {

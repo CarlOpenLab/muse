@@ -40,6 +40,21 @@ export function topLevelBlockAtY(view: EditorView, clientY: number): TopBlockHit
   return { offset, node, el }
 }
 
+/**
+ * 把手柄点选留下的整块 NodeSelection 释放成块首文本光标。
+ *
+ * 这类选区只是官方 block 服务为「拖拽排序」建的；拖拽没发生（点一下手柄、
+ * 或菜单被关掉）时它就是残留。留着的话，随后的打字 / 中文输入法起手会把
+ * 整块内容替换掉 —— 静默丢内容。
+ */
+export function releaseStickyNodeSelection(view: EditorView): boolean {
+  const { state } = view
+  if (!(state.selection instanceof NodeSelection)) return false
+  const from = state.selection.from
+  view.dispatch(state.tr.setSelection(TextSelection.near(state.doc.resolve(from + 1))))
+  return true
+}
+
 /** 该块是否是可被 NodeSelection 选中的原子块（图片/表格等）。 */
 export function isAtomicBlock(node: PMNode): boolean {
   return !node.isTextblock

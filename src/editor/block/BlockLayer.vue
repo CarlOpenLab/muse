@@ -23,7 +23,9 @@ function onPlusUp(): void {
 </script>
 
 <template>
-  <div class="muse-block-handle" data-show="false">
+  <!-- data-export-hide 必须挂在这个根元素上：BlockProvider#init 会把 content
+       （即本元素）从 layer 里 appendChild 到 body 直下，挂在外层 layer 上会失效 -->
+  <div class="muse-block-handle" data-show="false" data-export-hide>
     <button
       class="muse-block-handle-btn"
       type="button"

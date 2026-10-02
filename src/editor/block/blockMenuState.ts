@@ -57,8 +57,22 @@ export function openBlockMenu(init: {
   }
 }
 
+/**
+ * 关闭菜单。带一个「关闭钩子」：⠿ 菜单打开前，官方 block 服务已经把目标块设成
+ * NodeSelection；菜单关闭（Esc / 点遮罩 / 打字）时必须把这块选区释放成文本光标，
+ * 否则随后的输入会整块替换掉（静默丢内容）。钩子由 blockChromePlugin 注册。
+ */
 export function closeBlockMenu(): void {
+  const wasOpen = menu.value.open
   menu.value = { ...EMPTY }
+  if (wasOpen) closeHook?.()
+}
+
+let closeHook: (() => void) | null = null
+
+/** 插件构造时注册「关菜单时释放块选区」；销毁时置 null。 */
+export function setBlockMenuCloseHook(fn: (() => void) | null): void {
+  closeHook = fn
 }
 
 export type BlockMenuExecutor = (id: string, state: BlockMenuState) => void

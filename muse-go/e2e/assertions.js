@@ -214,6 +214,355 @@
     await sleep(300)
     results.quoteWorks = !!pm().querySelector('blockquote')
 
+    // ============================================================
+    // 10) 块悬浮手柄 + 块操作菜单（Notion 式，阶段一）
+    // ============================================================
+    const topBlocks = () => [...pm().children]
+    const editorScroll = () => pm().closest('.editor-scroll')
+    const midY = (el) => {
+      const r = el.getBoundingClientRect()
+      return r.top + r.height / 2
+    }
+    const ensureVisible = (el) => {
+      const sc = editorScroll()
+      if (!sc) return
+      const sr = sc.getBoundingClientRect()
+      const r = el.getBoundingClientRect()
+      if (r.top < sr.top + 32) sc.scrollTop -= sr.top + 32 - r.top
+      else if (r.bottom > sr.bottom - 32) sc.scrollTop += r.bottom - sr.bottom + 32
+    }
+    // gutter 桥监听 .editor-scroll 的 pointermove，且要求 x 在正文左缘之外
+    const gutterX = () => Math.max(2, pm().getBoundingClientRect().left - 24)
+    const hoverBlockAt = async (el) => {
+      ensureVisible(el)
+      const sc = editorScroll()
+      if (!sc || !el) return
+      sc.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: gutterX(),
+          clientY: midY(el),
+          pointerId: 1,
+          pointerType: 'mouse',
+          isPrimary: true
+        })
+      )
+      await sleep(420) // 官方服务 lodash.throttle(200ms) + floating-ui 定位
+    }
+    const handleEl = () => document.querySelector('.muse-block-handle')
+    const menuEl = () => document.querySelector('.muse-block-menu')
+    const handleBtns = () => [...document.querySelectorAll('.muse-block-handle .muse-block-handle-btn')]
+    const menuItems = () => [...document.querySelectorAll('.muse-block-menu-item')]
+    const menuClick = (label) => {
+      const btn = menuItems().find((b) => b.textContent.includes(label))
+      if (!btn) return false
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      return true
+    }
+    const openBlockMenu = async (el) => {
+      await hoverBlockAt(el)
+      const btn = handleBtns()[1]
+      if (!btn) return false
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await sleep(220)
+      return !!menuEl()
+    }
+    // 追加一个受控顶层段落（末尾的顶层 P 之后插入，内容唯一便于定位）
+    const appendParagraph = async (text) => {
+      const ps = topBlocks().filter((el) => el.tagName === 'P')
+      const lastP = ps[ps.length - 1]
+      if (!lastP) return null
+      pm().focus()
+      caretEnd(lastP)
+      await sleep(220)
+      if (lastP.textContent.trim()) {
+        document.execCommand('insertText', false, '\n')
+        await sleep(240)
+      }
+      document.execCommand('insertText', false, text)
+      await sleep(280)
+      return (
+        topBlocks()
+          .filter((el) => el.tagName === 'P' && el.textContent.includes(text))
+          .pop() ?? null
+      )
+    }
+    const findTarget = () =>
+      topBlocks()
+        .filter((el) => el.tagName === 'P' && el.textContent.includes('notion target'))
+        .pop() ?? null
+
+    const nt = await appendParagraph('notion target')
+    results.blockTargetTyped = !!nt
+    if (nt) {
+      await hoverBlockAt(nt)
+      const h = handleEl()
+      results.blockHandleShows = !!h && h.dataset.show === 'true' && getComputedStyle(h).display !== 'none'
+      const opened = await openBlockMenu(nt)
+      const m = menuEl()
+      results.blockMenuOpens = opened && !!m && !!m.querySelector('.muse-block-menu-group')
+      results.blockMenuHasOps =
+        !!m &&
+        ['创建副本', '复制 Markdown', '删除'].every((t) =>
+          menuItems().some((b) => b.textContent.includes(t))
+        )
+      // 遮罩点击 → 只关菜单，不动文档
+      const backdrop = document.querySelector('.fixed.inset-0.z-40')
+      if (backdrop) backdrop.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await sleep(220)
+      results.blockMenuCancels = !menuEl()
+      // 创建副本 → 块数 +1
+      const n0 = topBlocks().length
+      const dupClicked = (await openBlockMenu(findTarget())) && menuClick('创建副本')
+      await sleep(380)
+      results.blockMenuDuplicates = dupClicked && topBlocks().length === n0 + 1
+      // 删除副本 → 回到原值
+      const delClicked = (await openBlockMenu(findTarget())) && menuClick('删除')
+      await sleep(380)
+      results.blockMenuDeletes = delClicked && topBlocks().length === n0
+      // 转换为二级标题 → 再转回正文
+      const toH2 = (await openBlockMenu(findTarget())) && menuClick('二级标题')
+      await sleep(420)
+      results.blockMenuConverts = toH2 && !!pm().querySelector('h2')
+      const h2 = pm().querySelector('h2')
+      const backToP = h2 ? (await openBlockMenu(h2)) && menuClick('正文') : false
+      await sleep(420)
+      results.blockMenuConvertsBack = backToP && !pm().querySelector('h2')
+    }
+
+    // ＋：插入空段落 + 弹插入菜单；Esc 关闭；⌘Z 撤销
+    const t5 = findTarget()
+    if (t5) {
+      const nPlus = topBlocks().length
+      await hoverBlockAt(t5)
+      const plusBtn = handleBtns()[0]
+      if (plusBtn) {
+        plusBtn.dispatchEvent(
+          new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 2 })
+        )
+        plusBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+        // pointerup：解除「＋ 按下中」标记，否则手柄会拒绝后续拖拽
+        plusBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }))
+        await sleep(320)
+        results.blockPlusInserts = topBlocks().length === nPlus + 1
+        const m2 = menuEl()
+        results.blockPlusInsertMenu =
+          !!m2 &&
+          [...m2.querySelectorAll('.muse-block-menu-group')].some((g) =>
+            g.textContent.includes('插入块')
+          )
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+        await sleep(220)
+        results.blockMenuEscCloses = !menuEl()
+        pm().dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true })
+        )
+        await sleep(450)
+        results.blockPlusUndo = topBlocks().length === nPlus
+      }
+    }
+
+    // ＋ 插入菜单里选类型：新空段落变成表格（formatAt 分支）
+    const tIns = findTarget()
+    if (tIns) {
+      const tablesBefore = pm().querySelectorAll('table').length
+      await hoverBlockAt(tIns)
+      const plus2 = handleBtns()[0]
+      if (plus2) {
+        plus2.dispatchEvent(
+          new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 3 })
+        )
+        plus2.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+        plus2.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }))
+        await sleep(320)
+        const picked = menuClick('表格')
+        await sleep(450)
+        results.blockInsertTable =
+          picked && pm().querySelectorAll('table').length === tablesBefore + 1
+        // 表格块：菜单里没有「转换为」组（blockKind === 'table'）
+        const tbl = [...topBlocks()].find((el) => el.tagName === 'TABLE')
+        const openedTable = tbl ? await openBlockMenu(tbl) : false
+        const tm = menuEl()
+        results.blockTableMenuNoConvert =
+          openedTable &&
+          !!tm &&
+          ![...tm.querySelectorAll('.muse-block-menu-group')].some((g) =>
+            g.textContent.includes('转换为')
+          ) &&
+          menuItems().some((b) => b.textContent.includes('删除'))
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+        await sleep(200)
+        // 撤销插入的表格，恢复后续断言依赖的文档状态
+        pm().dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true })
+        )
+        await sleep(450)
+        results.blockInsertUndo = pm().querySelectorAll('table').length === tablesBefore
+      }
+    }
+
+    // Esc 关菜单后打字 / 菜单开着直接打字：都不能把整块内容替换掉
+    // （⠿ 的 mousedown 会留下 NodeSelection，菜单关闭时必须释放成文本光标）
+    const et = await appendParagraph('esc target')
+    results.escTargetTyped = !!et
+    if (et) {
+      const openedEsc = await openBlockMenu(et)
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      await sleep(240)
+      pm().focus()
+      document.execCommand('insertText', false, 'X')
+      await sleep(300)
+      const et2 = [...topBlocks()]
+        .filter((el) => el.tagName === 'P' && el.textContent.includes('esc target'))
+        .pop()
+      results.blockEscKeepsContent = openedEsc && !!et2 && et2.textContent.includes('esc target')
+      if (et2) {
+        const openedAgain = await openBlockMenu(et2)
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Y', bubbles: true, cancelable: true }))
+        await sleep(260)
+        const et3 = [...topBlocks()]
+          .filter((el) => el.tagName === 'P' && el.textContent.includes('esc target'))
+          .pop()
+        results.blockTypingClosesMenu = openedAgain && !menuEl()
+        results.blockTypingKeepsContent = !!et3 && et3.textContent.includes('esc target')
+      }
+    }
+
+    // ============================================================
+    // 11) 选中气泡工具条（阶段二）
+    // ============================================================
+    const tt = await appendParagraph('toolbar target')
+    results.toolbarTargetTyped = !!tt
+    if (tt) {
+      let tn = null
+      const walker = document.createTreeWalker(tt, NodeFilter.SHOW_TEXT)
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (n.textContent.includes('target')) tn = n
+      }
+      if (tn) {
+        const idx = tn.textContent.indexOf('target')
+        pm().focus()
+        const rt = document.createRange()
+        rt.setStart(tn, idx)
+        rt.setEnd(tn, idx + 6)
+        const sel2 = window.getSelection()
+        sel2.removeAllRanges()
+        sel2.addRange(rt)
+        await sleep(380) // DOM 选区 → ProseMirror 选区同步
+        const bar = document.querySelector('.muse-sel-toolbar')
+        results.selectionToolbarShows =
+          !!bar && bar.dataset.show === 'true' && getComputedStyle(bar).display !== 'none'
+        const boldBtn = [...document.querySelectorAll('.muse-sel-toolbar-btn')].find(
+          (b) => b.getAttribute('aria-label') === '加粗'
+        )
+        if (boldBtn) {
+          boldBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+          boldBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+          await sleep(480)
+        }
+        results.selectionToolbarBold = [...pm().querySelectorAll('strong')].some(
+          (s) => s.textContent === 'target'
+        )
+      }
+    }
+
+    // ============================================================
+    // 12) 多块范围选择（阶段三）：gutter 拖选 → 删除 → 撤销
+    // ============================================================
+    const rg1 = await appendParagraph('range one')
+    const rg2 = await appendParagraph('range two')
+    const rg3 = await appendParagraph('range three')
+    results.blockRangeTargetsTyped = !!(rg1 && rg2 && rg3)
+    if (rg1 && rg2 && rg3) {
+      const before = topBlocks().length
+      ensureVisible(rg3)
+      ensureVisible(rg1)
+      const sc = editorScroll()
+      const x = gutterX()
+      // down→move→up 连发不插等待：中间留空隙会被真实鼠标的 mousemove 插队
+      sc.dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: midY(rg1),
+          button: 0,
+          buttons: 1
+        })
+      )
+      window.dispatchEvent(
+        new MouseEvent('mousemove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: midY(rg3),
+          buttons: 1
+        })
+      )
+      window.dispatchEvent(
+        new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: x, clientY: midY(rg3) })
+      )
+      await sleep(260)
+      results.blockRangeSelects = pm().querySelectorAll('[data-muse-block-selected]').length === 3
+      pm().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })
+      )
+      await sleep(380)
+      results.blockRangeDeletes = topBlocks().length === before - 3
+      pm().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true })
+      )
+      await sleep(480)
+      results.blockRangeUndo = topBlocks().length === before
+    }
+
+    // ============================================================
+    // 13) 浮层在源码模式 / 导出时隐藏（不留残影）
+    // ============================================================
+    // 手柄的「隐藏」是 opacity:0 + pointer-events:none（[data-show='false']）。
+    // 不断言 opacity 数值：窗口未合成时 CSS transition 不推进（rAF 停摆），
+    // 数值会假阴性；可交互性（pointer-events）才是真正会坏掉的东西。
+    const handleVisible = () => {
+      const h = handleEl()
+      if (!h) return false
+      const cs = getComputedStyle(h)
+      return (
+        h.dataset.show === 'true' &&
+        cs.display !== 'none' &&
+        cs.pointerEvents !== 'none' &&
+        cs.visibility !== 'hidden'
+      )
+    }
+    const toolbarVisible = () => {
+      const t = document.querySelector('.muse-sel-toolbar')
+      if (!t) return false
+      const cs = getComputedStyle(t)
+      return t.dataset.show === 'true' && cs.display !== 'none' && cs.visibility !== 'hidden'
+    }
+    await hoverBlockAt(findTarget())
+    const shownBefore = handleVisible()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true, cancelable: true }))
+    await sleep(400)
+    results.overlaysHiddenInSource =
+      shownBefore &&
+      !!document.querySelector('.source-editor') &&
+      !handleVisible() &&
+      !toolbarVisible()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true, cancelable: true }))
+    await sleep(400)
+    results.sourceModeRestores = !document.querySelector('.source-editor') && !!pm()
+    document.body.classList.add('exporting')
+    await sleep(80)
+    const hExp = handleEl()
+    const tExp = document.querySelector('.muse-sel-toolbar')
+    results.exportHidesOverlays =
+      !!hExp &&
+      !!tExp &&
+      getComputedStyle(hExp).display === 'none' &&
+      getComputedStyle(tExp).display === 'none'
+    document.body.classList.remove('exporting')
+
     results.runtimeErrors = window.__errs
     results.ok =
       results.editorMounted &&
@@ -236,6 +585,36 @@
       results.sourceModeCloses &&
       results.bulletListWorks &&
       results.quoteWorks &&
+      results.blockTargetTyped &&
+      results.blockHandleShows &&
+      results.blockMenuOpens &&
+      results.blockMenuHasOps &&
+      results.blockMenuCancels &&
+      results.blockMenuDuplicates &&
+      results.blockMenuDeletes &&
+      results.blockMenuConverts &&
+      results.blockMenuConvertsBack &&
+      results.blockPlusInserts &&
+      results.blockPlusInsertMenu &&
+      results.blockMenuEscCloses &&
+      results.blockPlusUndo &&
+      results.blockInsertTable &&
+      results.blockTableMenuNoConvert &&
+      results.blockInsertUndo &&
+      results.escTargetTyped &&
+      results.blockEscKeepsContent &&
+      results.blockTypingClosesMenu &&
+      results.blockTypingKeepsContent &&
+      results.toolbarTargetTyped &&
+      results.selectionToolbarShows &&
+      results.selectionToolbarBold &&
+      results.blockRangeTargetsTyped &&
+      results.blockRangeSelects &&
+      results.blockRangeDeletes &&
+      results.blockRangeUndo &&
+      results.overlaysHiddenInSource &&
+      results.sourceModeRestores &&
+      results.exportHidesOverlays &&
       results.runtimeErrors.length === 0
     return { ok: results.ok, results }
   } catch (err) {

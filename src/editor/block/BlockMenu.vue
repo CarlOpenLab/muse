@@ -93,6 +93,13 @@ function onKey(e: KeyboardEvent): void {
     closeBlockMenu()
     return
   }
+  // 打字 / 退格：用户其实想编辑这个块 —— 关菜单（关闭钩子会把块选区释放成
+  // 文本光标），但**不**拦截本次按键，让它落到编辑器里。
+  const printable = e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey
+  if (printable || e.key === 'Backspace' || e.key === 'Delete') {
+    closeBlockMenu()
+    return
+  }
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     e.preventDefault()
     e.stopPropagation()
@@ -109,15 +116,25 @@ function onKey(e: KeyboardEvent): void {
   }
 }
 
-// 捕获阶段：菜单打开时抢在编辑器 keymap 之前处理 ↑↓/Enter/Esc
+// 捕获阶段：菜单打开时抢在编辑器 keymap 之前处理 ↑↓/Enter/Esc。
+// 另：输入法起手（中文）不走可打印 keydown，单独监听 compositionstart 关菜单
+// —— 关菜单的钩子会把块选区释放成文本光标，输入法文本才不会替换整块。
 watch(
   () => menu.value.open,
   (open) => {
-    if (open) window.addEventListener('keydown', onKey, true)
-    else window.removeEventListener('keydown', onKey, true)
+    if (open) {
+      window.addEventListener('keydown', onKey, true)
+      window.addEventListener('compositionstart', closeBlockMenu, true)
+    } else {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('compositionstart', closeBlockMenu, true)
+    }
   }
 )
-onUnmounted(() => window.removeEventListener('keydown', onKey, true))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKey, true)
+  window.removeEventListener('compositionstart', closeBlockMenu, true)
+})
 </script>
 
 <template>
@@ -125,10 +142,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
     <template v-if="menu.open">
       <div
         class="fixed inset-0 z-40"
+        data-export-hide
         @mousedown.prevent="closeBlockMenu()"
         @contextmenu.prevent="closeBlockMenu()"
       />
-      <div class="muse-block-menu fixed z-50" :style="style">
+      <div class="muse-block-menu fixed z-50" data-export-hide :style="style">
         <template v-for="(group, gi) in groups" :key="gi">
           <div class="muse-block-menu-group">{{ group.title }}</div>
           <button
