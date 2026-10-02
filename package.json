@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:web": "vite --config vite.web.config.ts",
-    "dev:go": "MYGO_DEV_URL=http://localhost:5173 go run ./muse-go",
+    "dev:go": "MYGO_DEV_URL=http://localhost:5173 go run -C muse-go .",
     "build": "pnpm build:go",
     "build:web": "vite build --config vite.web.config.ts",
     "build:go": "pnpm build:web && cd muse-go && CGO_ENABLED=0 go build -ldflags=\"-s -w\" -o Muse .",
