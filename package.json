@@ -10,9 +10,10 @@
     "dev:go": "MYGO_DEV_URL=http://localhost:5173 go run ./muse-go",
     "build": "pnpm build:go",
     "build:web": "vite build --config vite.web.config.ts",
-    "build:go": "pnpm build:web && cd muse-go && go build -o Muse .",
+    "build:go": "pnpm build:web && cd muse-go && CGO_ENABLED=0 go build -ldflags=\"-s -w\" -o Muse .",
     "typecheck": "vue-tsc --noEmit",
-    "test:agent": "node scripts/test-agent.mjs"
+    "test:agent": "node scripts/test-agent.mjs",
+    "test:e2e": "node scripts/e2e-muse.mjs"
   },
   "dependencies": {
     "@antdv-next/icons": "^1.1.1",

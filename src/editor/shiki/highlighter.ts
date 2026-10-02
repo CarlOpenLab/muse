@@ -7,7 +7,7 @@ import type { ThemedToken } from 'shiki'
  *
  * 用 `shiki/core` + 显式动态 import 指定语言/主题，Vite 只会为这些生成
  * 独立的 lazy chunk（而非 bundle-full 的全部 100+ 语言）。
- * 引擎用纯 JS 的 `createJavaScriptRegexEngine`，无需加载 wasm，最适合 Electron。
+ * 引擎用纯 JS 的 `createJavaScriptRegexEngine`，无需加载 wasm，最适合 WebView / 浏览器。
  *
  * - `createHighlighterCore` 异步拉取语法/主题数据；
  * - 一次性加载全部 6 套配套主题（与 useTheme 的 THEMES 注册表对应），切换时仅改

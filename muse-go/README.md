@@ -34,17 +34,29 @@ pnpm dev:go      # 终端 2：MYGO_DEV_URL=http://localhost:5173 go run ./muse-g
 ## 构建
 
 ```bash
-pnpm build       # = build:go：构建前端产物并产出 muse-go/Muse 单二进制（约 23MB，含前端）
+pnpm build       # = build:go：构建前端产物并产出 muse-go/Muse 单二进制（约 18MB，含前端）
 pnpm build:web   # 仅前端（muse-go/frontend/dist）
-pnpm build:go    # 同上，产出单二进制
+pnpm build:go    # 同上，产出单二进制（CGO_ENABLED=0 + -ldflags="-s -w"）
 ```
 
-二进制带调试符号；需要发布体积可加 `-ldflags="-s -w"`（约 18MB）。
+需要调试符号时直接 `go build -o Muse .`（约 23MB）。
 `mygo build`（dmg/签名/公证/自动更新）尚未配置。
+
+## e2e 冒烟测试
+
+```bash
+pnpm test:e2e              # 构建后启动（MUSE_E2E=1），断言结果打在 stdout
+node scripts/e2e-muse.mjs --no-build   # 用现有二进制直接跑
+```
+
+`muse-go/e2e.go` 在 MUSE_E2E=1 时把用户数据（含「文档」目录）指向一次性临时目录，
+页面加载完成后注入 `muse-go/e2e/assertions.js`（21 项断言：编辑器挂载 / IPC 桥 /
+标题 / 加粗 / 数学块与行内公式 / 表格与右键菜单 / 源代码模式 / 专注模式 / 列表与引用），
+以 0/1 退出。需要图形界面（会短暂弹出窗口），不适合无头 CI。
 
 ## 已知待验行为（相对原 Electron 版）
 
 - 中文 IME 在 WKWebView 的表现需实测（ProseMirror 在 WebKit 有已知 composition 差异）
 - 拖拽打开文件：桥按文件名匹配原生 onFileDrop 的路径，两事件时序未验证
 - 文件树排序：Go 按字节序（原 Electron 按 localeCompare(zh-CN) 拼音）
-- 原基于 Electron 的 e2e 冒烟脚本已移除，WebView 自动化待补
+- 文件树 / 打开文件夹等对话框链路尚无自动化（e2e 目前不覆盖，需要可注入的选目录夹具）

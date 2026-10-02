@@ -35,6 +35,8 @@ func main() {
 	app := mygo.App
 	// 关键：先设置应用名——决定用户数据目录，macOS 菜单栏 / Dock 也用它
 	app.SetName("Muse")
+	// e2e 模式（MUSE_E2E=1）：用户数据改指临时目录，须在读取用户数据之前
+	e2ePrepareUserData()
 
 	dist, err := fs.Sub(frontendDist, "frontend/dist")
 	if err != nil {
@@ -93,6 +95,9 @@ func openWindow() {
 
 	buildMenu(win)
 	services.RebuildMenu = func() { buildMenu(win) }
+
+	// e2e 模式：页面加载完成后注入断言脚本（见 e2e.go）
+	e2eAttach(win)
 
 	// 关闭：脏则拦截，交渲染进程确认；强制关闭（确认后）放行
 	win.OnClose(func(e *mygo.CloseEvent) {

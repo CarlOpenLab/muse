@@ -53,8 +53,11 @@ func goStr(p uintptr) string {
 		return ""
 	}
 	var buf []byte
+	// p 来自 objc_msgSend（C 指针），转 unsafe.Pointer 是合法的；
+	// go vet 的 unsafeptr 检查无法区分来源，这里会有一条已知误报。
+	base := unsafe.Pointer(p)
 	for i := uintptr(0); ; i++ {
-		b := *(*byte)(unsafe.Pointer(p + i))
+		b := *(*byte)(unsafe.Add(base, i))
 		if b == 0 {
 			return string(buf)
 		}

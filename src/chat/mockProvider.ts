@@ -95,7 +95,7 @@ function buildReply(userMessage: string): string {
     return [
       '## Muse 的技术架构',
       '',
-      'Muse 是一个 **Electron + Vue 3** 桌面应用，核心链路如下：',
+      'Muse 是一个 **MyGo（Go + 系统 WebView）+ Vue 3** 桌面应用，核心链路如下：',
       '',
       '1. **编辑器内核** — Milkdown 7（ProseMirror），开箱即 WYSIWYG markdown',
       '2. **代码高亮** — Shiki 4 单例 highlighter，代码块失焦 / 防抖重渲染',

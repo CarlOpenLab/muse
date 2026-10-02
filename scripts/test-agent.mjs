@@ -1,5 +1,5 @@
 /**
- * 打包 agent-test-entry.ts 并在 Node 中运行（无需 Electron / 浏览器）。
+ * 打包 agent-test-entry.ts 并在 Node 中运行（无需浏览器 / 桌面外壳）。
  * 用法：node scripts/test-agent.mjs
  */
 import { createRequire } from 'node:module'

@@ -88,8 +88,9 @@ pnpm dev           # 一键开发：vite dev server + go run（MyGo 窗口，前
 
 ```bash
 pnpm typecheck     # 类型检查（vue-tsc）
-pnpm build         # = build:go：前端产物 + muse-go/Muse 单二进制
+pnpm build         # = build:go：前端产物 + muse-go/Muse 单二进制（~18MB）
 pnpm build:web     # 仅前端 → muse-go/frontend/dist
+pnpm test:e2e      # e2e 冒烟（构建 + 启动应用跑 21 项断言，需图形界面）
 pnpm test:agent    # agent loop 解析逻辑单测（纯 Node）
 ```
 
@@ -141,7 +142,7 @@ muse/
 | Phase 5 | AI 流式输出（`@shikijs/stream`，未来主线） | ⏳ 规划中 |
 | Phase 4.6 | **主壳迁移 MyGo**（Go + 系统 WebView 替换 Electron，前端与 IPC 通道复用） | ✅ |
 
-单测：`pnpm test:agent`（agent loop 解析逻辑）。原基于 Electron 的 e2e 冒烟脚本（`test:e2e-typora` / `test:e2e`）随主壳迁移移除，WebView 自动化待补。
+单测：`pnpm test:agent`（agent loop 解析逻辑）；e2e 冒烟：`pnpm test:e2e`（MyGo 版，构建后启动应用跑 21 项 DOM/IPC 断言，需图形界面）。原 Electron 版 e2e 脚本已随主壳迁移移除，可在 git 历史中找回。
 
 详见 [PLAN.md](./PLAN.md)。
 
@@ -209,8 +210,9 @@ Other scripts:
 
 ```bash
 pnpm typecheck     # type checking (vue-tsc)
-pnpm build         # = build:go: frontend bundle + muse-go/Muse single binary
+pnpm build         # = build:go: frontend bundle + muse-go/Muse single binary (~18MB)
 pnpm build:web     # frontend only → muse-go/frontend/dist
+pnpm test:e2e      # e2e smoke (build + launch the app, 21 assertions; needs a GUI)
 pnpm test:agent    # agent-loop parsing unit tests (plain Node)
 ```
 
