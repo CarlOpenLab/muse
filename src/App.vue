@@ -16,6 +16,7 @@ import { useDocStats } from './composables/useDocStats'
 import { useOutline } from './composables/useOutline'
 import { useSearch } from './composables/useSearch'
 import { useSettings } from './composables/useSettings'
+import { useLinkModal } from './composables/useLinkModal'
 import { dispatchEditorInsert, dispatchEditorReplaceSelection } from './composables/useEditorControl'
 import StatusBar from './components/StatusBar.vue'
 import SearchPanel from './components/SearchPanel.vue'
@@ -26,6 +27,7 @@ import SourceEditor from './components/SourceEditor.vue'
 import FileTreePanel from './components/FileTreePanel.vue'
 import { useViewMode, type ViewModeState } from './composables/useViewMode'
 import { dispatchFormat, dispatchSelectCell, dispatchInsertImage } from './composables/useEditorControl'
+import { clearBlockRange } from './editor/block/blockSelectionState'
 import type { FormatAction } from './editor/formatCommands'
 
 const { isDark, toggle, themeId, currentTheme } = useTheme()
@@ -445,6 +447,10 @@ onMounted(() => {
   // 树内重命名当前文档 → 同步路径（原文件监听跟随新路径）
   window.addEventListener('muse:tree-renamed', onTreeRenamed)
 
+  // 编辑器内 ⌘K / Ctrl⌘I（typoraKeymap 派发）→ 链接 / 插入图片
+  window.addEventListener('muse:request-link', onRequestLink)
+  window.addEventListener('muse:request-image', onRequestImage)
+
   // 查找快捷键：⌘F 打开、⌘G / ⇧⌘G 下一个/上一个、Esc 关闭
   // Typora 视图快捷键：⌘/ 源代码模式、F8 专注、F9 打字机
   window.addEventListener('keydown', (e) => {
@@ -478,6 +484,8 @@ onUnmounted(() => {
   offMenu?.()
   offRequestClose?.()
   window.removeEventListener('muse:tree-renamed', onTreeRenamed)
+  window.removeEventListener('muse:request-link', onRequestLink)
+  window.removeEventListener('muse:request-image', onRequestImage)
 })
 
 watch(title, (t) => {
@@ -612,17 +620,20 @@ function onCtxClipboard(op: 'cut' | 'copy' | 'paste'): void {
   void window.muse?.invoke('app:webctx', op)
 }
 
-// ===== 链接弹窗（⌘K / 菜单 / 右键）=====
-const linkModalOpen = ref(false)
-const linkText = ref('')
-
-function openLinkModal(): void {
-  linkText.value = String(window.getSelection() ?? '').trim()
-  linkModalOpen.value = true
-}
+// ===== 链接弹窗（⌘K / 菜单 / 右键 / 气泡工具条）=====
+// 状态在模块级单例：选中气泡工具条（编辑器内部）也要能打开它
+const { linkModalOpen, linkText, openLinkModal } = useLinkModal()
 
 function applyLinkHref(href: string): void {
   dispatchFormat('link', href)
+}
+
+// 编辑器内快捷键（typoraKeymap 派发窗口事件）：⌘K 链接、Ctrl⌘I 插图
+function onRequestLink(): void {
+  openLinkModal()
+}
+function onRequestImage(): void {
+  void insertImageFromDialog()
 }
 
 // ===== 插入图片：选文件 → 拷入 assets/ → 光标处插入 =====
@@ -633,6 +644,7 @@ async function insertImageFromDialog(): Promise<void> {
 
 // ===== 导出（Typora「文件 > 导出」）=====
 async function exportPdf(): Promise<void> {
+  clearBlockRange() // 先把多块选中的高亮清掉，PDF 里不留底色
   // exporting 类：隐藏侧栏/状态栏，正文占满页宽（见 base.css）
   document.body.classList.add('exporting')
   try {
@@ -664,6 +676,7 @@ const EXPORT_CSS = `
 `
 
 async function exportHtml(): Promise<void> {
+  clearBlockRange() // 多块选中高亮不进导出 HTML
   const bodyHtml = editorScrollRef.value?.querySelector('.ProseMirror')?.innerHTML ?? ''
   const titleHtml = titleText.value.trim() ? `<h1>${escapeHtml(titleText.value.trim())}</h1>` : ''
   const html = `<!doctype html>

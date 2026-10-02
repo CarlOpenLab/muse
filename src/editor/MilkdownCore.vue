@@ -9,6 +9,7 @@ import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { history } from '@milkdown/plugin-history'
 import { clipboard } from '@milkdown/plugin-clipboard'
 import { trailing } from '@milkdown/plugin-trailing'
+import { block, blockConfig } from '@milkdown/plugin-block'
 import { replaceAll, callCommand } from '@milkdown/utils'
 import { Slice } from '@milkdown/prose/model'
 import { TextSelection } from '@milkdown/prose/state'
@@ -28,6 +29,9 @@ import { typoraKeymap } from './typoraKeymap'
 import { imagePastePlugin } from './imagePastePlugin'
 import { focusModePlugin } from './focusModePlugin'
 import { typewriterPlugin } from './typewriterPlugin'
+import { BlockHandleView } from './block/blockChromePlugin'
+import { blockSelectionPlugin } from './block/blockSelectionPlugin'
+import { selectionToolbar } from './selectionToolbarPlugin'
 import { museMath } from './math/mathPlugin'
 import { runFormat, applyLink, type FormatAction } from './formatCommands'
 import { useSearch } from '../composables/useSearch'
@@ -98,6 +102,17 @@ const { get, loading } = useEditor((root) =>
     .use(imagePastePlugin)
     .use(focusModePlugin)
     .use(typewriterPlugin)
+    // Notion 式块悬浮手柄：filterNodes 只取顶层块（表格/引用/代码块都能拿手柄），
+    // view 注入自绘手柄 + 菜单（blockChromePlugin）
+    .use(block)
+    .config((ctx) => {
+      ctx.set(blockConfig.key, { filterNodes: (pos) => pos.depth === 0 })
+      ctx.set(block.key, { view: (view) => new BlockHandleView(ctx, view) })
+    })
+    // 选中文字气泡工具条（加粗/斜体/删除线/行内代码/链接）
+    .use(selectionToolbar)
+    // 多块范围选择（gutter 拖选整片块：删除/复制/剪切/组拖拽）
+    .use(blockSelectionPlugin)
 )
 
 // 外部修改 markdown（如打开文件）时同步进编辑器

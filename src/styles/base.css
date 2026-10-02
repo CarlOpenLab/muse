@@ -701,14 +701,17 @@ body {
 }
 
 /* ===== 窗口拖拽区（macOS 无边框窗口）=====
- * 顶栏整条可拖动窗口；其中的按钮 / 输入必须显式排除，否则点不动。 */
+ * 顶栏整条可拖动窗口；其中的按钮 / 输入必须显式排除，否则点不动。
+ * -webkit-app-region 是 Chromium（Electron）；--app-region 是 MyGo。 */
 .app-drag {
+  --app-region: drag;
   -webkit-app-region: drag;
 }
 .app-no-drag,
 .app-drag button,
 .app-drag input,
 .app-drag a {
+  --app-region: no-drag;
   -webkit-app-region: no-drag;
 }
 
@@ -997,6 +1000,156 @@ body {
 }
 .muse-math-editor:focus {
   border-color: var(--fg-ghost, var(--fg-dim));
+}
+
+/* ---- Notion 式块手柄 / 块菜单 ----
+ * 手柄浮层由 blockChromePlugin 挂到 body（.muse-block-layer），
+ * 用 fixed 定位躲开 .editor-scroll 的 overflow 裁切。 */
+.muse-block-layer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+.muse-block-handle {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: auto;
+  user-select: none;
+  transition: opacity 120ms ease;
+}
+.muse-block-handle[data-show='false'] {
+  opacity: 0;
+  pointer-events: none;
+}
+.muse-block-handle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+.muse-block-handle-btn:hover {
+  background: var(--bg-hover, color-mix(in srgb, var(--fg) 8%, transparent));
+  color: var(--fg);
+}
+/* 点选整块（NodeSelection）时 nord 默认是 2px 蓝框，压成淡底圆角 */
+.milkdown-theme-nord.prose .ProseMirror-selectednode {
+  outline: none;
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  border-radius: 6px;
+}
+.muse-block-menu {
+  min-width: 200px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.25);
+  font-size: 13px;
+  user-select: none;
+}
+.muse-block-menu-group {
+  padding: 6px 8px 4px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+.muse-block-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.muse-block-menu-item.is-active {
+  background: var(--bg-hover, color-mix(in srgb, var(--fg) 8%, transparent));
+}
+.muse-block-menu-item.is-danger {
+  color: #e5484d;
+}
+.muse-block-menu-item.is-danger.is-active {
+  background: color-mix(in srgb, #e5484d 12%, transparent);
+}
+.muse-block-menu-shortcut {
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+/* ===== 多块范围选择（blockSelectionPlugin）=====
+ * 用 data 属性而非 class：专注模式的 muse-dim 也是节点装饰，两者互不覆盖。
+ */
+.milkdown-theme-nord.prose [data-muse-block-selected] {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* ===== 选中气泡工具条（selectionToolbarPlugin）=====
+ * 定位容器由 TooltipProvider 写 left/top 与 data-show；
+ * 视觉盒子是内部的 .muse-sel-toolbar-inner。
+ */
+.muse-sel-toolbar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;
+}
+.muse-sel-toolbar[data-show='false'] {
+  display: none;
+}
+.muse-sel-toolbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.3);
+  user-select: none;
+}
+.muse-sel-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 0;
+}
+.muse-sel-toolbar-btn:hover {
+  background: var(--bg-hover, color-mix(in srgb, var(--fg) 8%, transparent));
+  color: var(--fg);
+}
+.muse-sel-toolbar-btn.is-active {
+  background: color-mix(in srgb, var(--fg) 12%, transparent);
+  color: var(--fg);
 }
 
 /* ---- 导出 PDF / HTML：隐藏外壳，正文占满 ---- */

@@ -1,6 +1,7 @@
 import { $prose } from '@milkdown/utils'
 import { Plugin } from '@milkdown/prose/state'
 import { setSelectionSnapshot } from '../composables/useEditorSelection'
+import { hasBlockRange } from './block/blockSelectionState'
 
 /**
  * 选区跟踪插件：编辑器里选中文字时，把 {from, to, text} 快照到模块级单例，
@@ -8,11 +9,13 @@ import { setSelectionSnapshot } from '../composables/useEditorSelection'
  *
  * 注意：即使编辑器失焦，ProseMirror 的 selection 仍保留在 state 中，
  * 用户去侧栏点快捷操作时选区快照依然有效。
+ * 多块范围选择激活时让位 —— 快照由 blockSelectionPlugin 独占写入（整片范围）。
  */
 export const selectionPlugin = $prose(() =>
   new Plugin({
     view: (view) => ({
       update: (view) => {
+        if (hasBlockRange()) return
         const { from, to } = view.state.selection
         if (from !== to) {
           const text = view.state.doc.textBetween(from, to, '\n').trim()
