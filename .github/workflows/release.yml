@@ -1,4 +1,4 @@
-name: Release Electron app
+name: Release Muse app
 
 on:
   push:
@@ -27,11 +27,14 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            platform: mac
             artifact: macos
+            output: Muse
           - os: windows-latest
-            platform: win
             artifact: windows
+            output: Muse.exe
+          - os: ubuntu-latest
+            artifact: linux
+            output: Muse
 
     steps:
       - name: Check out source
@@ -51,6 +54,12 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: muse-go/go.mod
+          cache-dependency-path: muse-go/go.sum
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -61,27 +70,18 @@ jobs:
         run: |
           node -e "const pkg=require('./package.json'); const tag=process.env.RELEASE_TAG; const expected='v'+pkg.version; if (tag !== expected) { console.error('Release tag '+tag+' does not match package.json version '+pkg.version); process.exit(1); }"
 
-      - name: Build application
-        run: pnpm run build
+      - name: Build frontend
+        run: pnpm run build:web
 
-      - name: Package macOS app
-        if: matrix.platform == 'mac'
-        run: pnpm exec electron-builder --mac --x64 --publish never
+      - name: Build binary
+        working-directory: muse-go
+        run: go build -ldflags="-s -w" -o ${{ matrix.output }} .
 
-      - name: Package Windows app
-        if: matrix.platform == 'win'
-        run: pnpm exec electron-builder --win --x64 --publish never
-
-      - name: Upload packaged app
+      - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}-release
-          path: |
-            dist/*.dmg
-            dist/*.zip
-            dist/*.exe
-            dist/*.blockmap
-            dist/latest*.yml
+          path: muse-go/${{ matrix.output }}
           if-no-files-found: error
           retention-days: 7
 
@@ -90,7 +90,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download packaged apps
+      - name: Download binaries
         uses: actions/download-artifact@v4
         with:
           path: release-assets

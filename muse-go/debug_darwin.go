@@ -1,0 +1,113 @@
+//go:build darwin
+
+package main
+
+// 调试工具：MUSE_DEBUG_MENU=1 时，窗口打开 5 秒后程序化触发「文件 -> 新建」
+// 菜单项的原生动作，等价于用户点击。用来在不依赖手动操作的情况下验证
+// macOS 菜单接线（NSMenuItem -> mygoMenuItemClicked: -> Go Click）是否通畅：
+// 触发成功则日志出现 [muse] menu action: new。
+
+import (
+	"log"
+	"time"
+	"unsafe"
+
+	"github.com/ebitengine/purego"
+)
+
+var (
+	msgSend0 func(obj, sel uintptr) uintptr
+	msgSend1 func(obj, sel, a1 uintptr) uintptr
+)
+
+func init() {
+	lib, err := purego.Dlopen("/System/Library/Frameworks/AppKit.framework/AppKit", purego.RTLD_LAZY)
+	if err != nil {
+		log.Printf("[muse] debug menu: %v", err)
+		return
+	}
+	var getClass func(name *byte) uintptr
+	var regSel func(name *byte) uintptr
+	purego.RegisterLibFunc(&getClass, lib, "objc_getClass")
+	purego.RegisterLibFunc(&regSel, lib, "sel_registerName")
+	purego.RegisterLibFunc(&msgSend0, lib, "objc_msgSend")
+	purego.RegisterLibFunc(&msgSend1, lib, "objc_msgSend")
+	objcGetClass = getClass
+	selRegisterName = regSel
+}
+
+var (
+	objcGetClass    func(name *byte) uintptr
+	selRegisterName func(name *byte) uintptr
+)
+
+func cstr(s string) *byte {
+	b := append([]byte(s), 0)
+	return &b[0]
+}
+
+func sel(name string) uintptr { return selRegisterName(cstr(name)) }
+
+func goStr(p uintptr) string {
+	if p == 0 {
+		return ""
+	}
+	var buf []byte
+	for i := uintptr(0); ; i++ {
+		b := *(*byte)(unsafe.Pointer(p + i))
+		if b == 0 {
+			return string(buf)
+		}
+		buf = append(buf, b)
+	}
+}
+
+func nsTitle(item uintptr) string {
+	ns := msgSend0(item, sel("title"))
+	return goStr(msgSend0(ns, sel("UTF8String")))
+}
+
+// findItem 在 menu 里找标题为 title 的菜单项，返回 (item, index)。
+func findItem(menu uintptr, title string) (uintptr, int) {
+	count := msgSend0(menu, sel("numberOfItems"))
+	for i := uintptr(0); i < count; i++ {
+		item := msgSend1(menu, sel("itemAtIndex:"), i)
+		if item != 0 && nsTitle(item) == title {
+			return item, int(i)
+		}
+	}
+	return 0, -1
+}
+
+// debugTriggerMenu 程序化触发 mainMenu 里 menuTitle -> itemTitle 的动作。
+func debugTriggerMenu(menuTitle, itemTitle string) {
+	if objcGetClass == nil {
+		return
+	}
+	app := msgSend0(objcGetClass(cstr("NSApplication")), sel("sharedApplication"))
+	mainMenu := msgSend0(app, sel("mainMenu"))
+	if mainMenu == 0 {
+		log.Printf("[muse] debug menu: no mainMenu")
+		return
+	}
+	top, _ := findItem(mainMenu, menuTitle)
+	if top == 0 {
+		log.Printf("[muse] debug menu: %q not found", menuTitle)
+		return
+	}
+	sub := msgSend0(top, sel("submenu"))
+	_, idx := findItem(sub, itemTitle)
+	if idx < 0 {
+		log.Printf("[muse] debug menu: %q not found in %q", itemTitle, menuTitle)
+		return
+	}
+	log.Printf("[muse] debug menu: triggering %q -> %q", menuTitle, itemTitle)
+	msgSend1(sub, sel("performActionForItemAtIndex:"), uintptr(idx))
+}
+
+// scheduleDebugMenuTrigger 在 MUSE_DEBUG_MENU=1 时挂一个 5 秒后的自触发。
+func scheduleDebugMenuTrigger() {
+	time.AfterFunc(5*time.Second, func() {
+		debugTriggerMenu("文件", "新建")
+	})
+}

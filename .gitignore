@@ -1,8 +1,12 @@
 node_modules/
-out/
 dist/
 .vite/
 *.log
 .DS_Store
 Untitled*.md
 未命名*.md
+
+# MyGo 构建产物
+muse-go/Muse
+muse-go/Muse.exe
+muse-go/build/

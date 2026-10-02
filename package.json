@@ -2,21 +2,17 @@
   "name": "muse",
   "version": "0.1.2",
   "description": "Muse · Typora 式所见即所得 Markdown 编辑器（Shiki 高亮 + Milkdown 7）",
-  "main": "./out/main/index.js",
   "author": "",
   "license": "MIT",
   "scripts": {
-    "predev": "node scripts/fix-dock-types.mjs",
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite --config vite.web.config.ts",
+    "dev:go": "MYGO_DEV_URL=http://localhost:5173 go run ./muse-go",
+    "build": "pnpm build:go",
+    "build:web": "vite build --config vite.web.config.ts",
+    "build:go": "pnpm build:web && cd muse-go && go build -o Muse .",
     "typecheck": "vue-tsc --noEmit",
-    "test:agent": "node scripts/test-agent.mjs",
-    "test:e2e": "npm run build && node scripts/e2e-agent.mjs",
-    "test:e2e-typora": "npm run build && node scripts/e2e-typora.mjs",
-    "build:mac": "electron-vite build && electron-builder --mac",
-    "build:win": "electron-vite build && electron-builder --win",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "test:agent": "node scripts/test-agent.mjs"
   },
   "dependencies": {
     "@antdv-next/icons": "^1.1.1",
@@ -43,6 +39,7 @@
     "antdv-next": "^1.5.0",
     "antdv-style": "1.0.0-rc.1",
     "katex": "^0.18.4",
+    "mygo-runtime": "^0.1.22",
     "remark-math": "^6.0.0",
     "shiki": "^4.4.2",
     "unocss": "^66.7.5"
@@ -51,9 +48,6 @@
     "@antdv-next/auto-import-resolver": "^1.1.0",
     "@types/node": "^22.10.0",
     "@vitejs/plugin-vue": "^6.0.0",
-    "electron": "^43.0.0",
-    "electron-builder": "^26.0.0",
-    "electron-vite": "^5.0.0",
     "typescript": "^5.7.0",
     "unplugin-vue-components": "^32.1.0",
     "vite": "^7.0.0",
@@ -61,10 +55,8 @@
     "vue-tsc": "^3.0.0"
   },
   "allowScripts": {
-    "electron@43.3.0": true,
     "esbuild@0.25.12": true,
     "esbuild@0.28.1": true,
-    "electron-winstaller@5.4.0": true,
     "fsevents@2.3.3": true
   }
 }

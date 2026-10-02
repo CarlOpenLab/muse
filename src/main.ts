@@ -1,3 +1,6 @@
+// 必须第一个 import：安装 window.muse 桥（MyGo 环境），
+// 业务模块顶层有 window.muse?.on(...) 订阅，晚于它们求值会丢监听。
+import './platform/mygoBridge'
 import { createApp } from 'vue'
 import 'antdv-next/dist/reset.css'
 import '@antdv-next/x-markdown/themes/index.css'

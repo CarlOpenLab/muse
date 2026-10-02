@@ -9,13 +9,13 @@
 <h1 align="center">Muse</h1>
 
 <p align="center">
-  <strong>WYSIWYG Markdown 桌面编辑器</strong> · Shiki 实时高亮 · Electron + Vue 3
+  <strong>WYSIWYG Markdown 桌面编辑器</strong> · Shiki 实时高亮 · Go (MyGo) + Vue 3
 </p>
 
 <p align="center">
   <a href="#-功能特性"><img src="https://img.shields.io/badge/文档-中文-blue" alt="中文"></a>
   <a href="#-features"><img src="https://img.shields.io/badge/README-English-blue" alt="English"></a>
-  <img src="https://img.shields.io/badge/Electron-43-47848F" alt="Electron 43">
+  <img src="https://img.shields.io/badge/MyGo-Go%20%2B%20WebView-00ADD8" alt="MyGo">
   <img src="https://img.shields.io/badge/Vue-3.5-42B883" alt="Vue 3.5">
   <img src="https://img.shields.io/badge/Milkdown-7-2E3440" alt="Milkdown 7">
   <img src="https://img.shields.io/badge/Shiki-4-1F2328" alt="Shiki 4">
@@ -68,54 +68,53 @@
 
 ## 🧱 技术栈
 
-| 层     | 选型                                                                |
-| ----- | ----------------------------------------------------------------- |
-| 外壳    | Electron 43                                                       |
-| 构建    | electron-vite 5（HMR，main / preload / renderer 一体化）                |
-| UI    | Vue 3.5 + TypeScript + UnoCSS                                     |
-| 编辑器内核 | Milkdown 7（基于 ProseMirror，commonmark + GFM 预设）                    |
-| 代码高亮  | Shiki 4（单例 highlighter + inline decoration）                       |
-| 打包    | electron-builder（macOS dmg / Windows nsis / Linux AppImage + deb） |
+| 层     | 选型                                             |
+| ----- | ---------------------------------------------- |
+| 外壳    | MyGo（Go 1.27 + 系统 WebView + 类型安全 IPC）           |
+| 构建    | Vite 7（前端 HMR；`pnpm dev` 并行起前端与 Go 窗口）          |
+| UI    | Vue 3.5 + TypeScript + UnoCSS                  |
+| 编辑器内核 | Milkdown 7（基于 ProseMirror，commonmark + GFM 预设） |
+| 代码高亮  | Shiki 4（单例 highlighter + inline decoration）    |
+| 分发    | 单二进制（`pnpm build:go`）；mygo build 打包待配置         |
 
 ## 🚀 快速开始
 
 ```bash
-npm install
-npm run dev        # 启动开发模式（HMR）
+pnpm install
+pnpm dev           # 一键开发：vite dev server + go run（MyGo 窗口，前端 HMR）
 ```
 
 其他常用命令：
 
 ```bash
-npm run typecheck  # 类型检查（vue-tsc）
-npm run build      # 构建渲染产物到 out/
-npm run preview    # 预览构建产物
-npm run build:mac  # 打包 macOS dmg / zip
-npm run build:win  # 打包 Windows nsis
-npm run build:linux# 打包 Linux AppImage / deb
+pnpm typecheck     # 类型检查（vue-tsc）
+pnpm build         # = build:go：前端产物 + muse-go/Muse 单二进制
+pnpm build:web     # 仅前端 → muse-go/frontend/dist
+pnpm test:agent    # agent loop 解析逻辑单测（纯 Node）
 ```
 
 ### GitHub Actions 发布
 
-推送与 `package.json` 版本一致的标签（例如 `v0.1.2`）即可自动构建并发布 macOS 和 Windows 安装包：
+推送与 `package.json` 版本一致的标签（例如 `v0.1.2`）即可自动构建各平台单二进制并发布：
 
 ```bash
 git tag v0.1.2
 git push origin v0.1.2
 ```
 
-工作流位于 `.github/workflows/release.yml`。它会在 macOS runner 上生成 x64 的 `dmg` / `zip`，在 Windows runner 上生成 x64 的 `nsis` 安装程序，然后将所有产物上传到同一个 GitHub Release。仓库的 Actions 设置需要允许 workflow 写入 Releases（工作流已声明 `contents: write` 权限）。
+工作流位于 `.github/workflows/release.yml`。它在 macOS / Windows / Linux runner 上各自执行 `pnpm build:web` + `go build`，产出对应平台的可执行文件并上传到同一个 GitHub Release。仓库的 Actions 设置需要允许 workflow 写入 Releases（工作流已声明 `contents: write` 权限）。
 
 ## 📁 目录结构
 
 ```
 muse/
-├── electron/                 # 主进程
-│   ├── main.ts               # 窗口生命周期 / 原生菜单 / 快捷键
-│   ├── preload.ts            # 安全 IPC 桥（contextIsolation）
-│   └── services/fs.ts        # 打开 / 保存 / 最近文件 IPC
-├── src/                      # 渲染进程
+├── muse-go/                  # 主进程（Go + MyGo）
+│   ├── main.go               # 窗口生命周期 / Typora 菜单 / 快捷键
+│   ├── services/             # files / ai / export / appsvc（含全部 Go→前端事件）
+│   └── frontend/dist         # pnpm build:web 产物（go:embed 内嵌）
+├── src/                      # 前端（Vue 3）
 │   ├── App.vue               # 应用骨架（侧栏 / 画布 / 状态栏）
+│   ├── platform/mygoBridge.ts# window.muse 桥（IPC 通道 → Go 服务方法）
 │   ├── editor/               # 编辑器
 │   │   ├── MilkdownCore.vue  # Milkdown 装配（commonmark + GFM + 插件）
 │   │   ├── codeBlockView.ts  # 代码块 node view（语言输入框）
@@ -125,7 +124,7 @@ muse/
 │   ├── composables/          # 文件 / 主题 / 搜索 / 设置 / 统计 / 大纲
 │   └── styles/base.css       # 主题变量 + 编辑器排版
 ├── resources/                # 应用图标
-├── electron-builder.yml      # 打包配置
+├── vite.web.config.ts        # 前端构建配置
 └── uno.config.ts             # UnoCSS 配置
 ```
 
@@ -133,15 +132,16 @@ muse/
 
 | 阶段      | 内容                              | 状态    |
 | ------- | ------------------------------- | ----- |
-| Phase 0 | electron-vite + Vue 3 + TS 脚手架  | ✅     |
+| Phase 0 | Vite + Vue 3 + TS 脚手架            | ✅     |
 | Phase 1 | Milkdown 编辑器内核（WYSIWYG）         | ✅     |
 | Phase 2 | Shiki 代码块实时高亮                   | ✅     |
 | Phase 3 | 文件 I/O 与应用外壳（菜单 / 拖拽 / 最近文件）    | ✅     |
 | Phase 4 | 编辑体验打磨（主题 / 大纲 / 查找 / 统计 / 设置）  | ✅     |
 | Phase 4.5 | **Typora 交互对齐**（快捷键 / 段落与格式菜单 / 右键菜单 / 表格编辑 / 数学公式 / 图片粘贴 / 源代码模式 / 专注与打字机 / 导出 PDF·HTML） | ✅ |
 | Phase 5 | AI 流式输出（`@shikijs/stream`，未来主线） | ⏳ 规划中 |
+| Phase 4.6 | **主壳迁移 MyGo**（Go + 系统 WebView 替换 Electron，前端与 IPC 通道复用） | ✅ |
 
-Typora 对齐的冒烟测试：`npm run test:e2e-typora`（标题/格式/数学/表格/右键/源代码/专注等）；AI Agent 回归：`npm run test:e2e`。
+单测：`pnpm test:agent`（agent loop 解析逻辑）。原基于 Electron 的 e2e 冒烟脚本（`test:e2e-typora` / `test:e2e`）随主壳迁移移除，WebView 自动化待补。
 
 详见 [PLAN.md](./PLAN.md)。
 
@@ -189,54 +189,53 @@ Typora 对齐的冒烟测试：`npm run test:e2e-typora`（标题/格式/数学/
 
 ## 🧱 Tech Stack
 
-| Layer             | Choice                                                             |
-| ----------------- | ------------------------------------------------------------------ |
-| Shell             | Electron 43                                                        |
-| Build             | electron-vite 5 (HMR, unified main / preload / renderer)           |
-| UI                | Vue 3.5 + TypeScript + UnoCSS                                      |
-| Editor core       | Milkdown 7 (ProseMirror, commonmark + GFM presets)                 |
-| Code highlighting | Shiki 4 (singleton highlighter + inline decorations)               |
-| Packaging         | electron-builder (macOS dmg / Windows nsis / Linux AppImage + deb) |
+| Layer             | Choice                                                      |
+| ----------------- | ----------------------------------------------------------- |
+| Shell             | MyGo (Go 1.27 + system WebView + type-safe IPC)             |
+| Build             | Vite 7 (frontend HMR; `pnpm dev` runs vite + the Go window) |
+| UI                | Vue 3.5 + TypeScript + UnoCSS                               |
+| Editor core       | Milkdown 7 (ProseMirror, commonmark + GFM presets)          |
+| Code highlighting | Shiki 4 (singleton highlighter + inline decorations)        |
+| Distribution      | Single binary (`pnpm build:go`); `mygo build` packaging TBD |
 
 ## 🚀 Quick Start
 
 ```bash
-npm install
-npm run dev        # launch dev mode with HMR
+pnpm install
+pnpm dev           # vite dev server + go run (MyGo window, frontend HMR)
 ```
 
 Other scripts:
 
 ```bash
-npm run typecheck  # type checking (vue-tsc)
-npm run build      # build renderer output to out/
-npm run preview    # preview the build
-npm run build:mac  # package macOS dmg / zip
-npm run build:win  # package Windows nsis
-npm run build:linux# package Linux AppImage / deb
+pnpm typecheck     # type checking (vue-tsc)
+pnpm build         # = build:go: frontend bundle + muse-go/Muse single binary
+pnpm build:web     # frontend only → muse-go/frontend/dist
+pnpm test:agent    # agent-loop parsing unit tests (plain Node)
 ```
 
 ### GitHub Actions Releases
 
-Push a tag matching the version in `package.json` (for example, `v0.1.2`) to build and publish macOS and Windows installers automatically:
+Push a tag matching the version in `package.json` (for example, `v0.1.2`) to build and publish per-platform single binaries automatically:
 
 ```bash
 git tag v0.1.2
 git push origin v0.1.2
 ```
 
-The workflow is `.github/workflows/release.yml`. It builds x64 `dmg` / `zip` packages on macOS and an x64 NSIS installer on Windows, then uploads all artifacts to one GitHub Release. Repository Actions settings must allow workflows to write Releases (the workflow requests `contents: write`).
+The workflow is `.github/workflows/release.yml`. On macOS / Windows / Linux runners it runs `pnpm build:web` + `go build` and uploads the resulting executables to one GitHub Release. Repository Actions settings must allow workflows to write Releases (the workflow requests `contents: write`).
 
 ## 📁 Project Structure
 
 ```
 muse/
-├── electron/                 # Main process
-│   ├── main.ts               # window lifecycle / native menu / shortcuts
-│   ├── preload.ts            # secure IPC bridge (contextIsolation)
-│   └── services/fs.ts        # open / save / recent files IPC
-├── src/                      # Renderer process
+├── muse-go/                  # main process (Go + MyGo)
+│   ├── main.go               # window lifecycle / Typora menus / shortcuts
+│   ├── services/             # files / ai / export / appsvc (all Go→frontend events)
+│   └── frontend/dist         # pnpm build:web output (embedded via go:embed)
+├── src/                      # frontend (Vue 3)
 │   ├── App.vue               # app shell (sidebar / canvas / status bar)
+│   ├── platform/mygoBridge.ts# window.muse bridge (IPC channel → Go service method)
 │   ├── editor/               # editor
 │   │   ├── MilkdownCore.vue  # Milkdown wiring (commonmark + GFM + plugins)
 │   │   ├── codeBlockView.ts  # code block node view (language input)
@@ -246,7 +245,7 @@ muse/
 │   ├── composables/          # file / theme / search / settings / stats / outline
 │   └── styles/base.css       # theme variables + editor typography
 ├── resources/                # app icons
-├── electron-builder.yml      # packaging config
+├── vite.web.config.ts        # frontend build config
 └── uno.config.ts             # UnoCSS config
 ```
 
@@ -254,12 +253,13 @@ muse/
 
 | Phase | Scope                                                       | Status    |
 | ----- | ----------------------------------------------------------- | --------- |
-| 0     | electron-vite + Vue 3 + TS scaffold                         | ✅         |
+| 0     | Vite + Vue 3 + TS scaffold                                  | ✅         |
 | 1     | Milkdown editor core (WYSIWYG)                              | ✅         |
 | 2     | Shiki real-time code highlighting                           | ✅         |
 | 3     | File I/O & app shell (menus / drag-drop / recents)          | ✅         |
 | 4     | Editing polish (themes / outline / find / stats / settings) | ✅         |
 | 5     | AI streaming output (`@shikijs/stream`, the main line)      | ⏳ planned |
+| 4.6   | **Shell migrated to MyGo** (Go + system WebView replacing Electron) | ✅ |
 
 See [PLAN.md](./PLAN.md) for details.
 
