@@ -1,5 +1,9 @@
+packages:
+  - app
+
 allowBuilds:
   esbuild: true
+
 minimumReleaseAgeExclude:
   - '@lucide/vue@1.30.0'
   - mygo-runtime@0.1.22

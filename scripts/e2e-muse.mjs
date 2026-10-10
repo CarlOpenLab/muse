@@ -2,7 +2,7 @@
  * Muse · MyGo 版 e2e 冒烟测试。
  *
  * 构建单二进制 → 以 MUSE_E2E=1 启动（用户数据指向临时目录）→ 收集注入页面的
- * 断言结果（见 muse-go/e2e/assertions.js）→ 打印清单并以 0/1 退出。
+ * 断言结果（见 native/e2e/assertions.js）→ 打印清单并以 0/1 退出。
  *
  * 用法（仓库根目录）：
  *   pnpm test:e2e              # 先 pnpm build:go，再跑
@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const bin = join(root, 'muse-go', process.platform === 'win32' ? 'Muse.exe' : 'Muse')
+const bin = join(root, 'native', process.platform === 'win32' ? 'Muse.exe' : 'Muse')
 const noBuild = process.argv.includes('--no-build')
 const TIMEOUT_MS = 180_000
 

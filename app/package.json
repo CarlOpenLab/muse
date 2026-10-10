@@ -1,0 +1,52 @@
+{
+  "name": "@muse/app",
+  "version": "0.1.2",
+  "private": true,
+  "description": "Muse · Typora 式所见即所得 Markdown 编辑器（Shiki 高亮 + Milkdown 7）",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@antdv-next/icons": "^1.1.1",
+    "@antdv-next/unocss": "^1.1.1",
+    "@antdv-next/x": "1.2.1-beta.1",
+    "@antdv-next/x-markdown": "^0.1.3",
+    "@antdv-next/x-sdk": "^0.0.3",
+    "@lucide/vue": "^1.30.0",
+    "@milkdown/core": "^7.22.0",
+    "@milkdown/ctx": "^7.22.0",
+    "@milkdown/plugin-block": "^7.22.0",
+    "@milkdown/plugin-clipboard": "^7.22.0",
+    "@milkdown/plugin-history": "^7.22.0",
+    "@milkdown/plugin-listener": "^7.22.0",
+    "@milkdown/plugin-tooltip": "^7.22.0",
+    "@milkdown/plugin-trailing": "^7.22.0",
+    "@milkdown/preset-commonmark": "^7.22.0",
+    "@milkdown/preset-gfm": "^7.22.0",
+    "@milkdown/prose": "^7.22.0",
+    "@milkdown/theme-nord": "^7.22.0",
+    "@milkdown/transformer": "^7.22.0",
+    "@milkdown/utils": "^7.22.0",
+    "@milkdown/vue": "^7.22.0",
+    "antdv-next": "^1.5.0",
+    "antdv-style": "1.0.0-rc.1",
+    "katex": "^0.18.4",
+    "mygo-runtime": "^0.1.22",
+    "remark-math": "^6.0.0",
+    "shiki": "^4.4.2",
+    "unocss": "^66.7.5"
+  },
+  "devDependencies": {
+    "@antdv-next/auto-import-resolver": "^1.1.0",
+    "@types/node": "^22.10.0",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "typescript": "^5.7.0",
+    "unplugin-vue-components": "^32.1.0",
+    "vite": "^7.0.0",
+    "vue": "^3.5.0",
+    "vue-tsc": "^3.0.0"
+  }
+}

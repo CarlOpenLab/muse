@@ -1,12 +1,15 @@
 node_modules/
-dist/
+app/dist/
 .vite/
 *.log
 .DS_Store
 Untitled*.md
 未命名*.md
 
+# 前端构建产物（vite → native/embed/dist，go:embed 内嵌进单二进制）
+native/embed/dist/
+
 # MyGo 构建产物
-muse-go/Muse
-muse-go/Muse.exe
-muse-go/build/
+native/Muse
+native/Muse.exe
+native/build/

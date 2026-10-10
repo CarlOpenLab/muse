@@ -1,4 +1,4 @@
-// Muse · e2e 断言脚本（由 muse-go/e2e.go 在 MUSE_E2E=1 时经 Window.Eval 注入）。
+// Muse · e2e 断言脚本（由 native/e2e.go 在 MUSE_E2E=1 时经 Window.Eval 注入）。
 //
 // 驱动方式与旧 Electron 版 scripts/e2e-typora.mjs 相同：合成事件 + DOM 断言，
 // 不引入任何测试专用接口；用户数据目录已被 Go 侧指向一次性临时目录。

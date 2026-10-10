@@ -2,8 +2,8 @@
  * agent loop 核心逻辑集成测试入口（由 test-agent.mjs 打包后 Node 直跑）。
  * 验证真实源码：processSseText 解析 + mock 工具调用演示流。
  */
-import { processSseText } from '../src/chat/ipcProvider'
-import { mockChatFetch } from '../src/chat/mockProvider'
+import { processSseText } from '../app/src/chat/ipcProvider'
+import { mockChatFetch } from '../app/src/chat/mockProvider'
 
 async function main(): Promise<void> {
   let pass = 0

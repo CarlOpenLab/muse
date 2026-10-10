@@ -72,7 +72,7 @@ export function installMygoBridge(): boolean {
     invoke: (channel: string, ...args: unknown[]) => {
       if (channel === 'app:webctx') return webCtx(args[0] as string)
       const method = INVOKE_MAP[channel]
-      if (!method) return Promise.reject(new Error(`muse-go: 未映射的通道 ${channel}`))
+      if (!method) return Promise.reject(new Error(`native: 未映射的通道 ${channel}`))
       return call(method, ...args) as Promise<unknown>
     },
     send: (channel: string, ...args: unknown[]) => {

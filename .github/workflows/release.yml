@@ -57,8 +57,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: muse-go/go.mod
-          cache-dependency-path: muse-go/go.sum
+          go-version-file: native/go.mod
+          cache-dependency-path: native/go.sum
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -74,7 +74,7 @@ jobs:
         run: pnpm run build:web
 
       - name: Build binary
-        working-directory: muse-go
+        working-directory: native
         env:
           CGO_ENABLED: '0'
         run: go build -ldflags="-s -w" -o ${{ matrix.output }} .
@@ -83,7 +83,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}-release
-          path: muse-go/${{ matrix.output }}
+          path: native/${{ matrix.output }}
           if-no-files-found: error
           retention-days: 7
 

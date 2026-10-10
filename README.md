@@ -88,14 +88,14 @@ pnpm dev           # 一键开发：vite dev server + go run（MyGo 窗口，前
 
 ```bash
 pnpm typecheck     # 类型检查（vue-tsc）
-pnpm build         # = build:go：前端产物 + muse-go/Muse 单二进制（~18MB）
-pnpm build:web     # 仅前端 → muse-go/frontend/dist
-pnpm test:e2e      # e2e 冒烟（构建 + 启动应用跑 21 项断言，需图形界面）
+pnpm build         # = build:go：前端产物 + native/Muse 单二进制（~18MB）
+pnpm build:web     # 仅前端 → native/embed/dist
+pnpm test:e2e      # e2e 冒烟（构建 + 启动应用跑断言，需图形界面）
 pnpm test:agent    # agent loop 解析逻辑单测（纯 Node）
 ```
 
 调试：`pnpm dev` 时「视图 > 开发者工具」（⌥⌘I）打开 Web Inspector（前端 Console / Network）；
-详见 [muse-go/README.md](./muse-go/README.md#调试)。
+详见 [native/README.md](./native/README.md#调试)。
 
 ### GitHub Actions 发布
 
@@ -112,24 +112,26 @@ git push origin v0.1.2
 
 ```
 muse/
-├── muse-go/                  # 主进程（Go + MyGo）
+├── app/                      # 前端（Vue 3 · workspace 包 @muse/app）
+│   ├── App.vue               # 应用骨架（侧栏 / 画布 / 状态栏）
+│   ├── src/
+│   │   ├── platform/mygoBridge.ts# window.muse 桥（IPC 通道 → Go 服务方法）
+│   │   ├── editor/           # 编辑器
+│   │   │   ├── MilkdownCore.vue  # Milkdown 装配（commonmark + GFM + 插件）
+│   │   │   ├── codeBlockView.ts  # 代码块 node view（语言输入框）
+│   │   │   ├── searchPlugin.ts   # 查找替换 ProseMirror 插件
+│   │   │   └── shiki/        # Shiki 单例 + inline decoration 高亮
+│   │   ├── components/       # 大纲侧栏 / 查找栏 / 状态栏 / 设置面板
+│   │   ├── composables/      # 文件 / 主题 / 搜索 / 设置 / 统计 / 大纲
+│   │   └── styles/base.css   # 主题变量 + 编辑器排版
+│   ├── vite.config.ts        # 前端构建配置（产物 → native/embed/dist）
+│   └── uno.config.ts         # UnoCSS 配置
+├── native/                   # 主进程（Go + MyGo）
 │   ├── main.go               # 窗口生命周期 / Typora 菜单 / 快捷键
 │   ├── services/             # files / ai / export / appsvc（含全部 Go→前端事件）
-│   └── frontend/dist         # pnpm build:web 产物（go:embed 内嵌）
-├── src/                      # 前端（Vue 3）
-│   ├── App.vue               # 应用骨架（侧栏 / 画布 / 状态栏）
-│   ├── platform/mygoBridge.ts# window.muse 桥（IPC 通道 → Go 服务方法）
-│   ├── editor/               # 编辑器
-│   │   ├── MilkdownCore.vue  # Milkdown 装配（commonmark + GFM + 插件）
-│   │   ├── codeBlockView.ts  # 代码块 node view（语言输入框）
-│   │   ├── searchPlugin.ts   # 查找替换 ProseMirror 插件
-│   │   └── shiki/            # Shiki 单例 + inline decoration 高亮
-│   ├── components/           # 大纲侧栏 / 查找栏 / 状态栏 / 设置面板
-│   ├── composables/          # 文件 / 主题 / 搜索 / 设置 / 统计 / 大纲
-│   └── styles/base.css       # 主题变量 + 编辑器排版
+│   └── embed/dist            # pnpm build:web 产物（go:embed 内嵌，gitignore）
 ├── resources/                # 应用图标
-├── vite.web.config.ts        # 前端构建配置
-└── uno.config.ts             # UnoCSS 配置
+└── package.json              # 根＝纯编排脚本（dev / build / typecheck）
 ```
 
 ## 🗺️ 项目进度
@@ -213,14 +215,14 @@ Other scripts:
 
 ```bash
 pnpm typecheck     # type checking (vue-tsc)
-pnpm build         # = build:go: frontend bundle + muse-go/Muse single binary (~18MB)
-pnpm build:web     # frontend only → muse-go/frontend/dist
-pnpm test:e2e      # e2e smoke (build + launch the app, 21 assertions; needs a GUI)
+pnpm build         # = build:go: frontend bundle + native/Muse single binary (~18MB)
+pnpm build:web     # frontend only → native/embed/dist
+pnpm test:e2e      # e2e smoke (build + launch the app, runs assertions; needs a GUI)
 pnpm test:agent    # agent-loop parsing unit tests (plain Node)
 ```
 
 Debugging: under `pnpm dev`, View > Developer Tools (⌥⌘I) opens the Web Inspector
-(frontend console / network). See [muse-go/README.md](./muse-go/README.md#调试) (Chinese).
+(frontend console / network). See [native/README.md](./native/README.md#调试) (Chinese).
 
 ### GitHub Actions Releases
 
@@ -237,24 +239,26 @@ The workflow is `.github/workflows/release.yml`. On macOS / Windows / Linux runn
 
 ```
 muse/
-├── muse-go/                  # main process (Go + MyGo)
+├── app/                      # frontend (Vue 3 · workspace package @muse/app)
+│   ├── App.vue               # app shell (sidebar / canvas / status bar)
+│   ├── src/
+│   │   ├── platform/mygoBridge.ts# window.muse bridge (IPC channel → Go service method)
+│   │   ├── editor/           # editor
+│   │   │   ├── MilkdownCore.vue  # Milkdown wiring (commonmark + GFM + plugins)
+│   │   │   ├── codeBlockView.ts  # code block node view (language input)
+│   │   │   ├── searchPlugin.ts   # find & replace ProseMirror plugin
+│   │   │   └── shiki/        # Shiki singleton + inline decoration highlight
+│   │   ├── components/       # outline sidebar / search bar / status bar / settings
+│   │   ├── composables/      # file / theme / search / settings / stats / outline
+│   │   └── styles/base.css   # theme variables + editor typography
+│   ├── vite.config.ts        # frontend build config (out → native/embed/dist)
+│   └── uno.config.ts         # UnoCSS config
+├── native/                   # main process (Go + MyGo)
 │   ├── main.go               # window lifecycle / Typora menus / shortcuts
 │   ├── services/             # files / ai / export / appsvc (all Go→frontend events)
-│   └── frontend/dist         # pnpm build:web output (embedded via go:embed)
-├── src/                      # frontend (Vue 3)
-│   ├── App.vue               # app shell (sidebar / canvas / status bar)
-│   ├── platform/mygoBridge.ts# window.muse bridge (IPC channel → Go service method)
-│   ├── editor/               # editor
-│   │   ├── MilkdownCore.vue  # Milkdown wiring (commonmark + GFM + plugins)
-│   │   ├── codeBlockView.ts  # code block node view (language input)
-│   │   ├── searchPlugin.ts   # find & replace ProseMirror plugin
-│   │   └── shiki/            # Shiki singleton + inline decoration highlight
-│   ├── components/           # outline sidebar / search bar / status bar / settings
-│   ├── composables/          # file / theme / search / settings / stats / outline
-│   └── styles/base.css       # theme variables + editor typography
+│   └── embed/dist            # pnpm build:web output (embedded via go:embed, gitignored)
 ├── resources/                # app icons
-├── vite.web.config.ts        # frontend build config
-└── uno.config.ts             # UnoCSS config
+└── package.json              # root = orchestration only (dev / build / typecheck)
 ```
 
 ## 🗺️ Roadmap

@@ -3,12 +3,12 @@
 //
 // 开发：
 //
-//	pnpm dev:web              # 另开终端，vite dev server :5173
-//	MYGO_DEV_URL=http://localhost:5173 go run ./muse-go
+//	pnpm dev:web              # 另开终端，vite dev server :5173（= pnpm --dir app run dev）
+//	MYGO_DEV_URL=http://localhost:5173 go run -C native .
 //
-// 生产（前端先构建进 muse-go/frontend/dist，由 go:embed 内嵌）：
+// 生产（前端先构建进 native/embed/dist，由 go:embed 内嵌）：
 //
-//	pnpm build:web && go build -o Muse ./muse-go
+//	pnpm build:web && cd native && go build -o Muse .
 package main
 
 import (
@@ -26,7 +26,7 @@ import (
 	"muse/services"
 )
 
-//go:embed all:frontend/dist
+//go:embed all:embed/dist
 var frontendDist embed.FS
 
 var files *services.Files
@@ -38,7 +38,7 @@ func main() {
 	// e2e 模式（MUSE_E2E=1）：用户数据改指临时目录，须在读取用户数据之前
 	e2ePrepareUserData()
 
-	dist, err := fs.Sub(frontendDist, "frontend/dist")
+	dist, err := fs.Sub(frontendDist, "embed/dist")
 	if err != nil {
 		log.Fatal(err)
 	}

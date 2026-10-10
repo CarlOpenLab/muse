@@ -7,6 +7,12 @@ settings:
 importers:
 
   .:
+    devDependencies:
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
+
+  app:
     dependencies:
       '@antdv-next/icons':
         specifier: ^1.1.1
