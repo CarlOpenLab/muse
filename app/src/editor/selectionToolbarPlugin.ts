@@ -83,13 +83,18 @@ class SelectionToolbarView implements PluginView {
       shouldShow: (v) => this.#shouldShow(v),
     })
 
-    // 源码模式：编辑器本体被 v-show 隐藏，工具条也必须收起
-    this.#stopModeWatch = watch(useViewMode().viewMode, (mode) => {
-      if (mode.source) {
-        this.#provider.hide()
-        resetInlineMarkState()
-      }
-    })
+    // 源码模式：编辑器本体被 v-show 隐藏，工具条也必须收起。
+    // 必须 deep：setViewMode 改属性而非换 ref，非 deep 的 watch 收不到。
+    this.#stopModeWatch = watch(
+      useViewMode().viewMode,
+      (mode) => {
+        if (mode.source) {
+          this.#provider.hide()
+          resetInlineMarkState()
+        }
+      },
+      { deep: true }
+    )
   }
 
   update = (v: EditorView, prev: EditorState | undefined): void => {

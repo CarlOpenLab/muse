@@ -101,13 +101,19 @@ export class BlockHandleView implements PluginView {
     setBlockMenuExecutor((id, s) => this.#runMenuAction(id, s))
     setBlockMenuCloseHook(() => this.#releaseBlockSelection())
 
-    // 源码模式：编辑器本体被 v-show 隐藏，浮层也必须收起
-    this.#stopModeWatch = watch(useViewMode().viewMode, (mode) => {
-      if (mode.source) {
-        this.#provider.hide()
-        closeBlockMenu()
-      }
-    })
+    // 源码模式：编辑器本体被 v-show 隐藏，浮层也必须收起。
+    // 必须 deep：setViewMode 是 `viewMode.value[key] = ...` 改属性而非换 ref，
+    // 非 deep 的 watch 收不到属性变更（实测 shallow 0 次 / deep 1 次）。
+    this.#stopModeWatch = watch(
+      useViewMode().viewMode,
+      (mode) => {
+        if (mode.source) {
+          this.#provider.hide()
+          closeBlockMenu()
+        }
+      },
+      { deep: true }
+    )
 
     this.update()
   }
