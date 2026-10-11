@@ -537,8 +537,12 @@
     const toolbarVisible = () => {
       const t = document.querySelector('.muse-sel-toolbar')
       if (!t) return false
+      // [data-show='false'] 对应 CSS `display: none`，即已经收起：
+      // 工具条只会在 true/false 间切换，不会停在别的路径上，
+      // 不必再要求 dataset.show === 'true' 才算「可见」。
+      if (t.dataset.show === 'false') return false
       const cs = getComputedStyle(t)
-      return t.dataset.show === 'true' && cs.display !== 'none' && cs.visibility !== 'hidden'
+      return cs.display !== 'none' && cs.visibility !== 'hidden'
     }
     await hoverBlockAt(findTarget())
     const shownBefore = handleVisible()
