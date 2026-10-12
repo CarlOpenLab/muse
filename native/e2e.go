@@ -49,14 +49,14 @@ func e2eAttach(win *mygo.Window) {
 	if !e2eEnabled() {
 		return
 	}
-	win.OnDidFinishLoad(func() {
+	win.Page().OnDidFinishLoad(func() {
 		go func() {
 			log.Printf("[e2e] 页面加载完成，注入断言脚本")
 			// 从终端启动时窗口未必拿到焦点；ProseMirror 在未聚焦时不同步
 			// 折叠光标，断言里的选区操作需要窗口处于前台。
 			mygo.App.Focus()
 			win.Focus()
-			res, err := win.Eval(e2eScript)
+			res, err := win.Page().Eval(e2eScript)
 			code := 1
 			if err != nil {
 				log.Printf("[e2e] 注入失败: %v", err)

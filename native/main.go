@@ -221,13 +221,13 @@ func buildMenu(win *mygo.Window) {
 		{Label: "文件侧栏", Accelerator: "Shift+CmdOrCtrl+L", Click: sendFn("toggle-files")},
 		{Label: "大纲", Accelerator: "Ctrl+CmdOrCtrl+1", Click: sendFn("toggle-outline")},
 		mygo.Separator(),
-		{Label: "重新加载", Accelerator: "CmdOrCtrl+R", Click: func(*mygo.MenuItem, *mygo.Window) { win.Reload() }},
+		{Label: "重新加载", Accelerator: "CmdOrCtrl+R", Click: func(*mygo.MenuItem, *mygo.Window) { win.Page().Reload() }},
 	}
 	// 开发者工具（Web Inspector）：连 vite dev server（pnpm dev / dev:go）时可用，
 	// 或对已构建的二进制显式 MUSE_DEVTOOLS=1 打开
 	if os.Getenv("MYGO_DEV_URL") != "" || os.Getenv("MUSE_DEVTOOLS") == "1" {
 		viewSub = append(viewSub, mygo.Separator(),
-			&mygo.MenuItem{Label: "开发者工具", Accelerator: "Alt+CmdOrCtrl+I", Click: func(*mygo.MenuItem, *mygo.Window) { win.ToggleDevTools() }})
+			&mygo.MenuItem{Label: "开发者工具", Accelerator: "Alt+CmdOrCtrl+I", Click: func(*mygo.MenuItem, *mygo.Window) { win.Page().ToggleDevTools() }})
 	}
 	viewSub = append(viewSub, mygo.Separator(), &mygo.MenuItem{Role: mygo.RoleToggleFullScreen, Label: "全屏"})
 	viewMenu := &mygo.MenuItem{

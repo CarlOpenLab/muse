@@ -130,6 +130,6 @@ func scheduleDebugMenuTrigger() {
 		if w == nil {
 			return
 		}
-		time.AfterFunc(time.Second, func() { log.Printf("[muse] debug: IsDevToolsOpened=%v", w.IsDevToolsOpened()) })
+		time.AfterFunc(time.Second, func() { log.Printf("[muse] debug: IsDevToolsOpened=%v", w.Page().IsDevToolsOpened()) })
 	})
 }

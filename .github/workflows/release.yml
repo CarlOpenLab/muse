@@ -73,11 +73,23 @@ jobs:
       - name: Build frontend
         run: pnpm run build:web
 
+      - name: Lint
+        working-directory: native
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+
       - name: Build binary
         working-directory: native
         env:
           CGO_ENABLED: '0'
         run: go build -ldflags="-s -w" -o ${{ matrix.output }} .
+
+      - name: Compress with UPX (Linux/Windows)
+        if: matrix.os != 'macos-latest'
+        run: |
+          sudo apt-get install -y upx-ucl 2>/dev/null || true
+          upx --best --lzma native/${{ matrix.output }} || echo "UPX not available, skipping"
 
       - name: Upload binary
         uses: actions/upload-artifact@v4

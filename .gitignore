@@ -13,3 +13,6 @@ native/embed/dist/
 native/Muse
 native/Muse.exe
 native/build/
+
+# Legacy Electron build output
+out/

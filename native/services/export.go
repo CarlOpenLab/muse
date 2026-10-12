@@ -137,7 +137,11 @@ func (e *Export) ExportPDF(ctx context.Context, suggestedName string) string {
 	if win == nil {
 		return ""
 	}
-	pdf, err := win.PrintToPDF(mygo.PDFOptions{
+	page := win.Page()
+	if page == nil {
+		return ""
+	}
+	pdf, err := page.PrintToPDF(mygo.PDFOptions{
 		PageSize:   mygo.PageA4,
 		Background: true,
 		Margins:    &mygo.Margins{Top: 0.6, Right: 0.6, Bottom: 0.6, Left: 0.6},
