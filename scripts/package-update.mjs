@@ -19,7 +19,10 @@ if (publicKey.toString('base64') !== readFileSync(`${root}resources/update-publi
 mkdirSync(`${root}dist`, { recursive: true })
 const name = `Muse-${version}-${target}.tar.gz`
 const archive = `${root}dist/${name}`
-execFileSync('tar', ['-czf', archive, '-C', source, entry], { stdio: 'inherit', env: { ...process.env, COPYFILE_DISABLE: '1' } })
+// Use a relative archive name: GNU tar treats Windows drive letters as remote hosts.
+execFileSync('tar', ['-czf', `dist/${name}`, '-C', source, entry], {
+  cwd: root, stdio: 'inherit', env: { ...process.env, COPYFILE_DISABLE: '1' },
+})
 const digest = createHash('sha256').update(readFileSync(archive)).digest()
 const signature = sign(null, digest, privateKey)
 if (!verify(null, digest, createPublicKey(privateKey), signature)) throw new Error('Signature verification failed')
