@@ -94,7 +94,6 @@ if command -v create-dmg &>/dev/null; then
     --icon "${APP_NAME}.app" 180 185 \
     --hide-extension "${APP_NAME}.app" \
     --app-drop-link 420 185 \
-    --background "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" \
     "$DMG_OUT" \
     "$STAGE"
 else
