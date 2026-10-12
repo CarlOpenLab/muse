@@ -34,7 +34,7 @@ jobs:
             output: Muse.exe
           - os: ubuntu-latest
             artifact: linux
-            output: Muse
+            output: Muse-linux
 
     steps:
       - name: Check out source
