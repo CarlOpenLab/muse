@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to publish (for example, v0.1.2)'
+        description: 'Release tag to publish from the selected branch/tag (must match package.json version)'
         required: true
         type: string
 
@@ -40,7 +40,8 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+          # Build the triggering commit so manual runs include fixes from the selected ref.
+          ref: ${{ github.sha }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
