@@ -1,0 +1,15 @@
+# 统一换行，避免 Windows checkout 把源码转成 CRLF：
+# CRLF 会让 `gofmt -l .` 认为所有 .go 文件都未格式化（CI Lint 会失败）。
+*.go    text eol=lf
+*.ts    text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.vue   text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.mod   text eol=lf
+*.sum   text eol=lf
