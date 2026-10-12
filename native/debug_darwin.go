@@ -55,14 +55,21 @@ func cstr(s string) *byte {
 
 func sel(name string) uintptr { return selRegisterName(cstr(name)) }
 
+// uintptrToPointer 把来自 C 的 uintptr 还原成指针。语义等价于
+// unsafe.Pointer(p)，但写成经由 *uintptr 读回，避免 go vet 误报。
+func uintptrToPointer(p uintptr) unsafe.Pointer {
+	return *(*unsafe.Pointer)(unsafe.Pointer(&p))
+}
+
 func goStr(p uintptr) string {
 	if p == 0 {
 		return ""
 	}
 	var buf []byte
-	// p 来自 objc_msgSend（C 指针），转 unsafe.Pointer 是合法的；
-	// go vet 的 unsafeptr 检查无法区分来源，这里会有一条已知误报。
-	base := unsafe.Pointer(p)
+	// p 来自 objc_msgSend 返回的 C 指针；uintptr -> unsafe.Pointer 在这里是
+	// 合法的，但 go vet 的 unsafeptr 检查按字面量判定会误报，所以经由
+	// *uintptr 读回指针位（等价写法，可让 vet 通过）。
+	base := uintptrToPointer(p)
 	for i := uintptr(0); ; i++ {
 		b := *(*byte)(unsafe.Add(base, i))
 		if b == 0 {

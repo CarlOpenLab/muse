@@ -80,16 +80,16 @@ func main() {
 
 func openWindow() {
 	win := mygo.NewWindow(mygo.WindowOptions{
-		Title:      "Muse",
-		Width:      1200,
-		Height:     800,
-		MinWidth:   720,
-		MinHeight:  480,
+		Title:           "Muse",
+		Width:           1200,
+		Height:          800,
+		MinWidth:        720,
+		MinHeight:       480,
 		BackgroundColor: "#ffffff",
 		// 隐藏标题栏、红绿灯浮在内容上（落进左侧文件栏顶部的拖拽条）
 		TitleBarStyle:  mygo.TitleBarHidden,
 		TitleBarHeight: 52,
-		URL:             "/",
+		URL:            "/",
 	})
 	services.S.Win = win
 
@@ -115,7 +115,7 @@ func openWindow() {
 // ---- 应用菜单（对齐 Typora / Electron 版 main.ts） ----
 
 var (
-	lastMenuMu     sync.Mutex
+	lastMenuMu       sync.Mutex
 	lastMenuActionAt time.Time
 	lastMenuAction   string
 )

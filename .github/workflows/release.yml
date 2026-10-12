@@ -73,11 +73,14 @@ jobs:
       - name: Build frontend
         run: pnpm run build:web
 
-      - name: Lint
+      - name: Lint (gofmt)
         working-directory: native
-        run: |
-          test -z "$(gofmt -l .)"
-          go vet ./...
+        shell: bash
+        run: test -z "$(gofmt -l .)"
+
+      - name: Vet
+        working-directory: native
+        run: go vet ./...
 
       - name: Build binary
         working-directory: native
@@ -87,9 +90,19 @@ jobs:
 
       - name: Compress with UPX (Linux/Windows)
         if: matrix.os != 'macos-latest'
+        shell: bash
         run: |
-          sudo apt-get install -y upx-ucl 2>/dev/null || true
-          upx --best --lzma native/${{ matrix.output }} || echo "UPX not available, skipping"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update -qq && sudo apt-get install -y upx-ucl
+          else
+            choco install upx -y --no-progress || true
+            export PATH="$PATH:/c/ProgramData/chocolatey/bin"
+          fi
+          if command -v upx >/dev/null 2>&1; then
+            upx --best --lzma "native/${{ matrix.output }}"
+          else
+            echo "UPX not available, skipping compression"
+          fi
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
