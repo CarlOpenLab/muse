@@ -29,12 +29,15 @@ jobs:
           - os: macos-latest
             artifact: macos
             output: Muse
+            target: darwin-arm64
           - os: windows-latest
             artifact: windows
             output: Muse.exe
+            target: windows-amd64
           - os: ubuntu-latest
             artifact: linux
             output: Muse-linux
+            target: linux-amd64
 
     steps:
       - name: Check out source
@@ -74,6 +77,9 @@ jobs:
       - name: Build frontend
         run: pnpm run build:web
 
+      - name: Typecheck frontend
+        run: pnpm run typecheck
+
       - name: Lint (gofmt)
         working-directory: native
         shell: bash
@@ -83,11 +89,15 @@ jobs:
         working-directory: native
         run: go vet ./...
 
-      - name: Build binary
+      - name: Test native services
         working-directory: native
+        run: go test ./...
+
+      - name: Build binary
         env:
-          CGO_ENABLED: '0'
-        run: go build -ldflags="-s -w" -o ${{ matrix.output }} .
+          GOOS: ${{ matrix.artifact == 'macos' && 'darwin' || matrix.artifact }}
+          GOARCH: ${{ matrix.artifact == 'macos' && 'arm64' || 'amd64' }}
+        run: node scripts/build-native.mjs ${{ matrix.output }}
 
       - name: Compress with UPX (Linux/Windows)
         if: matrix.os != 'macos-latest'
@@ -115,6 +125,27 @@ jobs:
           brew install create-dmg || true
           chmod +x scripts/build-macos-app.sh
           scripts/build-macos-app.sh "native/${{ matrix.output }}" "resources/icon.icns" "${RELEASE_TAG#v}"
+
+      - name: Sign automatic update
+        shell: bash
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            node scripts/package-update.mjs dist/stage Muse.app "${{ matrix.target }}"
+          else
+            node scripts/package-update.mjs native "${{ matrix.output }}" "${{ matrix.target }}"
+          fi
+
+      - name: Upload signed update
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}-update
+          path: |
+            dist/Muse-*.tar.gz
+            dist/update-*.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload binary (Linux/Windows)
         if: matrix.os != 'macos-latest'
@@ -151,4 +182,5 @@ jobs:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
           name: Muse ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
           generate_release_notes: true
+          make_latest: true
           files: release-assets/*

@@ -6,6 +6,7 @@ import { XProvider } from '@antdv-next/x'
 import type { XProviderProps } from '@antdv-next/x'
 import MilkdownEditor from './editor/MilkdownEditor.vue'
 import TitleBar from './components/TitleBar.vue'
+import DocumentTitle from './components/DocumentTitle.vue'
 import SidePanel from './components/SidePanel.vue'
 import OutlinePanel from './components/OutlinePanel.vue'
 import ChatPanel from './chat/ChatPanel.vue'
@@ -283,7 +284,7 @@ function onTreeRenamed(e: Event): void {
 
 const showSettings = ref(false)
 const recentFiles = ref<string[]>([])
-const titleInputRef = ref<HTMLInputElement | null>(null)
+const titleInputRef = ref<InstanceType<typeof DocumentTitle> | null>(null)
 function focusTitleInput(): void {
   titleInputRef.value?.focus()
   titleInputRef.value?.select()
@@ -754,15 +755,12 @@ const getDocContext = (): string => fullContent.value
                 :class="{ 'focus-mode': viewMode.focus }"
                 @scroll.passive="onEditorScroll"
               >
-                <div class="mx-auto max-w-[46rem] px-12 pt-8 pb-32">
-                  <input
+                <div class="document-page">
+                  <DocumentTitle
                     v-show="!viewMode.source"
                     ref="titleInputRef"
                     v-model="titleText"
-                    placeholder="无标题"
-                    class="title-input w-full bg-transparent outline-none border-none text-[30px] font-bold leading-tight placeholder:text-[var(--fg-soft)] placeholder:opacity-60 mb-4 text-left"
-                    spellcheck="false"
-                    @keydown.enter="onTitleEnter"
+                    @enter="onTitleEnter"
                   />
                   <div v-show="!viewMode.source">
                     <MilkdownEditor v-model="doc" />

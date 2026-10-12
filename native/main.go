@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
 
 	"muse/services"
 )
@@ -37,6 +38,11 @@ func main() {
 	app.SetName("Muse")
 	// e2e 模式（MUSE_E2E=1）：用户数据改指临时目录，须在读取用户数据之前
 	e2ePrepareUserData()
+	icon, err := frontendDist.ReadFile("embed/dist/icon.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	mygo.Use(updater.New(updater.Options{Icon: icon, Language: "zh-Hans", DisableAutomaticChecks: e2eEnabled()}))
 
 	dist, err := fs.Sub(frontendDist, "embed/dist")
 	if err != nil {
@@ -57,6 +63,15 @@ func main() {
 	})
 
 	app.WhenReady(func() {
+		if runtime.GOOS == "darwin" {
+			icon, err := frontendDist.ReadFile("embed/dist/icon.png")
+			if err == nil {
+				err = app.Dock.SetIcon(icon)
+			}
+			if err != nil {
+				log.Printf("[muse] load Dock icon: %v", err)
+			}
+		}
 		openWindow()
 		if os.Getenv("MUSE_DEBUG_MENU") != "" {
 			scheduleDebugMenuTrigger()
@@ -237,6 +252,7 @@ func buildMenu(win *mygo.Window) {
 
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 		{Role: mygo.RoleAppMenu},
+		{Label: "更新", Submenu: []*mygo.MenuItem{updater.MenuItem()}},
 		{
 			Label: "文件",
 			Submenu: []*mygo.MenuItem{
