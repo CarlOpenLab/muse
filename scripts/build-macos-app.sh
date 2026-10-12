@@ -91,11 +91,12 @@ if command -v create-dmg &>/dev/null; then
     --window-pos 200 120 \
     --window-size 600 400 \
     --icon-size 100 \
-    "${APP_NAME}.app" 180 185 \
+    --icon "${APP_NAME}.app" 180 185 \
     --hide-extension "${APP_NAME}.app" \
     --app-drop-link 420 185 \
     --background "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" \
-    "$DMG_OUT"
+    "$DMG_OUT" \
+    "$STAGE"
 else
   echo "使用 hdiutil 生成 DMG..."
   # hdiutil fallback — 创建一个简单的 DMG
