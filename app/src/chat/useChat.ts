@@ -139,7 +139,7 @@ export function useChat() {
     (p) => {
       setChatConnection(p ? { baseUrl: p.baseUrl ?? '', apiKey: p.apiKey } : null)
     },
-    { immediate: true }
+    { immediate: true, deep: true }
   )
 
   // ===== Provider（真实请求走主进程 IPC；无供应商时回退本地 mock）=====

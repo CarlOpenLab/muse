@@ -5,11 +5,12 @@ import { defineConfig } from "mygo-cli";
 // devCommand / buildCommand 委托根目录分包脚本（根 → app/）。
 export default defineConfig({
   name: "Muse",
-  identifier: "dev.muse.editor",
-  version: "0.1.2",
+  identifier: "com.muse.app",
+  version: "0.2.1",
   devUrl: "http://localhost:5173",
   devCommand: "pnpm --dir .. run dev:web",
   buildCommand: "pnpm --dir .. run build:web",
   frontendDist: "embed/dist",
   out: "build",
+  updates: { publicKey: "FG0Hg7hGBVq3w+Cin+CDYOH/tqOiXF+jOd+V3e0kAa0=", github: "CarlOpenLab/muse", changelog: "../CHANGELOG.md" },
 });

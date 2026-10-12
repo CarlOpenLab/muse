@@ -60,6 +60,36 @@
     }
 
     // 1) 输入文本 → 标题命令（heading-1）
+    const title = document.querySelector('textarea.title-input')
+    const setTitle = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set
+    if (title) {
+      setTitle.call(title, 'yl-common 公共组件与方法提取清单（web / client）：长标题应当完整显示并自动换行 '.repeat(4))
+      title.dispatchEvent(new Event('input', { bubbles: true }))
+      await sleep(150)
+      results.longTitleWraps = title.clientHeight > 60 && title.scrollHeight <= title.clientHeight + 2
+      title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+      await sleep(100)
+      results.titleEnterFocusesBody = document.activeElement === pm()
+      setTitle.call(title, '')
+      title.dispatchEvent(new Event('input', { bubbles: true }))
+      await sleep(100)
+      results.titleShrinks = title.clientHeight < 50
+    } else {
+      results.longTitleWraps = false
+    }
+
+    pm().focus()
+    document.execCommand('insertText', false, 'https://example.com/' + 'long-identifier'.repeat(70))
+    await sleep(150)
+    results.longTokensWrap = pm().scrollWidth <= pm().clientWidth + 2
+    const tokenRange = document.createRange()
+    tokenRange.selectNodeContents(pm())
+    const tokenSelection = window.getSelection()
+    tokenSelection.removeAllRanges()
+    tokenSelection.addRange(tokenRange)
+    document.execCommand('delete')
+    await sleep(150)
+
     pm().focus()
     document.execCommand('insertText', false, 'hello typora')
     await sleep(300)
@@ -567,9 +597,67 @@
       getComputedStyle(tExp).display === 'none'
     document.body.classList.remove('exporting')
 
+    // Settings discovery UI uses a deterministic gateway response; HTTP parsing is
+    // covered by services/ai_test.go so this suite works without a running gateway.
+    const originalInvoke = window.muse.invoke
+    window.muse.invoke = (channel, ...args) => channel === 'ai:list-models'
+      ? Promise.resolve({ ok: true, message: '获取 1 个模型', models: [{ id: 'gateway/model', name: 'Gateway model', reasoning: true }] })
+      : originalInvoke(channel, ...args)
+    try {
+      document.querySelector('button[aria-label="设置"]').click()
+      await sleep(200)
+      const clickText = (text) => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === text)?.click()
+      clickText('模型供应商')
+      await sleep(100)
+      clickText('添加 Provider')
+      await sleep(200)
+      const magpie = [...document.querySelectorAll('.preset-item')].find((el) => el.textContent.includes('Magpie 本地网关'))
+      results.magpiePreset = !!magpie
+      magpie?.click()
+      await sleep(100)
+      clickText('下一步')
+      await sleep(100)
+      clickText('添加并获取模型')
+      await sleep(300)
+      const modelInput = () => document.querySelector('input[placeholder="model-id"]')
+      results.modelsAutoImported = modelInput()?.value === 'gateway/model'
+      clickText('自定义 ID')
+      await sleep(100)
+      const custom = [...document.querySelectorAll('input[placeholder="model-id"]')].at(-1)
+      if (custom) {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(custom, 'custom-id')
+        custom.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      await sleep(100)
+      clickText('刷新模型')
+      await sleep(200)
+      results.modelRefreshPreservesCustom = [...document.querySelectorAll('input[placeholder="model-id"]')].some((el) => el.value === 'custom-id')
+      results.modelRefreshDeduplicates = [...document.querySelectorAll('input[placeholder="model-id"]')].filter((el) => el.value === 'gateway/model').length === 1
+      clickText('应用更新')
+      await sleep(200)
+      const preferences = await originalInvoke('app:update-preferences')
+      results.updateSettingsVersion = preferences.version === '0.2.1'
+      results.updateSettingsVisible = document.body.textContent.includes('自动检查更新') && document.body.textContent.includes('自动下载并安装')
+      const changed = await originalInvoke('app:set-update-preferences', { automaticChecks: false, automaticDownloads: true })
+      results.updatePreferencesPersist = !changed.automaticChecks && changed.automaticDownloads
+    } finally {
+      window.muse.invoke = originalInvoke
+    }
+
     results.runtimeErrors = window.__errs
     results.ok =
       results.editorMounted &&
+      results.longTitleWraps &&
+      results.titleEnterFocusesBody &&
+      results.titleShrinks &&
+      results.longTokensWrap &&
+      results.magpiePreset &&
+      results.modelsAutoImported &&
+      results.modelRefreshPreservesCustom &&
+      results.modelRefreshDeduplicates &&
+      results.updateSettingsVersion &&
+      results.updateSettingsVisible &&
+      results.updatePreferencesPersist &&
       results.bridge.platform &&
       results.bridge.recentIsArray &&
       results.bridge.openPathsIsArray &&

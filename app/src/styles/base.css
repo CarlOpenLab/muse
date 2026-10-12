@@ -558,9 +558,29 @@ body {
 }
 
 /* ===== 编辑器排版（设置面板控制） ===== */
+.document-page {
+  width: 100%;
+  max-width: 64rem;
+  margin-inline: auto;
+  padding: 32px clamp(24px, 4vw, 64px) 128px;
+}
+
 .milkdown-theme-nord.prose {
+  min-width: 0;
+  max-width: none;
+  overflow-wrap: anywhere;
   font-size: var(--editor-font-size, 16px);
   line-height: var(--editor-line-height, 1.7);
+}
+
+.milkdown-theme-nord.prose table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.milkdown-theme-nord.prose img {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Nord 主题在 p/pre/code/标题等元素上直接声明了 font-size / line-height，

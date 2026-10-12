@@ -53,6 +53,8 @@
 * **AI tool calling (agent)** — describe a document problem in natural language and the AI edits the document directly through tools (read / replace selection / insert at caret / append to end / replace all); ⌘Z undoes it. Selecting text reveals a quick action bar: Polish / Expand / Summarize / Translate
 * **Find & replace** — ⌘F to open, ⌘G / ⇧⌘G for prev/next, highlighted matches
 * **Word count** — live stats in the status bar
+* **Automatic updates (0.2.1+)** — signed daily update checks, in-app download/install and restart; Settings > App Updates controls automatic checks/downloads. Install 0.2.1 manually once when upgrading from 0.2.0.
+
 * **Settings panel** — font size / line height, applied instantly and persisted
 * **File management** — open / save / save as / new via native menus and shortcuts (⌘N / ⌘O / ⌘S / ⌘⇧S)
   * Drag & drop to open files

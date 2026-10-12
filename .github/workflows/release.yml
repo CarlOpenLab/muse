@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to publish (for example, v0.1.2)'
+        description: 'Release tag to publish from the selected branch/tag (must match package.json version)'
         required: true
         type: string
 
@@ -29,18 +29,22 @@ jobs:
           - os: macos-latest
             artifact: macos
             output: Muse
+            target: darwin-arm64
           - os: windows-latest
             artifact: windows
             output: Muse.exe
+            target: windows-amd64
           - os: ubuntu-latest
             artifact: linux
             output: Muse-linux
+            target: linux-amd64
 
     steps:
       - name: Check out source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+          # Build the triggering commit so manual runs include fixes from the selected ref.
+          ref: ${{ github.sha }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -73,6 +77,9 @@ jobs:
       - name: Build frontend
         run: pnpm run build:web
 
+      - name: Typecheck frontend
+        run: pnpm run typecheck
+
       - name: Lint (gofmt)
         working-directory: native
         shell: bash
@@ -82,11 +89,15 @@ jobs:
         working-directory: native
         run: go vet ./...
 
-      - name: Build binary
+      - name: Test native services
         working-directory: native
+        run: go test ./...
+
+      - name: Build binary
         env:
-          CGO_ENABLED: '0'
-        run: go build -ldflags="-s -w" -o ${{ matrix.output }} .
+          GOOS: ${{ matrix.artifact == 'macos' && 'darwin' || matrix.artifact }}
+          GOARCH: ${{ matrix.artifact == 'macos' && 'arm64' || 'amd64' }}
+        run: node scripts/build-native.mjs ${{ matrix.output }}
 
       - name: Compress with UPX (Linux/Windows)
         if: matrix.os != 'macos-latest'
@@ -104,11 +115,53 @@ jobs:
             echo "UPX not available, skipping compression"
           fi
 
-      - name: Upload binary
+      - name: Build macOS DMG
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: |
+          # 安装 create-dmg（比裸 hdiutil 好看得多）
+          brew install create-dmg || true
+          chmod +x scripts/build-macos-app.sh
+          scripts/build-macos-app.sh "native/${{ matrix.output }}" "resources/icon.icns" "${RELEASE_TAG#v}"
+
+      - name: Sign automatic update
+        shell: bash
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            node scripts/package-update.mjs dist/stage Muse.app "${{ matrix.target }}"
+          else
+            node scripts/package-update.mjs native "${{ matrix.output }}" "${{ matrix.target }}"
+          fi
+
+      - name: Upload signed update
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}-update
+          path: |
+            dist/Muse-*.tar.gz
+            dist/update-*.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload binary (Linux/Windows)
+        if: matrix.os != 'macos-latest'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}-release
           path: native/${{ matrix.output }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload DMG (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-release
+          path: dist/Muse-*-macOS.dmg
           if-no-files-found: error
           retention-days: 7
 
@@ -129,4 +182,5 @@ jobs:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
           name: Muse ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
           generate_release_notes: true
+          make_latest: true
           files: release-assets/*

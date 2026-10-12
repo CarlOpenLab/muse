@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Plus, Trash2, Server, Wifi } from '@lucide/vue'
+import { Plus, Trash2, Server, Wifi, RefreshCw } from '@lucide/vue'
 import message from 'antdv-next/dist/message/index'
 import { useSettings, type ProviderConfig, type ProviderModel } from '../composables/useSettings'
-import { PROVIDER_PRESETS, type ProviderPreset } from '../composables/providerPresets'
+import { PROVIDER_PRESETS } from '../composables/providerPresets'
 
 const { settings, addProvider, removeProvider } = useSettings()
 
@@ -29,7 +29,15 @@ const draftName = ref('')
 const draftBaseUrl = ref('')
 const draftApiKey = ref('')
 const testing = ref(false)
-const testResult = ref<{ ok: boolean; status?: number; message: string } | null>(null)
+interface ModelsResult {
+  ok: boolean
+  status?: number
+  message: string
+  models?: ProviderModel[]
+}
+const testResult = ref<ModelsResult | null>(null)
+
+watch([draftBaseUrl, draftApiKey], () => { testResult.value = null })
 
 watch(addOpen, (open) => {
   if (!open) return
@@ -47,15 +55,24 @@ watch(addMode, () => {
   testResult.value = null
 })
 
-/** 联通测试统一走主进程 IPC（Node fetch，无 CORS） */
+async function fetchModels(baseUrl: string, apiKey?: string): Promise<ModelsResult> {
+  try {
+    const res = await window.muse?.invoke('ai:list-models', { baseUrl, apiKey })
+    return (res as ModelsResult | undefined) ?? { ok: false, message: '请在桌面应用中获取模型' }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : '获取模型失败' }
+  }
+}
+
+/** Requests go through Go so local gateways do not require browser CORS support. */
 async function runTest(baseUrl: string, apiKey: string): Promise<void> {
   testing.value = true
   testResult.value = null
   try {
-    const res = (await window.muse?.invoke('ai:test-connection', { baseUrl, apiKey })) as
-      | { ok: boolean; status?: number; message: string }
-      | undefined
-    testResult.value = res ?? { ok: false, message: 'IPC 不可用' }
+    const result = await fetchModels(baseUrl, apiKey)
+    if (addOpen.value && baseUrl === draftBaseUrl.value && apiKey === draftApiKey.value) {
+      testResult.value = result
+    }
   } finally {
     testing.value = false
   }
@@ -71,25 +88,25 @@ function goConfig(): void {
   step.value = 'config'
 }
 
-const canAdd = computed(() => Boolean(draftName.value.trim()) && testResult.value?.ok === true)
+const canAdd = computed(() => Boolean(draftName.value.trim() && draftBaseUrl.value.trim()) && !testing.value)
 
-function confirmAdd(): void {
+async function confirmAdd(): Promise<void> {
+  if (!canAdd.value) return
+  if (!testResult.value) await runTest(draftBaseUrl.value, draftApiKey.value)
+  if (!addOpen.value || !canAdd.value || !testResult.value) return
   const name = draftName.value.trim()
-  const fromPreset = addMode.value === 'preset' && PROVIDER_PRESETS.some((p) => p.id === draftPresetId.value)
   const created = addProvider({
     name,
     baseUrl: draftBaseUrl.value.trim() || undefined,
     apiKey: draftApiKey.value.trim() || undefined,
-    models: fromPreset
-      ? clone(PROVIDER_PRESETS.find((p) => p.id === draftPresetId.value)?.models ?? [])
-      : [],
+    models: testResult.value?.ok ? clone(testResult.value.models ?? []) : [],
   })
   if (!created) {
     message.error('名称不能为空或已存在，请更换名称')
     return
   }
   selectedName.value = name
-  message.success(fromPreset ? `已添加 ${name}（含预设模型，可在详情中调整）` : `已添加 ${name}`)
+  message.success(`已添加 ${name}（${testResult.value?.models?.length ?? 0} 个模型）`)
   addOpen.value = false
 }
 
@@ -112,22 +129,32 @@ function removeModel(model: ProviderModel): void {
 }
 
 const cardTesting = ref(false)
-const cardTest = ref<{ ok: boolean; status?: number; message: string } | null>(null)
-watch(selectedName, () => {
+const cardTest = ref<ModelsResult | null>(null)
+watch(() => [selectedName.value, provider.value?.baseUrl, provider.value?.apiKey], () => {
   cardTest.value = null
 })
 
 async function testProvider(): Promise<void> {
   const p = provider.value
-  if (!p) return
+  if (!p || cardTesting.value) return
+  const baseUrl = p.baseUrl ?? ''
+  const apiKey = p.apiKey
   cardTesting.value = true
   cardTest.value = null
   try {
-    const res = (await window.muse?.invoke('ai:test-connection', {
-      baseUrl: p.baseUrl,
-      apiKey: p.apiKey,
-    })) as { ok: boolean; status?: number; message: string } | undefined
-    cardTest.value = res ?? { ok: false, message: 'IPC 不可用' }
+    const res = await fetchModels(baseUrl, apiKey)
+    if (provider.value !== p || p.baseUrl !== baseUrl || p.apiKey !== apiKey) return
+    cardTest.value = res
+    if (res.ok) {
+      // Keep custom IDs and user-edited metadata while importing new server models.
+      const existing = new Map(p.models.map((model) => [model.id, model]))
+      for (const model of res.models ?? []) {
+        if (!existing.has(model.id)) {
+          p.models.push(model)
+          existing.set(model.id, model)
+        }
+      }
+    }
   } finally {
     cardTesting.value = false
   }
@@ -144,7 +171,7 @@ function clone<T>(value: T): T {
     <div>
       <div class="text-lg font-semibold">模型供应商</div>
       <p class="text-xs text-fg-soft mt-1">
-        配置 AI 对话可用的模型服务。添加时可测试联通性，确保配置可用。
+        配置 AI 对话可用的模型服务。添加后自动获取模型列表，也可保留自定义模型 ID。
       </p>
     </div>
 
@@ -190,11 +217,11 @@ function clone<T>(value: T): T {
                   <div class="flex gap-2">
                     <a-input-password
                       v-model:value="provider.apiKey"
-                      placeholder="sk-…"
+                      placeholder="可选；本地网关未启用认证时留空"
                       class="flex-1 min-w-0"
                     />
                     <a-button :loading="cardTesting" @click="testProvider" class="shrink-0">
-                      <Wifi :size="14" />测试联通
+                      <Wifi :size="14" />获取模型
                     </a-button>
                   </div>
                   <template #extra>
@@ -204,7 +231,7 @@ function clone<T>(value: T): T {
                       </a-tag>
                       {{ cardTest.message }}
                     </span>
-                    <span v-else>填写后点击「测试联通」，验证 Base URL 与密钥。</span>
+                    <span v-else>通过 /v1/models 获取模型；自定义 API 前缀请填写完整地址。</span>
                   </template>
                 </a-form-item>
               </a-col>
@@ -215,15 +242,20 @@ function clone<T>(value: T): T {
           <div class="mt-1">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs text-fg-soft">模型（{{ provider.models.length }}）</span>
-              <a-button type="text" size="small" class="!text-accent" @click="addModel">
-                <Plus :size="14" />添加模型
+              <div class="flex items-center gap-1 flex-wrap">
+              <a-button type="text" size="small" :loading="cardTesting" @click="testProvider">
+                <RefreshCw :size="14" />刷新模型
               </a-button>
+              <a-button type="text" size="small" class="!text-accent" @click="addModel">
+                <Plus :size="14" />自定义 ID
+              </a-button>
+              </div>
             </div>
             <div v-if="provider.models.length" class="flex flex-col gap-1.5">
               <div
                 v-for="(model, index) in provider.models"
-                :key="model.id + index"
-                class="flex items-center gap-2 px-3 py-2 rounded-md border border-border-subtle"
+                :key="index"
+                class="flex items-center gap-2 flex-wrap px-3 py-2 rounded-md border border-border-subtle"
               >
                 <a-input v-model:value="model.id" placeholder="model-id" class="flex-1 min-w-0" />
                 <a-input
@@ -240,7 +272,7 @@ function clone<T>(value: T): T {
               </div>
             </div>
             <div v-else class="text-xs text-fg-soft py-2">
-              尚未添加模型。手动创建可在此添加支持的模型；从预设导入的模型也可继续增删。
+              暂无模型，点击「获取模型」自动导入；接口不提供列表时可添加自定义 ID。
             </div>
           </div>
         </div>
@@ -288,8 +320,7 @@ function clone<T>(value: T): T {
             <div class="preset-item-body">
               <div class="preset-item-head">
                 <span class="text-sm font-semibold">{{ preset.label }}</span>
-                <a-tag v-if="preset.models.length">{{ preset.models.length }} 个模型</a-tag>
-                <a-tag v-else color="default">仅连接信息</a-tag>
+                <a-tag color="default">自动获取模型</a-tag>
               </div>
               <span class="text-xs text-fg-soft">{{ preset.description }}</span>
               <span class="text-[11px] text-fg-soft font-mono">
@@ -313,11 +344,11 @@ function clone<T>(value: T): T {
           <a-form-item label="Base URL">
             <a-input v-model:value="draftBaseUrl" placeholder="https://api.example.com/v1" />
           </a-form-item>
-          <a-form-item label="API Key" :extra="testResult ? undefined : '填写后点击「测试联通」验证配置。'">
+          <a-form-item label="API Key" :extra="testResult ? undefined : '添加时自动获取模型；API Key 可留空。'">
             <div class="flex gap-2">
-              <a-input-password v-model:value="draftApiKey" placeholder="sk-…" class="flex-1 min-w-0" />
+              <a-input-password v-model:value="draftApiKey" placeholder="可选；本地网关未启用认证时留空" class="flex-1 min-w-0" />
               <a-button :loading="testing" @click="runTest(draftBaseUrl, draftApiKey)" class="shrink-0">
-                <Wifi :size="14" />测试联通
+                <Wifi :size="14" />获取模型
               </a-button>
             </div>
           </a-form-item>
@@ -334,23 +365,17 @@ function clone<T>(value: T): T {
 
         <a-alert type="info" show-icon>
           <template #message>
-            {{ addMode === 'preset' ? '预设只是起点' : '手动创建' }}
+            自动获取可用模型
           </template>
           <template #description>
-            {{
-              addMode === 'preset'
-                ? '模型清单已从预设导入，可在添加后的详情里继续增删；模型 ID 会随厂商调整，请对照官方文档核对。'
-                : '创建后可在详情里手动添加支持的模型。'
-            }}
+            添加时从服务的 /v1/models 获取模型，无需手动填写 ID。接口不支持时仍可保存连接，再添加自定义 ID。刷新模型会保留已有模型和自定义配置。
           </template>
         </a-alert>
 
         <div class="flex justify-end gap-2 mt-4">
           <a-button v-if="addMode === 'preset'" @click="step = 'select'">上一步</a-button>
-          <a-button type="primary" :disabled="!canAdd" @click="confirmAdd">
-            <template v-if="!canAdd && testResult && !testResult.ok">修复后重新测试</template>
-            <template v-else-if="!canAdd">先通过联通测试</template>
-            <template v-else>添加</template>
+          <a-button type="primary" :disabled="!canAdd" :loading="testing" @click="confirmAdd">
+            {{ testResult && !testResult.ok ? '保存并自定义模型' : '添加并获取模型' }}
           </a-button>
         </div>
       </template>

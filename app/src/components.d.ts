@@ -26,9 +26,11 @@ declare module 'vue' {
     ARow: typeof import('antdv-next')['Row']
     ASegmented: typeof import('antdv-next')['Segmented']
     ASlider: typeof import('antdv-next')['Slider']
+    ASwitch: typeof import('antdv-next')['Switch']
     ATag: typeof import('antdv-next')['Tag']
     ATooltip: typeof import('antdv-next')['Tooltip']
     ATypographyText: typeof import('antdv-next')['TypographyText']
+    DocumentTitle: typeof import('./components/DocumentTitle.vue')['default']
     EditorContextMenu: typeof import('./components/EditorContextMenu.vue')['default']
     EntryScreen: typeof import('./components/EntryScreen.vue')['default']
     FileTreePanel: typeof import('./components/FileTreePanel.vue')['default']
@@ -42,5 +44,6 @@ declare module 'vue' {
     SourceEditor: typeof import('./components/SourceEditor.vue')['default']
     StatusBar: typeof import('./components/StatusBar.vue')['default']
     TitleBar: typeof import('./components/TitleBar.vue')['default']
+    UpdateSettings: typeof import('./components/UpdateSettings.vue')['default']
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "muse",
-  "version": "0.1.3",
+  "version": "0.2.1",
   "private": true,
   "license": "MIT",
   "description": "Muse monorepo 根 — 纯编排（前端在 app/，Go 壳在 native/）",
@@ -10,7 +10,7 @@
     "dev:go": "MYGO_DEV_URL=http://localhost:5173 go run -C native .",
     "build": "pnpm build:go",
     "build:web": "pnpm --dir app run build",
-    "build:go": "pnpm build:web && cd native && CGO_ENABLED=0 go build -ldflags=\"-s -w\" -o Muse .",
+    "build:go": "pnpm build:web && node scripts/build-native.mjs",
     "typecheck": "pnpm --dir app run typecheck",
     "test:agent": "node scripts/test-agent.mjs",
     "test:e2e": "node scripts/e2e-muse.mjs"

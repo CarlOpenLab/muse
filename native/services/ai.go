@@ -39,6 +39,20 @@ type TestConnRequest struct {
 	APIKey  string `json:"apiKey"`
 }
 
+type ProviderModel struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name,omitempty"`
+	Reasoning     bool     `json:"reasoning,omitempty"`
+	Input         []string `json:"input,omitempty"`
+	ContextWindow int      `json:"contextWindow,omitempty"`
+	MaxTokens     int      `json:"maxTokens,omitempty"`
+}
+
+type ModelsResult struct {
+	TestConnResult
+	Models []ProviderModel `json:"models,omitempty"`
+}
+
 // ChatStreamRequest 是流式对话的请求。
 type ChatStreamRequest struct {
 	RequestID string         `json:"requestId"`
@@ -82,7 +96,13 @@ func NewAI() *AI {
 }
 
 func normalizeBaseURL(raw string) string {
-	return strings.TrimRight(strings.TrimSpace(raw), "/")
+	base := strings.TrimRight(strings.TrimSpace(raw), "/")
+	u, err := url.Parse(base)
+	if err == nil && u.Host != "" && u.Path == "" {
+		u.Path = "/v1"
+		return u.String()
+	}
+	return base
 }
 
 func describeHTTPError(status int, raw string) string {
@@ -128,41 +148,81 @@ func osIsTimeout(err error) bool {
 
 // TestConnection 测试与 OpenAI 兼容端点的连通性。
 func (a *AI) TestConnection(req TestConnRequest) TestConnResult {
+	return a.ListModels(req).TestConnResult
+}
+
+// ListModels discovers models through the same API prefix used for chat requests.
+func (a *AI) ListModels(req TestConnRequest) ModelsResult {
+	failure := func(status int, message string) ModelsResult {
+		return ModelsResult{TestConnResult: TestConnResult{Status: status, Message: message}}
+	}
 	baseURL := normalizeBaseURL(req.BaseURL)
 	apiKey := strings.TrimSpace(req.APIKey)
 	if baseURL == "" {
-		return TestConnResult{Ok: false, Message: "请先填写 Base URL"}
+		return failure(0, "请先填写 Base URL")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), aiTimeout)
 	defer cancel()
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/models", nil)
 	if err != nil {
-		return TestConnResult{Ok: false, Message: err.Error()}
+		return failure(0, err.Error())
 	}
 	if apiKey != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
+	httpReq.Header.Set("Accept", "application/json")
 	res, err := a.client.Do(httpReq)
 	if err != nil {
-		return TestConnResult{Ok: false, Message: describeNetworkError(err)}
+		return failure(0, describeNetworkError(err))
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode >= 200 && res.StatusCode < 300 {
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
-		var data struct {
-			Data []any `json:"data"`
-		}
-		if json.Unmarshal(body, &data) == nil && data.Data != nil {
-			return TestConnResult{Ok: true, Status: res.StatusCode, Message: fmt.Sprintf("联通成功，发现 %d 个模型", len(data.Data))}
-		}
-		return TestConnResult{Ok: true, Status: res.StatusCode, Message: "联通成功"}
+	body, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+	if err != nil {
+		return failure(res.StatusCode, "读取模型列表失败")
 	}
-	if res.StatusCode == 401 || res.StatusCode == 403 {
-		return TestConnResult{Ok: false, Status: res.StatusCode, Message: "认证失败，请检查 API Key"}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return failure(res.StatusCode, describeHTTPError(res.StatusCode, string(body)))
 	}
-	return TestConnResult{Ok: false, Status: res.StatusCode, Message: fmt.Sprintf("请求失败（HTTP %d）", res.StatusCode)}
+	var data struct {
+		Data []struct {
+			ID            string `json:"id"`
+			Name          string `json:"name"`
+			DisplayName   string `json:"display_name"`
+			Reasoning     bool   `json:"reasoning"`
+			ContextWindow int    `json:"context_window"`
+			ContextLength int    `json:"context_length"`
+			MaxTokens     int    `json:"max_output_tokens"`
+			Modalities    struct {
+				Input []string `json:"input"`
+			} `json:"modalities"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(body, &data) != nil || data.Data == nil {
+		return failure(res.StatusCode, "模型接口未返回有效的 data 列表，请检查 Base URL（通常以 /v1 结尾）")
+	}
+	models := make([]ProviderModel, 0, len(data.Data))
+	seen := map[string]bool{}
+	for _, m := range data.Data {
+		id := strings.TrimSpace(m.ID)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		name := m.DisplayName
+		if name == "" {
+			name = m.Name
+		}
+		contextWindow := m.ContextWindow
+		if contextWindow == 0 {
+			contextWindow = m.ContextLength
+		}
+		models = append(models, ProviderModel{ID: id, Name: name, Reasoning: m.Reasoning,
+			Input: m.Modalities.Input, ContextWindow: contextWindow, MaxTokens: m.MaxTokens})
+	}
+	return ModelsResult{TestConnResult: TestConnResult{Ok: true, Status: res.StatusCode,
+		Message: fmt.Sprintf("联通成功，获取 %d 个模型", len(models))}, Models: models}
 }
 
 // ChatStream 发起流式对话：POST {baseUrl}/chat/completions（stream: true），

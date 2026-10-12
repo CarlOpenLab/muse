@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Palette, Server, Globe, Type, Wifi, FileText, FolderOpen } from '@lucide/vue'
+import { Palette, Server, Globe, Type, Wifi, FileText, FolderOpen, RefreshCw } from '@lucide/vue'
 import { useSettings } from '../composables/useSettings'
 import { useTheme } from '../composables/useTheme'
 import ProviderSettings from './ProviderSettings.vue'
+import UpdateSettings from './UpdateSettings.vue'
 import type { WebSearchResponse } from '../chat/ipcProvider'
 
 const { settings } = useSettings()
@@ -13,7 +14,7 @@ defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 /** 左侧分组导航：基础设置 / Agent 能力 */
-const activeTab = ref<'basic' | 'theme' | 'startup' | 'providers' | 'search'>('basic')
+const activeTab = ref<'basic' | 'theme' | 'startup' | 'providers' | 'search' | 'updates'>('basic')
 
 const NAV_ITEMS = [
   {
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
       { key: 'theme', label: '主题', icon: Palette },
       { key: 'basic', label: '排版', icon: Type },
       { key: 'startup', label: '启动文档', icon: FileText },
+      { key: 'updates', label: '应用更新', icon: RefreshCw },
     ],
   },
   {
@@ -195,6 +197,7 @@ async function pickDefaultDir(): Promise<void> {
 
               <!-- Agent 能力：模型供应商 -->
               <ProviderSettings v-else-if="activeTab === 'providers'" />
+              <UpdateSettings v-else-if="activeTab === 'updates'" />
 
               <!-- Agent 能力：联网搜索 -->
               <div v-else-if="activeTab === 'search'">

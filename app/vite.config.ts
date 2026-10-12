@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { copyFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
@@ -11,7 +12,12 @@ import { AntdvNextResolver } from '@antdv-next/auto-import-resolver'
 // Go 应用经 MYGO_DEV_URL 加载。
 export default defineConfig({
   base: './',
-  plugins: [UnoCSS(), vue(), Components({ resolvers: [AntdvNextResolver()], dts: 'src/components.d.ts' })],
+  plugins: [UnoCSS(), vue(), Components({ resolvers: [AntdvNextResolver()], dts: 'src/components.d.ts' }), {
+    name: 'muse-app-icon',
+    writeBundle() {
+      copyFileSync(resolve(__dirname, '../resources/icon.png'), resolve(__dirname, '../native/embed/dist/icon.png'))
+    },
+  }],
   build: {
     outDir: '../native/embed/dist',
     emptyOutDir: true,
