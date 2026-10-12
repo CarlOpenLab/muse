@@ -104,11 +104,32 @@ jobs:
             echo "UPX not available, skipping compression"
           fi
 
-      - name: Upload binary
+      - name: Build macOS DMG
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: |
+          # 安装 create-dmg（比裸 hdiutil 好看得多）
+          brew install create-dmg || true
+          chmod +x scripts/build-macos-app.sh
+          scripts/build-macos-app.sh "native/${{ matrix.output }}" "resources/icon.icns" "${RELEASE_TAG#v}"
+
+      - name: Upload binary (Linux/Windows)
+        if: matrix.os != 'macos-latest'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}-release
           path: native/${{ matrix.output }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload DMG (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-release
+          path: dist/Muse-*-macOS.dmg
           if-no-files-found: error
           retention-days: 7
 
