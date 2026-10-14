@@ -2,7 +2,11 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 
 const title = defineModel<string>({ required: true })
-const emit = defineEmits<{ enter: [event: KeyboardEvent] }>()
+const emit = defineEmits<{
+  enter: [event: KeyboardEvent]
+  /** 这一次标题编辑结束（回车或失焦）——调用方据此把文件名同步成标题 */
+  commit: []
+}>()
 const area = ref<HTMLTextAreaElement | null>(null)
 let observer: ResizeObserver | undefined
 let lastWidth = 0
@@ -20,6 +24,11 @@ function onInput(event: Event): void {
   title.value = element.value.replace(/[\r\n]+/g, ' ')
   element.value = title.value
   resize()
+}
+
+function onEnter(event: KeyboardEvent): void {
+  emit('enter', event)
+  emit('commit')
 }
 
 watch(title, resize, { flush: 'post' })
@@ -51,7 +60,8 @@ defineExpose({ focus: () => area.value?.focus(), select: () => area.value?.selec
     rows="1"
     spellcheck="false"
     @input="onInput"
-    @keydown.enter="emit('enter', $event)"
+    @keydown.enter="onEnter"
+    @blur="emit('commit')"
   />
 </template>
 

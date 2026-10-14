@@ -25,7 +25,7 @@ import SettingsModal from './components/SettingsModal.vue'
 import EditorContextMenu from './components/EditorContextMenu.vue'
 import LinkModal from './components/LinkModal.vue'
 import SourceEditor from './components/SourceEditor.vue'
-import FileTreePanel from './components/FileTreePanel.vue'
+import LeftPanel from './components/LeftPanel.vue'
 import { useViewMode, type ViewModeState } from './composables/useViewMode'
 import { dispatchFormat, dispatchSelectCell, dispatchInsertImage, dispatchEditorFocusBody } from './composables/useEditorControl'
 import { clearBlockRange } from './editor/block/blockSelectionState'
@@ -214,6 +214,7 @@ const {
   save,
   saveAs,
   setPath,
+  renameToTitle,
   closeDoc,
   handleCloseRequest,
   restoreDraft
@@ -233,7 +234,7 @@ const headings = useOutline(fullContent)
 const search = useSearch()
 const { settings } = useSettings()
 
-// ===== 视图模式（Typora「视图」菜单）：源代码 / 专注 / 打字机 / 大纲 =====
+// ===== 视图模式（视图菜单）：源代码 / 专注 / 打字机 / 大纲 =====
 const { viewMode, toggle: toggleViewMode } = useViewMode()
 
 /** 切换视图模式并广播（打字机插件监听此事件即时对齐光标） */
@@ -248,6 +249,8 @@ watch(
   () => viewMode.value.source,
   (on) => {
     if (on) sourceText.value = fullContent.value
+    // 退出源代码模式时补一次标题同步：源码里改过首行标题也能落成文件名
+    else void renameToTitle()
   }
 )
 function onSourceChange(text: string): void {
@@ -265,7 +268,7 @@ function toggleSourceMode(): void {
   setViewMode('source')
 }
 
-// ===== 文件树侧栏（Typora「文件」面板）：打开文件夹 / 打开文件 / 重命名同步 =====
+// ===== 左侧栏（「文件」页签）：打开文件夹 / 打开文件 / 重命名同步 =====
 function toggleFilesSidebar(): void {
   setViewMode('files')
 }
@@ -290,7 +293,7 @@ function focusTitleInput(): void {
   titleInputRef.value?.select()
 }
 function handleTitleBarEdit(): void {
-  // Typora 式：点击文件名即聚焦标题输入（标题与文件名分离，文件重命名走右键/另存为）
+  // 点击文件名即聚焦标题输入；标题编辑完成后文件名会跟随标题（见 renameToTitle）
   focusTitleInput()
 }
 /** 标题输入框回车：光标切进正文开头（一行标题写完，回车即落笔正文）。 */
@@ -299,6 +302,11 @@ function onTitleEnter(e: KeyboardEvent): void {
   if (e.isComposing) return
   e.preventDefault()
   dispatchEditorFocusBody()
+}
+
+/** 标题编辑完成（回车或失焦）：把文件名同步成标题 */
+function onTitleCommit(): void {
+  void renameToTitle()
 }
 
 // macOS 无边框窗口：红绿灯浮在内容上，左栏顶部要预留一条拖拽区
@@ -396,7 +404,7 @@ async function createDoc(): Promise<void> {
   await newFile()
 }
 
-// 启动：Typora 式 mac/win 一致 — 无外部打开文件时，默认在文稿中落盘一个 Untitled.md 真实文件
+// 启动：mac/win 行为一致 — 无外部打开文件时，默认在文稿中落盘一个 Untitled.md 真实文件
 // 无“未保存”概念，自动保存直接写该文件；最近文件仅作记录
 void window.muse?.invoke('fs:readRecent').then((r) => {
   recentFiles.value = Array.isArray(r) ? (r as string[]) : []
@@ -433,7 +441,7 @@ onMounted(() => {
     else if (action === 'save') void save()
     else if (action === 'saveAs') void saveAs()
     else if (action === 'find') openSearch()
-    // ---- Typora 对齐：段落 / 格式 / 视图 / 导出 ----
+    // ---- 段落 / 格式 / 视图 / 导出 ----
     else if (action === 'format' && format) dispatchFormat(format)
     else if (action === 'link') openLinkModal()
     else if (action === 'insert-image') void insertImageFromDialog()
@@ -455,12 +463,12 @@ onMounted(() => {
   // 树内重命名当前文档 → 同步路径（原文件监听跟随新路径）
   window.addEventListener('muse:tree-renamed', onTreeRenamed)
 
-  // 编辑器内 ⌘K / Ctrl⌘I（typoraKeymap 派发）→ 链接 / 插入图片
+  // 编辑器内 ⌘K / Ctrl⌘I（editorKeymap 派发）→ 链接 / 插入图片
   window.addEventListener('muse:request-link', onRequestLink)
   window.addEventListener('muse:request-image', onRequestImage)
 
   // 查找快捷键：⌘F 打开、⌘G / ⇧⌘G 下一个/上一个、Esc 关闭
-  // Typora 视图快捷键：⌘/ 源代码模式、F8 专注、F9 打字机
+  // 视图快捷键：⌘/ 源代码模式、F8 专注、F9 打字机
   window.addEventListener('keydown', (e) => {
     const mod = e.metaKey || e.ctrlKey
     const key = e.key.toLowerCase()
@@ -557,7 +565,7 @@ async function onDrop(e: DragEvent): Promise<void> {
   if (!path) return
   const isDir = (await window.muse?.invoke('fs:isDir', path)) as boolean
   if (isDir) {
-    // 拖入文件夹 → 作为工作区打开并展开文件栏（Typora 行为）
+    // 拖入文件夹 → 作为工作区打开并展开文件栏
     await setRoot(path)
     viewMode.value.files = true
     return
@@ -609,7 +617,7 @@ watch(headings, () => {
   void nextTick(onEditorScroll)
 })
 
-// ===== 右键上下文菜单（Typora 式）=====
+// ===== 右键上下文菜单 =====
 const ctxMenu = ref({ open: false, x: 0, y: 0, inTable: false })
 
 function onEditorContextmenu(e: MouseEvent): void {
@@ -636,7 +644,7 @@ function applyLinkHref(href: string): void {
   dispatchFormat('link', href)
 }
 
-// 编辑器内快捷键（typoraKeymap 派发窗口事件）：⌘K 链接、Ctrl⌘I 插图
+// 编辑器内快捷键（editorKeymap 派发窗口事件）：⌘K 链接、Ctrl⌘I 插图
 function onRequestLink(): void {
   openLinkModal()
 }
@@ -650,7 +658,7 @@ async function insertImageFromDialog(): Promise<void> {
   if (rel) dispatchInsertImage(rel)
 }
 
-// ===== 导出（Typora「文件 > 导出」）=====
+// ===== 导出（文件 > 导出）=====
 async function exportPdf(): Promise<void> {
   clearBlockRange() // 先把多块选中的高亮清掉，PDF 里不留底色
   // exporting 类：隐藏侧栏/状态栏，正文占满页宽（见 base.css）
@@ -742,8 +750,15 @@ const getDocContext = (): string => fullContent.value
           />
 
           <div class="flex flex-1 min-h-0">
-            <!-- 左栏：文件树（Typora「文件」面板，⌘⇧L / 底部工具条切换） -->
-            <FileTreePanel v-show="viewMode.files" :active-path="currentPath" @open="openPath" />
+            <!-- 左栏：文件 / 大纲两个页签（⌘⇧L / 底部工具条切换整栏） -->
+            <LeftPanel
+              v-show="viewMode.files"
+              :active-path="currentPath"
+              :headings="headings"
+              :active-heading="activeHeading"
+              @open="openPath"
+              @jump="scrollToHeading"
+            />
 
             <!-- 中栏：顶栏下方是 Markdown 编辑区 -->
             <main class="flex-1 min-w-0 flex flex-col bg-bg">
@@ -761,6 +776,7 @@ const getDocContext = (): string => fullContent.value
                     ref="titleInputRef"
                     v-model="titleText"
                     @enter="onTitleEnter"
+                    @commit="onTitleCommit"
                   />
                   <div v-show="!viewMode.source">
                     <MilkdownEditor v-model="doc" />

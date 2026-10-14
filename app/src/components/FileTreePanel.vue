@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import {
   ChevronDown,
   ChevronRight,
@@ -13,7 +13,7 @@ import {
 import { useWorkspace, type TreeNode } from '../composables/useWorkspace'
 
 /**
- * 左侧文件树侧栏（Typora「文件」面板）：
+ * 左栏「文件」页：文件树本体（外壳与页签在 LeftPanel）。
  * 打开文件夹 → 树形浏览 markdown 文件，点击打开，右键新建 / 重命名 / 删除 / Finder 显示。
  * 数据与操作全部来自 useWorkspace（fs:listTree / createFile / rename / trash），
  * 主进程递归监听目录，外部改动自动刷新。渲染用扁平列表（按展开态过滤），避免递归组件。
@@ -68,7 +68,7 @@ async function startRename(node: TreeNode): Promise<void> {
   renameValue.value = node.name
   await nextTick()
   renameInput.value?.focus()
-  // 选中主名（不含扩展名），Typora 式
+  // 选中主名（不含扩展名）
   const dot = node.name.lastIndexOf('.')
   renameInput.value?.setSelectionRange(0, dot > 0 ? dot : node.name.length)
 }
@@ -138,43 +138,12 @@ const ctxStyle = computed(() => {
   return { left: `${x}px`, top: `${y}px` }
 })
 
-// ---- 拖拽调宽 ----
-let dragging = false
-
-function startDrag(e: MouseEvent): void {
-  e.preventDefault()
-  dragging = true
-  const startX = e.clientX
-  const startW = ws.width.value
-  const onMove = (ev: MouseEvent): void => {
-    if (!dragging) return
-    ws.setWidth(startW + (ev.clientX - startX))
-  }
-  const onUp = (): void => {
-    dragging = false
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-  }
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-  document.body.style.cursor = 'col-resize'
-  document.body.style.userSelect = 'none'
-}
-onUnmounted(() => {
-  dragging = false
-})
 </script>
 
 <template>
-  <aside
-    data-export-hide
-    class="relative shrink-0 flex flex-col bg-bg border-r border-border-strong select-none"
-    :style="{ width: `${ws.width.value}px` }"
-  >
-    <!-- 头部：工作区名 + 操作（mac 红绿灯浮在这条区上，app-drag 可拖窗） -->
-    <div class="app-drag h-12 shrink-0 flex items-center gap-1 pl-3 pr-2 border-b border-border-subtle">
+  <div class="flex-1 min-h-0 flex flex-col select-none">
+    <!-- 头部：工作区名 + 操作 -->
+    <div class="h-9 shrink-0 flex items-center gap-1 pl-3 pr-2 border-b border-border-subtle">
       <span class="flex-1 min-w-0 text-[12px] font-medium text-fg-dim truncate" :title="ws.root.value ?? ''">
         {{ ws.rootName.value || '未打开文件夹' }}
       </span>
@@ -237,9 +206,6 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 左栏右边缘拖拽把手 -->
-    <div class="tree-resizer" title="拖拽调整宽度" @mousedown="startDrag" />
-
     <!-- 树右键菜单 -->
     <Teleport to="body">
       <template v-if="ctx.open">
@@ -260,22 +226,10 @@ onUnmounted(() => {
         </div>
       </template>
     </Teleport>
-  </aside>
+  </div>
 </template>
 
 <style scoped>
-.tree-resizer {
-  position: absolute;
-  top: 0;
-  right: -3px;
-  width: 6px;
-  height: 100%;
-  cursor: col-resize;
-  z-index: 10;
-}
-.tree-resizer:hover {
-  background: color-mix(in srgb, var(--fg) 14%, transparent);
-}
 .tree-row {
   display: flex;
   align-items: center;

@@ -9,6 +9,28 @@ function basename(p: string): string {
   return p.slice(Math.max(i, j) + 1) || p
 }
 
+// 文件扩展名（含点）；没有扩展名时按 markdown 处理
+function extensionOf(p: string): string {
+  const name = basename(p)
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? name.slice(dot) : '.md'
+}
+
+/**
+ * 把标题转成合法的文件名主干。
+ * 按最严的平台处理：去掉路径分隔符与 Windows 保留字符、控制字符，
+ * 折叠空白、去掉首尾的点与空格（Windows 不允许文件名以点结尾），并限长。
+ */
+function titleToFileBase(title: string): string {
+  return title
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[.\s]+/, '')
+    .replace(/[.\s]+$/, '')
+    .slice(0, 120)
+    .trim()
+}
+
 // ---- 标题 / 正文分离：标题为单行输入框，正文为 Milkdown 编辑器 ----
 function splitTitleBody(markdown: string): { title: string; body: string } {
   const m = markdown.match(/^#\s+(.*)(?:\n|$)/)
@@ -29,6 +51,9 @@ const titleText = ref('')
 const doc = ref('') // 正文（不含标题）
 const currentPath = ref<string | null>(null)
 const dirty = ref(false)
+// 上一次与文件名对齐过的标题：载入 / 另存为 / 重命名后同步。
+// 标题编辑结束时拿它比对，只有用户真的改过标题才去动盘上的文件名。
+const syncedTitle = ref('')
 // 是否已进入编辑（新建 / 打开 / 恢复草稿后为 true）。未进入时显示 Entry 欢迎页。
 const started = ref(false)
 // 程序性替换内容时置 true，抑制 watch 触发脏标记与草稿写入
@@ -89,7 +114,7 @@ watch([doc, titleText], () => {
       void window.muse?.invoke('fs:writeDraft', fullContent.value)
     }, 1500)
   } else {
-    // 已命名文档：自动保存（Typora / Obsidian 式），切文件与关窗前另有兜底 flush
+    // 已命名文档：自动保存，切文件与关窗前另有兜底 flush
     clearTimeout(saveTimer)
     saveTimer = setTimeout(() => void writeCurrent(), AUTOSAVE_DELAY)
   }
@@ -118,6 +143,7 @@ function loadContent(path: string | null, content: string): void {
   titleText.value = title
   doc.value = body
   currentPath.value = path
+  syncedTitle.value = title
   syncDocumentWatch(path)
   syncDirty(false)
   started.value = true
@@ -155,7 +181,7 @@ async function flushBeforeSwitch(): Promise<boolean> {
 async function newFile(): Promise<void> {
   if (!(await flushBeforeSwitch())) return
   void window.muse?.invoke('fs:clearDraft')
-  // Typora 式：直接落盘到可配置的固定文件（默认 ~/Documents/Untitled.md），始终同一文件
+  // 直接落盘到可配置的固定文件（默认 ~/Documents/Untitled.md），始终同一文件
   try {
     const { settings } = useSettings()
     const dir = settings.value.defaultFileDir?.trim() || ''
@@ -172,6 +198,7 @@ async function newFile(): Promise<void> {
   startupPath = null
   suppress = true
   titleText.value = ''
+  syncedTitle.value = ''
   doc.value = ''
   currentPath.value = null
   syncDocumentWatch(null)
@@ -241,6 +268,8 @@ async function saveAs(): Promise<boolean> {
     if (path) {
       currentPath.value = path
       startupPath = null
+      // 另存为选定的文件名就是这一版的名字，标题暂时让位（下次改标题再同步）
+      syncedTitle.value = titleText.value.trim()
       syncDocumentWatch(path)
       syncDirty(false)
       void window.muse?.invoke('fs:clearDraft')
@@ -257,7 +286,36 @@ function setPath(path: string): void {
   currentPath.value = path
   // 重命名后不再视为启动文档（已有了明确落盘位置）
   startupPath = null
+  // 手工改名以文件名说了算：把当前标题记为已同步，避免紧接着被标题改回去
+  syncedTitle.value = titleText.value.trim()
   syncDocumentWatch(path)
+}
+
+/**
+ * 标题编辑结束后把文件名同步成标题（标题即文件名）。
+ * 触发点：标题输入框回车/失焦、退出源代码模式；只有标题相对上次同步真的变了才动盘。
+ */
+async function renameToTitle(): Promise<void> {
+  const path = currentPath.value
+  const title = titleText.value.trim()
+  if (!path || !title || title === syncedTitle.value) return
+  const base = titleToFileBase(title)
+  if (!base) return
+  const target = base + extensionOf(path)
+  if (target === basename(path)) {
+    syncedTitle.value = title
+    return
+  }
+  // 先写盘再改名：防抖任务还挂在旧路径上，改名后它会写到已经不存在的文件
+  await flushPending()
+  // flush 是异步的，期间可能切了文档或又改了标题——对不上就放弃这次改名
+  if (currentPath.value !== path || titleText.value.trim() !== title) return
+  const renamed = (await window.muse?.invoke('fs:renameDocument', path, target)) as string | null
+  if (!renamed || currentPath.value !== path) return
+  syncedTitle.value = title
+  setPath(renamed)
+  // 启动文档的 flush 只写了草稿，改名后要把正文补到新文件上
+  if (dirty.value) await writeCurrent()
 }
 
 /** 关掉当前文档，回到欢迎页（当前文件被删除时用） */
@@ -267,6 +325,7 @@ function closeDoc(): void {
   clearTimeout(saveTimer)
   startupPath = null
   titleText.value = ''
+  syncedTitle.value = ''
   doc.value = ''
   currentPath.value = null
   syncDocumentWatch(null)
@@ -355,6 +414,7 @@ export function useFile() {
     save,
     saveAs,
     setPath,
+    renameToTitle,
     closeDoc,
     flushPending,
     flushBeforeSwitch,

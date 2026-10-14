@@ -10,6 +10,7 @@
 //	Files.ListTree      递归列出工作区里的 markdown -> TreeNode[] | null
 //	Files.CreateFile    在目录下新建 md（重名自动加序号）-> path | ""
 //	Files.Rename        重命名文件 / 目录 -> newPath | ""
+//	Files.RenameDocument 按标题改当前文档的文件名（不限工作区）-> newPath | ""
 //	Files.Trash         移入废纸篓（可恢复）-> bool
 //	Files.WatchFile / Files.UnwatchFile   当前文档监听 -> 变更时推 fs:document-changed
 //	Files.UnwatchWorkspace                取消目录监听（listTree 自动换绑）
@@ -230,7 +231,7 @@ func (f *Files) SaveAs(ctx context.Context, content string) (string, error) {
 	return path, nil
 }
 
-// CreateDefault Typora 式：启动即在固定目录打开同一文件（可配置，不自动递增）。
+// CreateDefault：启动即在固定目录打开同一文件（可配置，不自动递增）。
 func (f *Files) CreateDefault(dir, name string) *FileContent {
 	log2.Printf("[muse] Files.CreateDefault dir=%q name=%q", dir, name)
 	baseDir := strings.TrimSpace(dir)
@@ -418,6 +419,45 @@ func (f *Files) Rename(path, newName string) string {
 	}
 	next := filepath.Join(filepath.Dir(path), name)
 	if !f.insideWorkspace(next) || pathExists(next) {
+		return ""
+	}
+	if err := os.Rename(path, next); err != nil {
+		return ""
+	}
+	// 最近文件里的旧路径同步跟上，避免菜单里留死链接
+	f.mu.Lock()
+	for i, p := range f.recent {
+		if p == path {
+			f.recent[i] = next
+		}
+	}
+	f.saveRecentLocked()
+	f.mu.Unlock()
+	if RebuildMenu != nil {
+		RebuildMenu()
+	}
+	return next
+}
+
+// RenameDocument 把当前文档改成新的文件名（标题即文件名）。
+// 与 Rename 的区别是不要求文件位于工作区内——文档可以从任何位置打开；
+// 仍然只接受纯文件名，且只对已存在的文本类文件生效，目标已占用时直接失败（不静默覆盖）。
+func (f *Files) RenameDocument(path, newName string) string {
+	name := strings.TrimSpace(newName)
+	if name == "" || strings.ContainsAny(name, `/\`) || name == "." || name == ".." {
+		return ""
+	}
+	if !isTextFile(path) {
+		return ""
+	}
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	next := filepath.Join(filepath.Dir(path), name)
+	if next == path {
+		return path
+	}
+	if pathExists(next) {
 		return ""
 	}
 	if err := os.Rename(path, next); err != nil {

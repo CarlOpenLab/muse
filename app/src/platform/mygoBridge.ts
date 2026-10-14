@@ -21,6 +21,7 @@ const INVOKE_MAP: Record<string, string> = {
   'fs:createFile': 'Files.CreateFile',
   'fs:createFolder': 'Files.CreateFolder',
   'fs:rename': 'Files.Rename',
+  'fs:renameDocument': 'Files.RenameDocument',
   'fs:trash': 'Files.Trash',
   'fs:revealInFolder': 'Files.RevealInFolder',
   'fs:unwatchWorkspace': 'Files.UnwatchWorkspace',
