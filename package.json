@@ -1,6 +1,6 @@
 {
   "name": "muse",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "license": "MIT",
   "description": "Muse monorepo 根 — 纯编排（前端在 app/，Go 壳在 native/）",

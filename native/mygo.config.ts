@@ -6,7 +6,7 @@ import { defineConfig } from "mygo-cli";
 export default defineConfig({
   name: "Muse",
   identifier: "com.muse.app",
-  version: "0.2.1",
+  version: "0.2.2",
   devUrl: "http://localhost:5173",
   devCommand: "pnpm --dir .. run dev:web",
   buildCommand: "pnpm --dir .. run build:web",
