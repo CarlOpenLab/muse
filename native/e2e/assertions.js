@@ -660,7 +660,7 @@
       clickText('应用更新')
       await sleep(200)
       const preferences = await originalInvoke('app:update-preferences')
-      results.updateSettingsVersion = preferences.version === '0.2.2'
+      results.updateSettingsVersion = preferences.version === '0.2.3'
       results.updateSettingsVisible = document.body.textContent.includes('自动检查更新') && document.body.textContent.includes('自动下载并安装')
       const changed = await originalInvoke('app:set-update-preferences', { automaticChecks: false, automaticDownloads: true })
       results.updatePreferencesPersist = !changed.automaticChecks && changed.automaticDownloads

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3
+
+- Fix laggy title editing with IME: the composing text is no longer written back to the textarea, the title model only commits after composition ends, and Enter during composition no longer renames the file. / 修复标题输入法卡顿：组合输入期间不再回写输入框内容，标题仅在组合结束后提交，组合中按回车不再触发文件名同步。
+
 ## 0.2.2
 
 - Switch the left sidebar between the file tree and the current document's outline. / 左侧栏可在文件树与当前文档大纲之间切换。
