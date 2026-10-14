@@ -13,7 +13,7 @@ export interface DocStats {
 
 /**
  * 文档统计（字数 / 字符 / 行数）。
- * 字数 = CJK 汉字数 + 英文单词数（与 Word/Typora 口径接近）。
+ * 字数 = CJK 汉字数 + 英文单词数（与常见写作工具的口径接近）。
  */
 export function useDocStats(doc: Ref<string>) {
   return computed<DocStats>(() => {

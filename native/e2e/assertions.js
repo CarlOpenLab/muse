@@ -1,6 +1,6 @@
 // Muse · e2e 断言脚本（由 native/e2e.go 在 MUSE_E2E=1 时经 Window.Eval 注入）。
 //
-// 驱动方式与旧 Electron 版 scripts/e2e-typora.mjs 相同：合成事件 + DOM 断言，
+// 驱动方式与旧 Electron 版 e2e 脚本 相同：合成事件 + DOM 断言，
 // 不引入任何测试专用接口；用户数据目录已被 Go 侧指向一次性临时目录。
 // 返回 { ok, results }，由 Go 打印为 E2E_RESULT 一行 JSON。
 (async () => {
@@ -91,7 +91,7 @@
     await sleep(150)
 
     pm().focus()
-    document.execCommand('insertText', false, 'hello typora')
+    document.execCommand('insertText', false, 'hello muse')
     await sleep(300)
     const p0 = pm().querySelector('p')
     const sel = window.getSelection()
@@ -101,7 +101,7 @@
     sel.addRange(range)
     fmt('heading-1')
     await sleep(300)
-    results.headingWorks = !!pm().querySelector('h1') && pm().querySelector('h1').textContent.includes('hello typora')
+    results.headingWorks = !!pm().querySelector('h1') && pm().querySelector('h1').textContent.includes('hello muse')
 
     // 2) 同级再切换 → 退回正文
     fmt('heading-1')
@@ -120,7 +120,7 @@
     fmt('bold')
     await sleep(300)
     results.boldWorks = !!pm().querySelector('strong')
-    // 收起选区到段落末尾（保留 'hello typora' 完整文本）
+    // 收起选区到段落末尾（保留 'hello muse' 完整文本）
     const p1b = pm().querySelector('p')
     pm().focus()
     caretEnd(p1b)
@@ -198,7 +198,7 @@
     await sleep(300)
     const srcArea = document.querySelector('.source-editor')
     results.sourceModeOpens = !!srcArea
-    results.sourceModeHasTitle = !!srcArea && /typora/.test(srcArea.value)
+    results.sourceModeHasTitle = !!srcArea && /hello muse/.test(srcArea.value)
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true, cancelable: true }))
     await sleep(300)
     results.sourceModeCloses = !document.querySelector('.source-editor')

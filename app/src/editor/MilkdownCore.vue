@@ -25,7 +25,7 @@ import { selectionPlugin } from './selectionPlugin'
 import { handleEditorTool } from './editorToolHandlers'
 import { searchCommand } from './searchCommands'
 import { placeholderPlugin } from './placeholderPlugin'
-import { typoraKeymap } from './typoraKeymap'
+import { editorKeymap } from './editorKeymap'
 import { imagePastePlugin } from './imagePastePlugin'
 import { focusModePlugin } from './focusModePlugin'
 import { typewriterPlugin } from './typewriterPlugin'
@@ -54,7 +54,7 @@ const { pendingAction } = useEditorControl()
 
 /**
  * Milkdown 序列化器会把「空段落」写成 <br />（保留空行的内置行为），
- * 放在表格单元格里就是噪音（Typora 保存空单元格是干净的）。
+ * 放在表格单元格里就是噪音（空单元格应当保持干净）。
  * 仅对形如表格行的行内做清理，不影响正文空行保留。
  */
 function cleanTableBr(markdown: string): string {
@@ -98,7 +98,7 @@ const { get, loading } = useEditor((root) =>
     .use(selectionPlugin)
     .use(searchCommand)
     .use(placeholderPlugin)
-    .use(typoraKeymap)
+    .use(editorKeymap)
     .use(imagePastePlugin)
     .use(focusModePlugin)
     .use(typewriterPlugin)
@@ -147,7 +147,7 @@ watch(
       })
     }
     if (action.type === 'format' && action.format) {
-      // Typora 式格式化：统一走 runFormat；link 需 href（弹窗确认后携带）
+      // 格式化统一走 runFormat；link 需 href（弹窗确认后携带）
       editor.action((ctx) => {
         if (action.format === 'link' && action.href) applyLink(ctx, action.href)
         else runFormat(ctx, action.format!)
@@ -194,7 +194,7 @@ watch(
   }
 )
 
-// 编辑器内快捷键（typoraKeymap）→ 格式命令
+// 编辑器内快捷键（editorKeymap）→ 格式命令
 function onFormatEvent(e: Event): void {
   const action = (e as CustomEvent<string>).detail as FormatAction
   const editor = get()

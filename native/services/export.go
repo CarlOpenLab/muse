@@ -60,7 +60,7 @@ func assetsDir(docPath string) (string, error) {
 }
 
 // markdownImagePath 生成可写进 markdown 的相对路径。
-// sanitize 已去掉空格与特殊字符，中文按 Typora 习惯直书；仅转义 #%。
+// sanitize 已去掉空格与特殊字符，中文直书；仅转义 #%。
 func markdownImagePath(name string) string {
 	r := strings.NewReplacer("%", "%25", "#", "%23")
 	return "assets/" + r.Replace(name)

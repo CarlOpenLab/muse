@@ -32,14 +32,14 @@
 ## ✨ Features
 
 * **WYSIWYG editing** — powered by Milkdown 7; headings, bold, lists, quotes, tables, and task lists render as you type
-* **Typora-style interaction parity** — the goal of the first milestone:
-  * **Shortcuts** — ⌘1-6 headings / ⌘0 paragraph / ⌘= ⌘- promote & demote heading / ⌘B ⌘I bold & italic / ⌘⇧\` inline code / ⌃⇧\` strikethrough / ⌘K link / ⌘\\ clear formatting / ⌘⌥Q quote / ⌘⌥U ⌘⌥O lists / ⌘⇧X task list / ⌘⌥C code fence / ⌘⌥B math block / ⌘⌥T table / ⌘] ⌘[ list indent (matches Typora macOS defaults)
-  * **Native menus** — the Paragraph / Format / View menus mirror Typora
+* **Interaction parity** — the goal of the first milestone:
+  * **Shortcuts** — ⌘1-6 headings / ⌘0 paragraph / ⌘= ⌘- promote & demote heading / ⌘B ⌘I bold & italic / ⌘⇧\` inline code / ⌃⇧\` strikethrough / ⌘K link / ⌘\\ clear formatting / ⌘⌥Q quote / ⌘⌥U ⌘⌥O lists / ⌘⇧X task list / ⌘⌥C code fence / ⌘⌥B math block / ⌘⌥T table / ⌘] ⌘[ list indent (macOS defaults)
+  * **Native menus** — the Paragraph / Format / View menus follow mainstream Markdown editors
   * **Context menu** — right-click inside the editor: clipboard + inline formatting + paragraph + table row/column ops (table ops appear automatically inside tables)
-  * **Folder / file-tree sidebar** — the Open Folder button in the status bar (or File > Open Folder… ⌘⇧O, or dropping a folder onto the window) opens a Typora-style file tree on the left: click to open, active-file highlight, right-click to create file/folder, rename, move to trash, reveal in Finder; external changes refresh automatically (⌘⇧L or the status-bar button toggles the sidebar)
+  * **Folder / file-tree sidebar** — the Open Folder button in the status bar (or File > Open Folder… ⌘⇧O, or dropping a folder onto the window) opens a file tree on the left: click to open, active-file highlight, right-click to create file/folder, rename, move to trash, reveal in Finder; external changes refresh automatically (⌘⇧L or the status-bar button toggles the sidebar)
   * **Table editing** — ⌘⌥T to insert; right-click to add/remove rows & columns or delete the table; Tab / ⇧Tab to jump cells
   * **Math** — `$…$` inline and `$$…$$` block (remark-math parsing + KaTeX rendering); click a formula to edit it, and type `$$` + Enter to convert a paragraph into a math block
-  * **Image paste / drop** — pasted or dropped images are copied into an `assets/` folder next to the document and inserted with a relative path (Typora behavior); ⌘⌃I or right-click to pick a file
+  * **Image paste / drop** — pasted or dropped images are copied into an `assets/` folder next to the document and inserted with a relative path; ⌘⌃I or right-click to pick a file
   * **Source code mode** — ⌘/ toggles between WYSIWYG and raw markdown, synced both ways
   * **Focus / typewriter mode** — F8 dims everything but the current paragraph; F9 keeps the caret at ~45% of the viewport height
   * **Export** — File > Export PDF (with body styling) / Export HTML (standalone styled file; relative image paths work)
@@ -60,7 +60,7 @@
   * Drag & drop to open files
   * Recent files list
   * Unsaved marker (●) + close confirmation
-  * Auto-save (debounced, Typora / Obsidian style)
+  * Auto-save (debounced)
 
 > 📌 Screenshot placeholder — to be added.
 
@@ -134,7 +134,7 @@ muse/
 │       ├── composables/          # file / theme / search / settings / stats / outline / workspace
 │       └── styles/base.css       # theme variables + editor typography
 ├── native/                       # main process (Go + MyGo)
-│   ├── main.go                   # window lifecycle / Typora-style menus / shortcuts
+│   ├── main.go                   # window lifecycle / native menus / shortcuts
 │   ├── services/                 # files / ai / export / appsvc / state
 │   └── embed/dist                # pnpm build:web output (go:embed, gitignored)
 ├── resources/                    # app icons
@@ -150,7 +150,7 @@ muse/
 | 2       | Shiki real-time code highlighting                           | ✅         |
 | 3       | File I/O & app shell (menus / drag-drop / recents)          | ✅         |
 | 4       | Editing polish (themes / outline / find / stats / settings) | ✅         |
-| 4.5     | **Typora interaction parity** (shortcuts / paragraph & format menus / context menu / table editing / math / image paste / source mode / focus & typewriter / PDF & HTML export) | ✅ |
+| 4.5     | **Interaction parity** (shortcuts / paragraph & format menus / context menu / table editing / math / image paste / source mode / focus & typewriter / PDF & HTML export) | ✅ |
 | 4.6     | **Shell migrated to MyGo** (Go + system WebView replacing Electron; frontend and IPC channels reused) | ✅ |
 | 5       | AI streaming output (`@shikijs/stream`, the main line)      | ⏳ planned |
 

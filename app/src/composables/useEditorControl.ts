@@ -33,7 +33,7 @@ export interface EditorAction {
   tool?: { name: string; args: unknown }
   /** tool：执行完成后回调（agent loop 需要拿到结果反馈给模型） */
   resolve?: (r: ToolResult) => void
-  /** format：Typora 式格式化动作（标题/列表/表格/行内格式…） */
+  /** format：格式化动作（标题/列表/表格/行内格式…） */
   format?: FormatAction
   /** format: 'link' 时携带的链接地址；serialize / insert-image 的结果回调 */
   href?: string
@@ -100,7 +100,7 @@ export function useEditorControl() {
   return { pendingAction }
 }
 
-/** 请求执行一个 Typora 式格式化动作（菜单 / 右键 / 链接弹窗确认后调用）。 */
+/** 请求执行一个格式化动作（菜单 / 右键 / 链接弹窗确认后调用）。 */
 export function dispatchFormat(format: FormatAction, href?: string): void {
   pendingAction.value = { type: 'format', format, href, seq: ++seq }
 }

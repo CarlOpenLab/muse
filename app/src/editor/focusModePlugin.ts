@@ -1,5 +1,5 @@
 /**
- * 专注模式（Typora F8）：非光标所在顶层块降低不透明度，落笔处保持全亮。
+ * 专注模式（F8）：非光标所在顶层块降低不透明度，落笔处保持全亮。
  * 纯 decoration + CSS 过渡，不改文档。
  */
 import { $prose } from '@milkdown/utils'

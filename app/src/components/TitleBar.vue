@@ -23,7 +23,7 @@ defineProps<{
 const emit = defineEmits<{
   /** 点击路径：在系统文件管理器中打开所在文件夹 */
   reveal: []
-  /** 点击文件名：Typora 式交互（已保存文件可重命名，未命名则聚焦标题） */
+  /** 点击文件名：聚焦标题输入（标题编辑完成后文件名跟随标题） */
   editTitle: []
 }>()
 </script>

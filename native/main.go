@@ -127,7 +127,7 @@ func openWindow() {
 	})
 }
 
-// ---- 应用菜单（对齐 Typora / Electron 版 main.ts） ----
+// ---- 应用菜单（经典桌面 Markdown 编辑器的菜单布局） ----
 
 var (
 	lastMenuMu       sync.Mutex
@@ -181,7 +181,7 @@ func buildMenu(win *mygo.Window) {
 		return func(*mygo.MenuItem, *mygo.Window) { sendFormat(format) }
 	}
 
-	// 段落菜单（Typora：⌘1-6 标题、⌘0 正文、⌘⌥ 组合插入块级结构）
+	// 段落菜单（⌘1-6 标题、⌘0 正文、⌘⌥ 组合插入块级结构）
 	paragraphMenu := &mygo.MenuItem{
 		Label: "段落",
 		Submenu: []*mygo.MenuItem{
@@ -210,7 +210,7 @@ func buildMenu(win *mygo.Window) {
 		},
 	}
 
-	// 格式菜单（行内样式，Typora：⌘B/⌘I/⌘K…）
+	// 格式菜单（行内样式，⌘B/⌘I/⌘K…）
 	formatMenu := &mygo.MenuItem{
 		Label: "格式",
 		Submenu: []*mygo.MenuItem{

@@ -2,7 +2,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 
 /**
- * 源代码模式（Typora ⌘/）：整页等宽编辑 markdown 原文。
+ * 源代码模式（⌘/）：整页等宽编辑 markdown 原文。
  * 进入时由 App 注入当前正文 markdown；输入防抖回传，退出前强制回传一次。
  */
 const props = defineProps<{ content: string }>()

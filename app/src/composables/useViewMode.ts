@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 
 /**
- * 视图模式（Typora「视图」菜单对齐）：源代码模式 / 专注模式 / 打字机模式 / 大纲开关。
+ * 视图模式（视图菜单）：源代码模式 / 专注模式 / 打字机模式 / 大纲开关。
  * 模块级单例，持久化到 localStorage。
  */
 export interface ViewModeState {
@@ -9,7 +9,7 @@ export interface ViewModeState {
   focus: boolean
   typewriter: boolean
   outline: boolean
-  /** 左侧文件树侧栏（Typora ⌘⇧L） */
+  /** 左侧栏（⌘⇧L） */
   files: boolean
 }
 

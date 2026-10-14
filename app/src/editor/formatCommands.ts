@@ -1,5 +1,5 @@
 /**
- * Typora 式格式化命令总线。
+ * 格式化命令总线。
  *
  * 一个 FormatAction 字符串统一描述「标题/段落/列表/引用/表格/行内格式」等操作，
  * 三条入口都汇到这里执行：
@@ -119,7 +119,7 @@ export function runFormat(ctx: Ctx, action: FormatAction): boolean {
     case 'heading-6': {
       const level = Number(action.split('-')[1])
       const h = ancestor(view, 'heading')
-      // 同级标题再按一次 → 退回正文（Typora 行为）
+      // 同级标题再按一次 → 退回正文
       call(h && (h.node.attrs.level as number) === level ? turnIntoTextCommand.key : wrapInHeadingCommand.key, level)
       return true
     }

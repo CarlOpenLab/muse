@@ -3,7 +3,7 @@ import { setActiveShikiTheme, type ShikiThemeName } from '../editor/shiki/highli
 import { refreshShikiHighlight } from '../editor/shiki/shikiCodeBlock'
 
 /**
- * 多主题管理（单例，Typora 式）。
+ * 多主题管理（单例）。
  *
  * - 每套主题 = 一组语义 CSS 变量色板（base.css 的 `:root[data-theme='xx']`）+ 配套 Shiki 高亮主题；
  * - 在 <html> 上同时维护 `data-theme`（色板选择）与 `.dark` 类（明暗模式）：

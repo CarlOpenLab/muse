@@ -1,10 +1,10 @@
 /**
- * Typora 式编辑器内快捷键 + 智能粘贴。
+ * 编辑器内快捷键 + 智能粘贴。
  *
  * - 段落/格式快捷键（⌘1-6、⌘0、⌘K、⌘⌥Q/O/U/C/T/B…）转发为 `muse:format` 窗口事件，
  *   由 MilkdownCore 监听并经 runFormat 执行（prose 层拿不到 milkdown ctx，事件桥接）。
  * - Tab / ⇧Tab：表格内跳格，列表内缩进/反缩进（直接用 prosemirror 命令，不经 ctx）。
- * - 智能粘贴：选中有文字时粘贴 URL → 直接变成链接（Typora 行为）。
+ * - 智能粘贴：选中有文字时粘贴 URL → 直接变成链接。
  */
 import { $prose } from '@milkdown/utils'
 import { Plugin, PluginKey } from '@milkdown/prose/state'
@@ -12,7 +12,7 @@ import { sinkListItem, liftListItem } from '@milkdown/prose/schema-list'
 import { goToNextCell } from '@milkdown/prose/tables'
 import type { EditorView } from '@milkdown/prose/view'
 
-export const typoraKeymapKey = new PluginKey('muse-typora-keymap')
+export const editorKeymapKey = new PluginKey('muse-editor-keymap')
 
 const FORMAT_EVENTS: Record<string, string> = {
   'Mod-1': 'heading-1',
@@ -62,10 +62,10 @@ function inNodeType($from: { node(d: number): { type: { name: string } }; depth:
   return false
 }
 
-export const typoraKeymap = $prose(
+export const editorKeymap = $prose(
   () =>
     new Plugin({
-      key: typoraKeymapKey,
+      key: editorKeymapKey,
       props: {
         handleKeyDown(view: EditorView, event: KeyboardEvent): boolean {
           const key = event.key === 'Tab' ? 'Tab' : event.key.toLowerCase()
@@ -112,7 +112,7 @@ export const typoraKeymap = $prose(
         },
         handlePaste(view: EditorView, event: ClipboardEvent): boolean {
           const text = event.clipboardData?.getData('text/plain') ?? ''
-          // Typora 行为：选中有文字时粘贴纯 URL → 选中文字变成链接
+          // 选中有文字时粘贴纯 URL → 选中文字变成链接
           if (text && URL_RE.test(text.trim())) {
             const { state } = view
             const { from, to, empty } = state.selection

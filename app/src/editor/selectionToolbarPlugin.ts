@@ -1,5 +1,5 @@
 /**
- * 选中文字气泡工具条（Typora / Notion 式）。
+ * 选中文字气泡工具条。
  *
  * 底座用 @milkdown/plugin-tooltip 的 TooltipProvider（floating-ui 定位 + 自动跟随滚动），
  * UI 用独立 Vue app 挂到 body。只读选区算按钮态，不写 useEditorSelection 快照。

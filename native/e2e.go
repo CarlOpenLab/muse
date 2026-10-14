@@ -2,7 +2,7 @@
 // recent / draft / settings），页面加载完成后把 e2e/assertions.js 注入页面，
 // 打印 E2E_RESULT 一行 JSON 并以 0/1 退出。
 //
-// 断言脚本用合成事件 + DOM 断言驱动（与旧 Electron 版 scripts/e2e-typora.mjs
+// 断言脚本用合成事件 + DOM 断言驱动（与旧 Electron 版 e2e 脚本
 // 相同的方式），由 scripts/e2e-muse.mjs 启动与收集结果。需要图形界面，
 // 不适合无头 CI。
 package main

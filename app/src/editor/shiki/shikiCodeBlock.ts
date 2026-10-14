@@ -11,7 +11,7 @@ import { getHighlighter, tokenize, getActiveShikiTheme } from './highlighter'
  *
  * 思路：用 ProseMirror **inline decoration** 把 Shiki token 的颜色叠加到
  * `code_block` 节点的文本上。ProseMirror 的 decoration 机制只包裹文本、
- * 不改变 underlying text DOM，因此光标完全原生，打字即时高亮，最 Typora。
+ * 不改变 underlying text DOM，因此光标完全原生，打字即时高亮。
  *
  * - Shiki 高亮器异步初始化；完成后 dispatch 一个 meta 触发重新着色；
  * - `codeToTokens` 同步且快，每次文档变更重建 decoration；

@@ -175,7 +175,7 @@ async function pickDefaultDir(): Promise<void> {
               <!-- 基础设置：启动文档 -->
               <div v-else-if="activeTab === 'startup'">
                 <div class="text-lg font-semibold">启动文档</div>
-                <p class="text-xs text-fg-soft mt-1 mb-6">每次启动在固定位置打开同一文件（Typora 式），可在下方自定义目录与文件名。</p>
+                <p class="text-xs text-fg-soft mt-1 mb-6">每次启动在固定位置打开同一文件，可在下方自定义目录与文件名。</p>
                 <a-form layout="vertical">
                   <a-form-item label="默认目录（留空则为 ~/Documents）">
                     <div class="flex gap-2">

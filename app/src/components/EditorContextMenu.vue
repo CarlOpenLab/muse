@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import type { FormatAction } from '../editor/formatCommands'
 
 /**
- * 编辑器右键菜单（Typora 式）：剪贴板 + 行内格式 + 段落 + 表格操作。
+ * 编辑器右键菜单：剪贴板 + 行内格式 + 段落 + 表格操作。
  * 纯展示组件：位置与状态由 App 计算，动作经事件回抛 App 分发。
  */
 const props = defineProps<{

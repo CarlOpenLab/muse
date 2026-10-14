@@ -8,7 +8,7 @@ Electron 版已移除，`native/` 是唯一主进程实现。前端（`../app/sr
 
 ```
 native/
-├── main.go            窗口、Typora 菜单（含快捷键）、生命周期、外部「打开方式」
+├── main.go            窗口、原生菜单（含快捷键）、生命周期、外部「打开方式」
 ├── services/
 │   ├── state.go       应用级共享状态 + 全部 Go→前端事件
 │   ├── files.go       文件/对话框/最近文件/草稿/目录与文档监听

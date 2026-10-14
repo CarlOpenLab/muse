@@ -1,5 +1,5 @@
 /**
- * 打字机模式（Typora F9）：光标竖向位置始终保持在滚动容器约 45% 高度处。
+ * 打字机模式（F9）：光标竖向位置始终保持在滚动容器约 45% 高度处。
  * 监听选区变化（view.update），滚动容器 scrollTop 直接对齐（不进撤销栈、不改文档）。
  */
 import { $prose } from '@milkdown/utils'
