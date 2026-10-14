@@ -78,6 +78,30 @@
       results.longTitleWraps = false
     }
 
+    // 1.5) 标题输入法（IME）组合：组合期间不能就地改写 value，换行要到组合结束才折叠。
+    //      旧实现每次 input 都 replace 换行并把 value 写回 DOM，会打断输入法组合，
+    //      表现就是拼音与候选字混在一起连续往外冒。
+    if (title) {
+      const composingInput = (value, data) => {
+        setTitle.call(title, value)
+        title.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+        title.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, data }))
+      }
+      composingInput('拼\n音', '拼')
+      await sleep(60)
+      results.imeComposingKeepsValue = title.value === '拼\n音'
+      title.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '拼音' }))
+      title.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: false, data: '拼音' }))
+      await sleep(80)
+      results.imeCommitNormalizes = title.value === '拼 音'
+      setTitle.call(title, '')
+      title.dispatchEvent(new Event('input', { bubbles: true }))
+      await sleep(80)
+    } else {
+      results.imeComposingKeepsValue = false
+      results.imeCommitNormalizes = false
+    }
+
     pm().focus()
     document.execCommand('insertText', false, 'https://example.com/' + 'long-identifier'.repeat(70))
     await sleep(150)
@@ -650,6 +674,8 @@
       results.longTitleWraps &&
       results.titleEnterFocusesBody &&
       results.titleShrinks &&
+      results.imeComposingKeepsValue &&
+      results.imeCommitNormalizes &&
       results.longTokensWrap &&
       results.magpiePreset &&
       results.modelsAutoImported &&
