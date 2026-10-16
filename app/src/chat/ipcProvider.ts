@@ -22,6 +22,13 @@ import { mockChatFetch } from './mockProvider'
 import { dispatchEditorTool } from '../composables/useEditorControl'
 import { pushChainEntry, updateChainEntry } from './chainStore'
 import { TOOL_LABEL, toolArgsSummary, type ToolResult } from './editorTools'
+import { buildSystemMessages } from './agent/prompt'
+import {
+  applyToolCallDelta,
+  compactToolCalls,
+  parseToolArguments,
+  validateToolCall,
+} from './agent/toolCall'
 
 export interface ChatConnection {
   baseUrl: string
@@ -92,6 +99,8 @@ export interface AgentToolCall {
 export interface AgentRoundResult {
   /** 含 content 的原始 SSE 事件文本（原样转发给 x-sdk） */
   contentEvents: string[]
+  /** 本轮累积的正文文本（写入历史时与 tool_calls 一起保留，避免模型的话丢失） */
+  content: string
   toolCalls: AgentToolCall[]
   /** 本轮累积的思考文本（增量，供思考链流式更新） */
   thinking: string
@@ -136,20 +145,12 @@ export function processSseText(
           const delta = parsed.choices?.[0]?.delta
           if (!delta) continue
           if (delta.content) acc.contentEvents.push(`data: ${data}\n\n`)
+          if (delta.content) acc.content += delta.content
           if (delta.reasoning_content) {
             acc.thinking += delta.reasoning_content
             onThinking?.(delta.reasoning_content)
           }
-          const tcs = delta.tool_calls
-          if (tcs?.length) {
-            for (const tc of tcs) {
-              const idx = tc.index ?? 0
-              const entry = (acc.toolCalls[idx] ??= { id: '', name: '', arguments: '' })
-              if (tc.id) entry.id += tc.id
-              if (tc.function?.name) entry.name += tc.function.name
-              if (tc.function?.arguments) entry.arguments += tc.function.arguments
-            }
-          }
+          if (delta.tool_calls?.length) applyToolCallDelta(acc.toolCalls, delta.tool_calls)
         } catch {
           /* 非 JSON 事件忽略 */
         }
@@ -168,7 +169,7 @@ function readIpcRound(
   onThinking?: (delta: string) => void
 ): Promise<AgentRoundResult> {
   return new Promise((resolve) => {
-    const acc: AgentRoundResult = { contentEvents: [], toolCalls: [], thinking: '' }
+    const acc: AgentRoundResult = { contentEvents: [], content: '', toolCalls: [], thinking: '' }
     const buf = { s: '' }
     let settled = false
     const done = (r: AgentRoundResult): void => {
@@ -212,7 +213,7 @@ function readIpcRound(
 
 /** Mock 连接：直接读 mockChatFetch 的流 */
 async function readMockRound(body: Record<string, unknown>): Promise<AgentRoundResult> {
-  const acc: AgentRoundResult = { contentEvents: [], toolCalls: [], thinking: '' }
+  const acc: AgentRoundResult = { contentEvents: [], content: '', toolCalls: [], thinking: '' }
   const buf = { s: '' }
   const res = await mockChatFetch('', { body: JSON.stringify(body) } as RequestInit)
   const reader = res.body!.getReader()
@@ -230,25 +231,37 @@ const sseEncoder = new TextEncoder()
 /** 工具调用 → 思考链节点（loading → success|error），返回执行结果 */
 async function executeToolWithChain(tc: AgentToolCall): Promise<ToolResult> {
   const label = TOOL_LABEL[tc.name] ?? tc.name
-  const args = tc.arguments ? ((JSON.parse(tc.arguments) as unknown) ?? {}) : {}
-  const summary = toolArgsSummary(args)
+  // 安全解析：参数不完整/非法时不再让整条流崩掉，而是回一条错误结果给模型
+  const parsed = parseToolArguments(tc.arguments)
+  const args = parsed.ok ? parsed.args : {}
+  const summary = toolArgsSummary(tc.name, args)
   const key = pushChainEntry({
     kind: 'tool',
     status: 'loading',
     title: label,
-    description: summary || '执行中…',
+    description: summary || (parsed.ok ? '执行中…' : parsed.error),
   })
   let tr: ToolResult
-  try {
-    tr = await dispatchEditorTool(tc.name, args)
-  } catch (e) {
-    tr = { ok: false, message: `工具执行失败：${e instanceof Error ? e.message : String(e)}` }
+  if (!parsed.ok) {
+    tr = { ok: false, message: `参数无法解析：${parsed.error}` }
+  } else {
+    try {
+      tr = await dispatchEditorTool(tc.name, args)
+    } catch (e) {
+      tr = { ok: false, message: `工具执行失败：${e instanceof Error ? e.message : String(e)}` }
+    }
   }
   updateChainEntry(key, {
     status: tr.ok ? 'success' : 'error',
     description: tr.ok ? tr.message : `失败：${tr.message}`,
   })
   return tr
+}
+
+/** 工具结果是否是一次「改动提议」（propose_edit 成功提交） */
+function isProposalResult(tr: ToolResult): boolean {
+  const data = tr.data as { status?: string } | undefined
+  return !!data && data.status === 'proposed'
 }
 
 /**
@@ -288,6 +301,8 @@ function createChatStream(opts: AgentOptions): ReadableStream<Uint8Array> {
 
       try {
         let degraded = false
+        // 记录循环是怎么结束的：自然收尾 / 已提交改动提议 / 轮次用尽
+        let stopReason: 'natural' | 'proposed' | 'cap' = 'cap'
         for (let round = 1; round <= MAX_ROUNDS; round++) {
           if (cancelled) break
           currentRequestId = `agent_${Date.now().toString(36)}_${round}_${Math.random().toString(36).slice(2, 8)}`
@@ -317,9 +332,22 @@ function createChatStream(opts: AgentOptions): ReadableStream<Uint8Array> {
 
           // 工具调用：执行后把结果作为 tool 消息带回下一轮
           if (result.toolCalls.length) {
+            const calls = compactToolCalls(result.toolCalls)
             const toolMsgs: XModelMessage[] = []
-            for (const tc of result.toolCalls) {
+            let proposed = false
+            for (const tc of calls) {
+              const invalid = validateToolCall(tc)
+              if (invalid) {
+                toolMsgs.push({
+                  role: 'tool',
+                  type: 'tool',
+                  tool_call_id: tc.id || `invalid_${toolMsgs.length}`,
+                  content: JSON.stringify({ ok: false, message: invalid } as ToolResult),
+                } as XModelMessage)
+                continue
+              }
               const tr = await executeToolWithChain(tc)
+              if (isProposalResult(tr)) proposed = true
               // 带 type 字段：兼容要求消息显式带 type 的端点（如 Console Go），OpenAI 端点忽略未知字段
               toolMsgs.push({
                 role: 'tool',
@@ -332,9 +360,10 @@ function createChatStream(opts: AgentOptions): ReadableStream<Uint8Array> {
               {
                 role: 'assistant',
                 type: 'assistant',
-                content: null,
+                // 保留本轮模型的正文：旧实现写死 null，把「我准备改这几处」这类说明丢掉了
+                content: result.content || null,
                 // OpenAI 规范：tool_calls 必须是嵌套结构 { id, type: 'function', function: { name, arguments } }
-                tool_calls: result.toolCalls.map((tc) => ({
+                tool_calls: calls.map((tc) => ({
                   id: tc.id,
                   type: 'function',
                   function: { name: tc.name, arguments: tc.arguments },
@@ -346,8 +375,14 @@ function createChatStream(opts: AgentOptions): ReadableStream<Uint8Array> {
             controller.enqueue(
               sseEncoder.encode(`data: ${JSON.stringify({ choices: [{ index: 0, delta: {} }] })}\n\n`)
             )
+            // 已经提交改动提议：收尾等用户确认，不再空转后续轮次
+            if (proposed) {
+              stopReason = 'proposed'
+              break
+            }
             continue
           }
+          stopReason = 'natural'
           break
         }
       } finally {
@@ -387,16 +422,12 @@ export function ipcChatFetch(
     body = {}
   }
   if (Array.isArray(body.messages)) {
-    // 文档上下文在前（主上下文），选中文本其次（直接编辑目标），联网搜索最后（参考资料）
-    const systems: XModelMessage[] = []
-    if (docContext) systems.push({ role: 'system', content: docContext })
-    if (selectionContext) {
-      systems.push({
-        role: 'system',
-        content: `用户当前在文档中选中了以下文本，请针对这段文本处理（需要修改时用工具直接改，不要只给建议）：\n\n${selectionContext}`,
-      })
-    }
-    if (searchContext) systems.push({ role: 'system', content: searchContext })
+    const hasToolsEarly = Array.isArray(body.tools) && body.tools.length > 0
+    // agent 提示词（带工具时）+ 文档 / 选区 / 搜索上下文
+    const systems = buildSystemMessages(
+      { doc: docContext, selection: selectionContext, search: searchContext },
+      { withTools: hasToolsEarly }
+    ) as XModelMessage[]
     if (systems.length) body.messages = [...systems, ...body.messages]
   }
 

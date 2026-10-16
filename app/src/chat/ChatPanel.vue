@@ -15,6 +15,8 @@ import { ChevronDown, Ellipsis, MessageSquareText, Pencil, Pin, Plus, Trash2 } f
 import { useChat } from './useChat'
 import ChatMessages from './ChatMessages.vue'
 import ChatInput from './ChatInput.vue'
+import ProposalCard from './ProposalCard.vue'
+import { useProposals } from './proposals'
 import { setPendingDocContext, setPendingSelectionContext } from './ipcProvider'
 import { useEditorSelection, type SelectionSnapshot } from '../composables/useEditorSelection'
 import { useToolChain, clearChain } from './chainStore'
@@ -35,6 +37,7 @@ const emit = defineEmits<{
 }>()
 
 const chat = useChat()
+const { pending: pendingProposals } = useProposals()
 const {
   conversationList,
   activeKey,
@@ -329,6 +332,15 @@ const activeLabel = computed(() => activeConversation.value?.label ?? '新对话
       @replace-selection="handleReplaceSelection"
     />
 
+    <!-- AI 改动提议：用户确认后才写入文档（AI 不再直接改正文） -->
+    <div v-if="pendingProposals.length" class="proposal-stack">
+      <ProposalCard
+        v-for="p in pendingProposals"
+        :key="p.id"
+        :proposal="p"
+      />
+    </div>
+
     <!-- 输入 -->
     <ChatInput
       ref="senderRef"
@@ -354,6 +366,15 @@ const activeLabel = computed(() => activeConversation.value?.label ?? '新对话
 </template>
 
 <style scoped>
+/* AI 改动提议堆叠区：贴在输入框上方，可滚动 */
+.proposal-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 0;
+  max-height: 45%;
+  overflow-y: auto;
+}
 /* 侧栏窄屏：收紧 ChatMessages / ChatInput 的宽屏留白 */
 .chat-panel :deep(.chat-messages .antd-bubble-list) {
   padding-inline: 16px;

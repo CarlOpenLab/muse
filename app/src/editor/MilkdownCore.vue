@@ -146,6 +146,9 @@ watch(
         text: action.text,
       })
     }
+    if (action.type === 'apply-proposal' && action.proposal) {
+      action.resolve?.(applyProposal(editor, action.proposal))
+    }
     if (action.type === 'format' && action.format) {
       // 格式化统一走 runFormat；link 需 href（弹窗确认后携带）
       editor.action((ctx) => {
@@ -244,6 +247,47 @@ function insertMarkdown(editor: Editor, markdown: string): void {
  * 替换前做原文一致性校验：若选区内容已被用户改动（from/to 失效），
  * 退化为在选区起点插入，避免误删用户新写的内容。
  */
+/**
+ * 落地一条 AI 改动提议（用户确认后）：**严格**校验原文一致性。
+ * 与 replaceSelection 的关键区别：原文对不上时不会「退化成插入」，
+ * 而是返回失败，由 UI 提示「提议已失效」，避免把新内容错插到别处。
+ */
+function applyProposal(
+  editor: Editor,
+  a: { from: number; to: number; expectedText: string; text: string }
+): { ok: boolean; message: string } {
+  let result = { ok: false, message: '编辑器未就绪' }
+  editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx) as EditorView
+    const parser = ctx.get(parserCtx)
+    const doc = parser(a.text)
+    if (!doc) {
+      result = { ok: false, message: '新内容解析失败，无法应用' }
+      return
+    }
+    const { state } = view
+    const size = state.doc.content.size
+    const f = Math.max(0, Math.min(a.from, size))
+    const t = Math.max(0, Math.min(a.to, size))
+    const slice = new Slice(doc.content, 0, 0)
+    if (f === t) {
+      view.dispatch(state.tr.insert(f, slice.content).scrollIntoView())
+      view.focus()
+      result = { ok: true, message: '已插入' }
+      return
+    }
+    const current = state.doc.textBetween(Math.min(f, t), Math.max(f, t), '\n').trim()
+    if (current !== a.expectedText.trim()) {
+      result = { ok: false, message: '文档已变动，这处提议已失效；请让 AI 重新生成' }
+      return
+    }
+    view.dispatch(state.tr.replace(f, t, slice).scrollIntoView())
+    view.focus()
+    result = { ok: true, message: '已应用改动' }
+  })
+  return result
+}
+
 function replaceSelection(
   editor: Editor,
   a: { from: number; to: number; expectedText: string; text: string }

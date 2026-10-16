@@ -15,6 +15,7 @@ export type EditorActionType =
   | 'focus-body'
   | 'insert-text'
   | 'replace-selection'
+  | 'apply-proposal'
   | 'tool'
   | 'format'
   | 'serialize'
@@ -29,6 +30,8 @@ export interface EditorAction {
   to?: number
   /** replace-selection：原文快照，用于替换前一致性校验 */
   expectedText?: string
+  /** apply-proposal：要落地的改动提议（用户确认后） */
+  proposal?: { from: number; to: number; expectedText: string; text: string }
   /** tool：AI 工具调用（agent loop 执行文档编辑） */
   tool?: { name: string; args: unknown }
   /** tool：执行完成后回调（agent loop 需要拿到结果反馈给模型） */
@@ -98,6 +101,29 @@ export function dispatchEditorTool(name: string, args: unknown): Promise<ToolRes
 
 export function useEditorControl() {
   return { pendingAction }
+}
+
+/**
+ * 落地一条 AI 改动提议（用户在确认卡片上点「应用」时调用）。
+ * 与 replace-selection 不同：这里**严格校验**原文一致性 —— 文档若已变动则失败并返回原因，
+ * 绝不退化成「插入」，避免把新内容错插到别处。
+ */
+export function dispatchApplyProposal(p: {
+  from: number
+  to: number
+  expectedText: string
+  text: string
+}): Promise<ToolResult> {
+  return new Promise((resolve) => {
+    const action: EditorAction = { type: 'apply-proposal', proposal: p, resolve, seq: ++seq }
+    pendingAction.value = action
+    setTimeout(() => {
+      if (pendingAction.value === action) {
+        pendingAction.value = null
+        resolve({ ok: false, message: '编辑器未就绪，无法应用改动' })
+      }
+    }, 8000)
+  })
 }
 
 /** 请求执行一个格式化动作（菜单 / 右键 / 链接弹窗确认后调用）。 */

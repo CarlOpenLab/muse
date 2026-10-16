@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "test:agent": "tsc -p tsconfig.agent-test.json && node --test \".tmp-agent-test/__tests__/*.test.js\""
   },
   "dependencies": {
     "@antdv-next/icons": "^1.1.1",
