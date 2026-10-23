@@ -506,3 +506,4 @@ Web → Native：
 | 日期 | 决策 | 备注 |
 |---|---|---|
 | 2026-10-23 | 提出 RFC，等待评审 | 不实施；先做 M0 PoC |
+| 2026-10-23 | M0/M0.5 Web 侧 PoC 完成：双画布 16/16 fixture 语义往返、桥协议 8/8 单测 + 页内宿主模拟端到端（保存握手/id 回显/revision/防抖/主题/图片回插）、连续 10 轮编辑保存无丢失；IME 与加载性能需 macOS 宿主真机验证 | 见 [rfc-001-m0-poc-report.md](rfc-001-m0-poc-report.md)、`editor-web/`；建议宿主验证后选方案 B（Milkdown），Vditor 数据保留备选 |
