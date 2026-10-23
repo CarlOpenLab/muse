@@ -1523,10 +1523,12 @@ func (a *App) blockView(c *ui.Context, i int) {
 		}
 		if bs := a.blocks[i].doc.Blocks; len(bs) > 0 {
 			switch bs[0].Kind {
-			case mdoc.Table, mdoc.Rule, mdoc.HTML:
-				// Table structure is chrome; cells edit themselves. Rule/HTML
-				// have no Markdown source surface.
+			case mdoc.Table, mdoc.Rule:
+				// Table structure is chrome; cells edit themselves. Rules are
+				// contentless.
 				return
+			case mdoc.HTML:
+				// HTML blocks edit as raw source (like code, without fences).
 			}
 		}
 		x, y, over := row.PointerPosition()
@@ -1993,6 +1995,16 @@ func (a *App) caretFromPoint(c *ui.Context, kind mdoc.Kind, x, y, size, lineHeig
 
 // toggleTask flips the item-th task marker in a list block's raw source.
 func (a *App) toggleTask(block, item int, checked bool) {
+	// The task box is clickable while the item is in rich editing: toggle the
+	// run model there and let the rich commit serialize [x]/[ ].
+	if r := a.rich; r != nil && r.block == block && r.task {
+		if r.checked != checked {
+			r.toggleTask()
+		}
+		a.richDirty()
+		a.invalidate()
+		return
+	}
 	if block < 0 || block >= len(a.blocks) {
 		return
 	}

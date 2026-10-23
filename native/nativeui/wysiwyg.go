@@ -332,6 +332,83 @@ func (r *richEditor) atomRange(start, end int) (int, int) {
 	return start, end
 }
 
+// richAutoPair mirrors the source editor's pairing for the rich editor:
+// with a selection the chosen opener wraps it; with a collapsed caret an
+// opener inserts a pair with the caret inside, and typing the closer right
+// before its twin skips over it. Markdown markers (*, _, ~) are NOT paired:
+// in visible text they are literal characters.
+func (a *App) richAutoPair(text string) bool {
+	r := a.rich
+	if r == nil {
+		return false
+	}
+	runes := []rune(text)
+	if len(runes) != 1 {
+		return false
+	}
+	ch := runes[0]
+	vis := []rune(r.visibleText())
+	s, e := r.selection()
+	if s < 0 || e < s || e > len(vis) {
+		return false
+	}
+	// typing a closer (or a self-paired quote) right before its twin skips over
+	if s == e && s < len(vis) && vis[s] == ch && strings.ContainsRune(")]}\"'`", ch) {
+		r.setCaret(s+1, false)
+		a.invalidate()
+		return true
+	}
+	open := ch
+	close, ok := map[rune]rune{
+		'(': ')', '[': ']', '{': '}', '"': '"', '\'': '\'', '`': '`',
+	}[open]
+	if !ok {
+		return false
+	}
+	if s != e {
+		selected := string(vis[s:e])
+		r.snapshot()
+		r.deleteRange(s, e)
+		r.insertText(string(open) + selected + string(close))
+		r.setCaret(s+1+len([]rune(selected)), false)
+		a.richDirty()
+		a.invalidate()
+		return true
+	}
+	if s < len(vis) && vis[s] == close {
+		r.setCaret(s+1, false)
+		a.invalidate()
+		return true
+	}
+	r.snapshot()
+	r.insertText(string(open) + string(close))
+	r.setCaret(s+1, false)
+	a.richDirty()
+	a.invalidate()
+	return true
+}
+
+// richExitTo crosses to the adjacent block at a rich block's first (dir<0)
+// or last (dir>0) visual line, staying open only when the neighbour is rich
+// editable.
+func (a *App) richExitTo(dir int) {
+	r := a.rich
+	if r == nil {
+		return
+	}
+	target := r.block + dir
+	if target < 0 || target >= len(a.blocks) {
+		return
+	}
+	if !a.beginRichEditAt(target, -1, -1) {
+		return
+	}
+	if dir > 0 && a.rich != nil {
+		a.rich.setCaret(0, false)
+	}
+	a.invalidate()
+}
+
 func (r *richEditor) insertText(text string) {
 	if text == "" {
 		return
@@ -658,6 +735,9 @@ func (a *App) richInput(c *ui.Context, ev ui.InputEvent, layout *ui.TextLayout) 
 		return true
 	case ui.InputText:
 		r.compose = ""
+		if a.richAutoPair(ev.Text) {
+			return true
+		}
 		r.snapshot()
 		r.insertText(ev.Text)
 		a.richDirty()
@@ -793,6 +873,18 @@ func (a *App) richInput(c *ui.Context, ev ui.InputEvent, layout *ui.TextLayout) 
 		a.invalidate()
 		return true
 	case ui.KeyUp, ui.KeyDown:
+		// 跨块语义与块编辑器一致：只在绝对边界（0 或末尾）且光标塌陷时跨到
+		// 相邻块；其余情况交给文本布局做行内移动。
+		n := len([]rune(r.visibleText()))
+		if !shift && r.anchor == r.caret &&
+			((ev.Key == ui.KeyDown && r.caret >= n) || (ev.Key == ui.KeyUp && r.caret <= 0)) {
+			if ev.Key == ui.KeyDown {
+				a.richExitTo(1)
+			} else {
+				a.richExitTo(-1)
+			}
+			return true
+		}
 		cr := layout.Caret(r.utf16Index(r.caret))
 		dy := -cr.H
 		if ev.Key == ui.KeyDown {

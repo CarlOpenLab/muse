@@ -61,15 +61,23 @@ The fix is an editor-kernel replacement, not more shortcuts.
   - Implemented (closeout): Cmd+K opens the link URL popover when the caret is
     inside a link run, or turns the selection into a link; the URL edits in a
     modal and commits through the run model (r.markdown() re-serializes).
-  - Still to polish: IME composition, rich cross-block arrows,
-    rich auto-pair, math rendered as typeset instead of visible TeX.
+  - Implemented (closeout): rich auto-pair for ()[]{}""''`` (selection wraps,
+    collapsed inserts a pair with the caret inside, typing a closer before its
+    twin skips over; markdown markers stay literal), and Up/Down crossing into
+    the adjacent block at a block's first/last edge (same semantics as the
+    source editor: only at the absolute text boundary).
+  - Framework note: inline math in the rich editor is a Unicode typeset atom
+    (run.Display); MyGo's TextLayout has no inline-image runs, so true bitmap
+    typesetting inside rich text is blocked on the framework.
 
 - **Phase 2 — list/quote chrome (done, first pass)**
   - Bullets/numbers/quotes outside the editor; Enter continues/starts blocks.
   - Implemented: hide `- `/`1.`/`> `, draw bullets/numbers/quote bars/task boxes,
     Enter creates the next item/quote line, Tab/Shift+Tab nest and outdent.
-  - Still to polish: clicking the task checkbox while rich, ordered-number
-    incrementing on Enter, nested-list indentation from source round-trip.
+  - Verified (closeout): the task checkbox is clickable while the item is in
+    rich editing (toggles the run model, commit serializes [x]/[ ]), and
+    Enter on an ordered item increments its marker (nextListPrefix).
+  - Still to polish: nested-list indentation from source round-trip.
 
 - **Phase 3 — tables/code/math/images (done, first pass)**
   - Tables edit per cell without pipes; code hides fences and shows a language
@@ -81,8 +89,14 @@ The fix is an editor-kernel replacement, not more shortcuts.
     a rendered table (anchored to the edited cell) plus Cmd+Enter inserting a
     row below the edited cell; the alignment row's colon style is mirrored for
     new columns and the last column cannot be deleted.
-  - Still pending: true image/TeX inline atoms (not Unicode),
-    image drag/resize, HTML block editing.
+  - Implemented (closeout): HTML blocks edit as raw source (the click path no
+    longer skips them); image blocks gained a display-width stepper in the
+    image editor that persists an equivalent HTML img width attribute (mdoc
+    parses it back into ImgWidth; 重置 returns to the markdown form).
+  - Still pending: true image/TeX inline atoms (not Unicode — blocked on
+    TextLayout inline-image support). Canvas edge-drag for image resize would
+    additionally need hit-testing inside mdoc's view; the stepper covers the
+    capability.
 
 - **Phase 4 — cleanup (done, first pass)**
   - Markdown source surfaces are gone for paragraphs, headings, lists, quotes,
@@ -91,8 +105,9 @@ The fix is an editor-kernel replacement, not more shortcuts.
     disabled; Rule/HTML blocks no longer open a source surface.
   - IME composition is previewed at the caret and commits through the normal text
     input path; the editor no longer drops composed Chinese/Japanese text.
-  - Optional next steps: true inline-math image atoms,
-    image drag/resize, very long paragraph caret tuning.
+  - Optional next steps: true inline-math image atoms (blocked on framework),
+    canvas edge-drag image resize (stepper delivered),
+    very long paragraph caret tuning.
 
 ## Risks
 
