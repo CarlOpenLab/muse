@@ -19,3 +19,5 @@ native/build/
 
 # Legacy Electron build output
 out/
+# editor-web PoC 构建产物
+editor-web/dist/
