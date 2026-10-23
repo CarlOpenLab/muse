@@ -3,6 +3,7 @@ package services
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -65,5 +66,35 @@ func TestNormalizeBaseURL(t *testing.T) {
 		if got := normalizeBaseURL(input); got != want {
 			t.Errorf("normalize(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestChatStreamWithDirectSink(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n"))
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	var chunks []string
+	ended := false
+	res := NewAI().ChatStreamWith(ChatStreamRequest{
+		RequestID: "t1",
+		BaseURL:   server.URL,
+		Body:      map[string]any{"model": "m", "stream": true},
+	}, ChatSink{
+		Chunk: func(c string) { chunks = append(chunks, c) },
+		End:   func() { ended = true },
+	})
+	if !res.Ok || !ended || len(chunks) != 3 {
+		t.Fatalf("res=%+v ended=%v chunks=%q", res, ended, chunks)
+	}
+	if !strings.Contains(strings.Join(chunks, ""), "Hel") {
+		t.Fatalf("chunks = %q", chunks)
 	}
 }

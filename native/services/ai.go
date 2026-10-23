@@ -68,6 +68,14 @@ type ChatResult struct {
 	Message string `json:"message,omitempty"`
 }
 
+// ChatSink receives a stream directly, for callers that are not a web page
+// (the native UI). Any callback may be nil.
+type ChatSink struct {
+	Chunk func(string)
+	End   func()
+	Error func(string)
+}
+
 // WebSearchItem 是一条搜索结果。
 type WebSearchItem struct {
 	Title       string `json:"title"`
@@ -229,6 +237,22 @@ func (a *AI) ListModels(req TestConnRequest) ModelsResult {
 // 按 SSE 事件边界（\n\n）切块后经 ai:chat-chunk 转发；渲染进程负责拼回流。
 // 方法与 Electron 版语义一致：调用在整个流结束后才返回。
 func (a *AI) ChatStream(req ChatStreamRequest) ChatResult {
+	return a.ChatStreamWith(req, ChatSink{
+		Chunk: func(chunk string) {
+			_ = EvChatChunk.Broadcast(map[string]any{"requestId": req.RequestID, "chunk": chunk})
+		},
+		End: func() {
+			_ = EvChatEnd.Broadcast(map[string]any{"requestId": req.RequestID})
+		},
+		Error: func(message string) {
+			_ = EvChatError.Broadcast(map[string]any{"requestId": req.RequestID, "message": message})
+		},
+	})
+}
+
+// ChatStreamWith is ChatStream without the web event bus: the caller gets the
+// raw SSE chunks, end and error through sink.
+func (a *AI) ChatStreamWith(req ChatStreamRequest, sink ChatSink) ChatResult {
 	requestID := req.RequestID
 	baseURL := normalizeBaseURL(req.BaseURL)
 	apiKey := strings.TrimSpace(req.APIKey)
@@ -266,7 +290,9 @@ func (a *AI) ChatStream(req ChatStreamRequest) ChatResult {
 			return ChatResult{Ok: false, Aborted: true, Message: "已中止"}
 		}
 		message := describeNetworkError(err)
-		_ = EvChatError.Broadcast(map[string]any{"requestId": requestID, "message": message})
+		if sink.Error != nil {
+			sink.Error(message)
+		}
 		return ChatResult{Ok: false, Message: message}
 	}
 	defer res.Body.Close()
@@ -274,7 +300,9 @@ func (a *AI) ChatStream(req ChatStreamRequest) ChatResult {
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		raw, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 		message := describeHTTPError(res.StatusCode, string(raw))
-		_ = EvChatError.Broadcast(map[string]any{"requestId": requestID, "message": message})
+		if sink.Error != nil {
+			sink.Error(message)
+		}
 		return ChatResult{Ok: false, Message: message}
 	}
 
@@ -291,13 +319,17 @@ func (a *AI) ChatStream(req ChatStreamRequest) ChatResult {
 				}
 				chunk := acc[:sep+2]
 				acc = acc[sep+2:]
-				_ = EvChatChunk.Broadcast(map[string]any{"requestId": requestID, "chunk": chunk})
+				if sink.Chunk != nil {
+					sink.Chunk(chunk)
+				}
 			}
 		}
 		if readErr != nil {
 			if readErr != io.EOF && !errors.Is(readErr, context.Canceled) {
 				message := describeNetworkError(readErr)
-				_ = EvChatError.Broadcast(map[string]any{"requestId": requestID, "message": message})
+				if sink.Error != nil {
+					sink.Error(message)
+				}
 				return ChatResult{Ok: false, Message: message}
 			}
 			break
@@ -305,12 +337,16 @@ func (a *AI) ChatStream(req ChatStreamRequest) ChatResult {
 	}
 	// 兜底：流以单个 \n 结尾等边界情况
 	if strings.TrimSpace(acc) != "" {
-		_ = EvChatChunk.Broadcast(map[string]any{"requestId": requestID, "chunk": acc})
+		if sink.Chunk != nil {
+			sink.Chunk(acc)
+		}
 	}
 	if ctx.Err() != nil {
 		return ChatResult{Ok: false, Aborted: true, Message: "已中止"}
 	}
-	_ = EvChatEnd.Broadcast(map[string]any{"requestId": requestID})
+	if sink.End != nil {
+		sink.End()
+	}
 	return ChatResult{Ok: true}
 }
 

@@ -1,4 +1,4 @@
-name: Release Muse app
+name: Release Muse
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to publish from the selected branch/tag (must match package.json version)'
+        description: 'Release tag to publish'
         required: true
         type: string
 
@@ -29,34 +29,22 @@ jobs:
           - os: macos-latest
             artifact: macos
             output: Muse
-            target: darwin-arm64
+            goos: darwin
+            goarch: arm64
           - os: windows-latest
             artifact: windows
             output: Muse.exe
-            target: windows-amd64
+            goos: windows
+            goarch: amd64
           - os: ubuntu-latest
             artifact: linux
             output: Muse-linux
-            target: linux-amd64
+            goos: linux
+            goarch: amd64
 
     steps:
       - name: Check out source
         uses: actions/checkout@v7
-        with:
-          # Build the triggering commit so manual runs include fixes from the selected ref.
-          ref: ${{ github.sha }}
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -64,23 +52,7 @@ jobs:
           go-version-file: native/go.mod
           cache-dependency-path: native/go.sum
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Verify release version
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
-        run: |
-          node -e "const pkg=require('./package.json'); const tag=process.env.RELEASE_TAG; const expected='v'+pkg.version; if (tag !== expected) { console.error('Release tag '+tag+' does not match package.json version '+pkg.version); process.exit(1); }"
-
-      - name: Build frontend
-        run: pnpm run build:web
-
-      - name: Typecheck frontend
-        run: pnpm run typecheck
-
-      - name: Lint (gofmt)
+      - name: Format check
         working-directory: native
         shell: bash
         run: test -z "$(gofmt -l .)"
@@ -89,31 +61,18 @@ jobs:
         working-directory: native
         run: go vet ./...
 
-      - name: Test native services
+      - name: Test
         working-directory: native
         run: go test ./...
 
-      - name: Build binary
-        env:
-          GOOS: ${{ matrix.artifact == 'macos' && 'darwin' || matrix.artifact }}
-          GOARCH: ${{ matrix.artifact == 'macos' && 'arm64' || 'amd64' }}
-        run: node scripts/build-native.mjs ${{ matrix.output }}
-
-      - name: Compress with UPX (Linux/Windows)
-        if: matrix.os != 'macos-latest'
+      - name: Build native binary
         shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            sudo apt-get update -qq && sudo apt-get install -y upx-ucl
-          else
-            choco install upx -y --no-progress || true
-            export PATH="$PATH:/c/ProgramData/chocolatey/bin"
-          fi
-          if command -v upx >/dev/null 2>&1; then
-            upx --best --lzma "native/${{ matrix.output }}"
-          else
-            echo "UPX not available, skipping compression"
-          fi
+          mkdir -p out
+          go build -C native -o "../out/${{ matrix.output }}" .
 
       - name: Build macOS DMG
         if: matrix.os == 'macos-latest'
@@ -121,42 +80,20 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
         run: |
-          # 安装 create-dmg（比裸 hdiutil 好看得多）
           brew install create-dmg || true
           chmod +x scripts/build-macos-app.sh
-          scripts/build-macos-app.sh "native/${{ matrix.output }}" "resources/icon.icns" "${RELEASE_TAG#v}"
+          scripts/build-macos-app.sh "out/${{ matrix.output }}" "resources/icon.icns" "${RELEASE_TAG#v}"
 
-      - name: Sign automatic update
-        shell: bash
-        env:
-          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
-        run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            node scripts/package-update.mjs dist/stage Muse.app "${{ matrix.target }}"
-          else
-            node scripts/package-update.mjs native "${{ matrix.output }}" "${{ matrix.target }}"
-          fi
-
-      - name: Upload signed update
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact }}-update
-          path: |
-            dist/Muse-*.tar.gz
-            dist/update-*.json
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload binary (Linux/Windows)
+      - name: Upload binary
         if: matrix.os != 'macos-latest'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}-release
-          path: native/${{ matrix.output }}
+          path: out/${{ matrix.output }}
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload DMG (macOS)
+      - name: Upload DMG
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v7
         with:

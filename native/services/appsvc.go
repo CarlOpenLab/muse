@@ -4,6 +4,7 @@
 //	App.SetDirty        渲染进程同步脏标记（关窗判断用）
 //	App.Close           渲染进程确认后请求强制关闭
 //	App.ConfirmUnsaved  未保存确认框 -> "save" | "discard" | "cancel"
+//	App.CopyText        写系统剪贴板（文件树 / 卡片头的复制路径）
 package services
 
 import (
@@ -39,6 +40,16 @@ func (a *App) Close() {
 	if win != nil {
 		win.Close()
 	}
+}
+
+// CopyText 写系统剪贴板，供渲染进程复制文件 / 目录的相对或绝对路径。
+// 返回是否写入成功（空字符串不覆盖剪贴板）。
+func (a *App) CopyText(text string) bool {
+	if text == "" {
+		return false
+	}
+	mygo.Clipboard.WriteText(text)
+	return true
 }
 
 // ConfirmUnsaved 未保存确认框。

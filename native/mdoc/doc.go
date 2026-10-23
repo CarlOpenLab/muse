@@ -29,6 +29,10 @@ const (
 	HTML
 	// Table is a GFM table; Rows and Align describe it.
 	Table
+	// Image is a paragraph holding just one image; Src, Alt and Title describe it.
+	Image
+	// Math is a display-math block; Text holds the TeX.
+	Math
 )
 
 // Span is a run of inline text with one style. The zero value is plain text.
@@ -39,6 +43,7 @@ type Span struct {
 	Code   bool
 	Strike bool
 	Link   string // non-empty for a link target
+	Math   bool   // inline TeX
 }
 
 // Cell is one table cell: a run of styled spans.
@@ -50,21 +55,28 @@ type Item struct {
 	Marker   string
 	Inlines  []Span
 	Children []Block
+	Task     bool // a GFM task-list item
+	Checked  bool
 }
 
 // Block is one block of a document. Which fields apply depends on Kind.
 type Block struct {
-	Kind     Kind     // what this block is
-	Level    int      // Heading: 1..6
-	Inlines  []Span   // Paragraph, Heading
-	Text     string   // Code, HTML
-	Lang     string   // Code: info string
-	Ordered  bool     // List
-	Start    int      // List: first number of an ordered list
-	Items    []Item   // List
-	Children []Block  // Quote
-	Rows     [][]Cell // Table: rows of cells
-	Align    []Align  // Table: per-column alignment
+	Kind      Kind     // what this block is
+	Level     int      // Heading: 1..6
+	Inlines   []Span   // Paragraph, Heading
+	Text      string   // Code, HTML
+	Lang      string   // Code: info string
+	Ordered   bool     // List
+	Start     int      // List: first number of an ordered list
+	Items     []Item   // List
+	Children  []Block  // Quote
+	Rows      [][]Cell // Table: rows of cells
+	Align     []Align  // Table: per-column alignment
+	Src       string   // Image: destination
+	Alt       string   // Image: alt text
+	Title     string   // Image: title
+	ImgWidth  float32  // Image: explicit width in DIPs, from HTML
+	ImgHeight float32  // Image: explicit height in DIPs, from HTML
 }
 
 // Align is a table column's alignment.
