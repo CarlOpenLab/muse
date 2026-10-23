@@ -58,7 +58,10 @@ The fix is an editor-kernel replacement, not more shortcuts.
   - Markers hidden while editing; caret/selection drawn in rendered text.
   - Implemented: typing, arrows/Home/End/Up/Down, Shift selection, Backspace/Delete,
     undo, paste/copy/cut, Enter split, Cmd+B/I/U/E, Cmd+0–6 headings.
-  - Still to polish: IME composition, Cmd+K link popover, rich cross-block arrows,
+  - Implemented (closeout): Cmd+K opens the link URL popover when the caret is
+    inside a link run, or turns the selection into a link; the URL edits in a
+    modal and commits through the run model (r.markdown() re-serializes).
+  - Still to polish: IME composition, rich cross-block arrows,
     rich auto-pair, math rendered as typeset instead of visible TeX.
 
 - **Phase 2 — list/quote chrome (done, first pass)**
@@ -74,8 +77,12 @@ The fix is an editor-kernel replacement, not more shortcuts.
     images edit through alt/src/title fields while the image stays rendered.
   - Inline math is now an atomic visible run (`x² + α`) while its TeX source is
     preserved; partial deletion expands to the whole atom.
-  - Still pending: true image/TeX inline atoms (not Unicode), table row/column
-    commands, image drag/resize, HTML block editing.
+  - Implemented (closeout): table row/column add/remove — right-click menu on
+    a rendered table (anchored to the edited cell) plus Cmd+Enter inserting a
+    row below the edited cell; the alignment row's colon style is mirrored for
+    new columns and the last column cannot be deleted.
+  - Still pending: true image/TeX inline atoms (not Unicode),
+    image drag/resize, HTML block editing.
 
 - **Phase 4 — cleanup (done, first pass)**
   - Markdown source surfaces are gone for paragraphs, headings, lists, quotes,
@@ -84,8 +91,8 @@ The fix is an editor-kernel replacement, not more shortcuts.
     disabled; Rule/HTML blocks no longer open a source surface.
   - IME composition is previewed at the caret and commits through the normal text
     input path; the editor no longer drops composed Chinese/Japanese text.
-  - Optional next steps: true inline-math image atoms, table row/column commands,
-    image drag/resize, rich link URL popover, very long paragraph caret tuning.
+  - Optional next steps: true inline-math image atoms,
+    image drag/resize, very long paragraph caret tuning.
 
 ## Risks
 

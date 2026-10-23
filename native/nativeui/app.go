@@ -162,6 +162,12 @@ type App struct {
 	renameOpen  bool
 	renamePath  string
 	renameValue string
+
+	// link URL popover (rich editor, Cmd+K on a link)
+	linkPopOpen  bool
+	linkPopURL   string
+	linkPopLabel string
+	linkPopRun   int // index into a.rich.runs
 }
 
 // New returns the app on a welcome document, with the panel on files.
@@ -220,6 +226,7 @@ func (a *App) View(c *ui.Context) {
 
 	a.settingsDialog(c)
 	a.renameDialog(c)
+	a.linkPopover(c)
 }
 
 // windowBG is a single flat color, not a wash: the light side is a neutral
@@ -633,6 +640,8 @@ func (a *App) editorContent(c *ui.Context) {
 				a.moveCell(1)
 			} else if c.Shortcut(ui.Shift, ui.KeyTab) {
 				a.moveCell(-1)
+			} else if c.Shortcut(ui.Cmd, ui.KeyEnter) {
+				a.insertRowBelowCell()
 			}
 		}
 		a.blockEditor(c)
@@ -1538,6 +1547,9 @@ func (a *App) blockView(c *ui.Context, i int) {
 		}
 		a.beginBlockEditAt(i, x, y)
 	})
+	if bs := a.blocks[i].doc.Blocks; len(bs) > 0 && bs[0].Kind == mdoc.Table {
+		a.tableMenu(row, i)
+	}
 	row.Children(func() {
 		opts := mdoc.Options{
 			BodyFontSize: float32(a.fontSize),
@@ -2182,6 +2194,240 @@ func joinTableLine(parts []string, lead, trail bool) string {
 	return s
 }
 
+// ---------------------------------------------------------------------------
+// Table structure commands: rows and columns are edited through the block's
+// source lines, keeping the alignment row in sync with every mutation.
+
+// tableColumnCount reads the table's column count from its alignment line.
+func tableColumnCount(src string) int {
+	lines := strings.Split(src, "\n")
+	if len(lines) < 2 {
+		return 0
+	}
+	parts, _, _ := splitTableLine(lines[1])
+	return len(parts)
+}
+
+// tableRows counts rendered rows (header + body rows).
+func tableRows(b sourceBlock) int {
+	if len(b.doc.Blocks) == 0 || b.doc.Blocks[0].Kind != mdoc.Table {
+		return 0
+	}
+	return len(b.doc.Blocks[0].Rows)
+}
+
+// mutateTable rewrites the table block's source through fn and refreshes.
+func (a *App) mutateTable(block int, fn func(lines []string) []string) bool {
+	if block < 0 || block >= len(a.blocks) {
+		return false
+	}
+	b := a.blocks[block]
+	if b.Source == "" {
+		return false
+	}
+	next := strings.Join(fn(strings.Split(b.Source, "\n")), "\n")
+	if next == b.Source {
+		return false
+	}
+	a.source = a.source[:b.Start] + next + a.source[b.End:]
+	a.refreshDoc()
+	a.dirty = true
+	a.updateTitle()
+	a.invalidate()
+	return true
+}
+
+// tableAnchor commits an open cell edit and returns its row/col as the
+// anchor for structure commands.
+func (a *App) tableAnchor(block int) (row, col int, ok bool) {
+	if a.cellEdit != nil && a.cellEdit.block == block {
+		ce := a.cellEdit
+		a.commitCell(ce, ce.value)
+		return ce.row, ce.col, true
+	}
+	return 1, 0, false
+}
+
+// insertTableRowBelow inserts an empty body row after rendered row at
+// (at < 0 or past the end appends after the last row).
+func (a *App) insertTableRowBelow(block, at int) bool {
+	if block < 0 || block >= len(a.blocks) {
+		return false
+	}
+	cols := tableColumnCount(a.blocks[block].Source)
+	if cols == 0 {
+		return false
+	}
+	rows := tableRows(a.blocks[block])
+	row := at
+	if row < 0 || row >= rows {
+		row = rows - 1
+	}
+	return a.mutateTable(block, func(lines []string) []string {
+		idx := row + 2 // row 0 → after the alignment line; row r → after line r+1
+		if idx > len(lines) {
+			idx = len(lines)
+		}
+		empty := "|" + strings.Repeat("   |", cols)
+		out := make([]string, 0, len(lines)+1)
+		out = append(out, lines[:idx]...)
+		out = append(out, empty)
+		return append(out, lines[idx:]...)
+	})
+}
+
+// deleteTableRow removes the body row at rendered row at. The header and
+// alignment lines are chrome and cannot be deleted.
+func (a *App) deleteTableRow(block, at int) bool {
+	if at < 1 {
+		return false
+	}
+	return a.mutateTable(block, func(lines []string) []string {
+		idx := at + 1
+		if idx >= len(lines) {
+			return lines
+		}
+		return append(lines[:idx], lines[idx+1:]...)
+	})
+}
+
+// alignmentStyle mirrors a neighbour alignment cell's colon style.
+func alignmentStyle(seg string) string {
+	s := strings.TrimSpace(seg)
+	left := strings.HasPrefix(s, ":")
+	right := strings.HasSuffix(s, ":") && len(s) > 1
+	switch {
+	case left && right:
+		return ":---:"
+	case right:
+		return "---:"
+	case left:
+		return ":---"
+	default:
+		return "---"
+	}
+}
+
+// insertTableColumnAt inserts an empty column before rendered column at
+// (at == cols appends after the last column). The alignment line's new
+// cell mirrors the neighbour's colon style.
+func (a *App) insertTableColumnAt(block, at int) bool {
+	if block < 0 || block >= len(a.blocks) {
+		return false
+	}
+	cols := tableColumnCount(a.blocks[block].Source)
+	if cols == 0 {
+		return false
+	}
+	if at < 0 {
+		at = 0
+	}
+	if at > cols {
+		at = cols
+	}
+	return a.mutateTable(block, func(lines []string) []string {
+		out := make([]string, len(lines))
+		for i, line := range lines {
+			parts, lead, trail := splitTableLine(line)
+			if len(parts) != cols {
+				out[i] = line // 结构不齐的行保持原样
+				continue
+			}
+			seg := "   "
+			if i == 1 {
+				style := "---"
+				if at > 0 {
+					style = alignmentStyle(parts[at-1])
+				} else if len(parts) > 0 {
+					style = alignmentStyle(parts[0])
+				}
+				neighbour := at
+				if neighbour >= len(parts) {
+					neighbour = len(parts) - 1
+				}
+				p := parts[neighbour]
+				left := p[:len(p)-len(strings.TrimLeft(p, " \t"))]
+				right := p[len(strings.TrimRight(p, " \t")):]
+				seg = left + style + right
+			}
+			next := append(append([]string{}, parts[:at]...), seg)
+			next = append(next, parts[at:]...)
+			out[i] = joinTableLine(next, lead, trail)
+		}
+		return out
+	})
+}
+
+// deleteTableColumnAt removes rendered column at from every line and refuses
+// to reduce the table below one column.
+func (a *App) deleteTableColumnAt(block, at int) bool {
+	if block < 0 || block >= len(a.blocks) {
+		return false
+	}
+	cols := tableColumnCount(a.blocks[block].Source)
+	if cols <= 1 {
+		a.notice("表格至少保留一列")
+		return false
+	}
+	if at < 0 || at >= cols {
+		return false
+	}
+	return a.mutateTable(block, func(lines []string) []string {
+		out := make([]string, len(lines))
+		for i, line := range lines {
+			parts, lead, trail := splitTableLine(line)
+			if len(parts) != cols {
+				out[i] = line
+				continue
+			}
+			next := append(append([]string{}, parts[:at]...), parts[at+1:]...)
+			out[i] = joinTableLine(next, lead, trail)
+		}
+		return out
+	})
+}
+
+// tableMenu attaches the row/column commands to a rendered table. The
+// commands anchor to the cell being edited; without one, insertion appends
+// at the end and the delete items are not offered.
+func (a *App) tableMenu(el ui.Element, block int) {
+	el.ContextMenu(func(m *ui.Menu) {
+		row, col, hasAnchor := a.tableAnchor(block)
+		if m.Item("在下方插入行").Chosen() {
+			a.insertTableRowBelow(block, row)
+		}
+		if hasAnchor && row >= 1 && m.Item("删除此行").Chosen() {
+			a.deleteTableRow(block, row)
+		}
+		m.Separator()
+		if m.Item("在左侧插入列").Chosen() {
+			a.insertTableColumnAt(block, col)
+		}
+		if m.Item("在右侧插入列").Chosen() {
+			a.insertTableColumnAt(block, col+1)
+		}
+		if hasAnchor && m.Item("删除此列").Chosen() {
+			a.deleteTableColumnAt(block, col)
+		}
+	})
+}
+
+// insertRowBelowCell commits the cell and starts editing a fresh row below
+// it, same column (Cmd+Enter inside a cell).
+func (a *App) insertRowBelowCell() {
+	ce := a.cellEdit
+	if ce == nil {
+		return
+	}
+	block, row, col := ce.block, ce.row, ce.col
+	a.commitCell(ce, ce.value)
+	if !a.insertTableRowBelow(block, row) {
+		return
+	}
+	a.startCellEdit(block, row+1, col)
+	a.invalidate()
+}
+
 func canSplitBlock(kind mdoc.Kind) bool {
 	switch kind {
 	case mdoc.Paragraph, mdoc.Heading, mdoc.List, mdoc.Quote:
@@ -2414,6 +2660,78 @@ func (a *App) insertLink(start, end int) {
 	next := string(src[:start]) + label + "(" + url + ")" + string(src[end:])
 	urlStart := start + len([]rune(label)) + 1
 	a.applyEditSource(next, urlStart, urlStart+len([]rune(url)))
+}
+
+// The link URL popover edits the run in the rich editor directly: runs
+// carry the link target and r.markdown() serializes it back to source.
+
+// editLinkAtCaret opens the URL popover when the rich caret sits inside a
+// link run. It reports whether a link was found.
+func (a *App) editLinkAtCaret() bool {
+	if a.rich == nil {
+		return false
+	}
+	off := 0
+	for i, run := range a.rich.runs {
+		n := len([]rune(run.Text))
+		if run.Link != "" && a.rich.caret >= off && a.rich.caret <= off+n {
+			a.linkPopURL = run.Link
+			a.linkPopLabel = run.Text
+			a.linkPopRun = i
+			a.linkPopOpen = true
+			a.invalidate()
+			return true
+		}
+		off += n
+	}
+	return false
+}
+
+// applyLinkPop writes the edited URL back into the link run.
+func (a *App) applyLinkPop() {
+	if !a.linkPopOpen || a.rich == nil || a.linkPopRun < 0 || a.linkPopRun >= len(a.rich.runs) {
+		a.linkPopOpen = false
+		return
+	}
+	url := strings.TrimSpace(a.linkPopURL)
+	if url == "" || strings.ContainsAny(url, ")\n") {
+		a.notice("链接 URL 不能为空或包含括号")
+		a.linkPopOpen = false
+		return
+	}
+	if a.rich.runs[a.linkPopRun].Link == url {
+		a.linkPopOpen = false
+		return
+	}
+	a.rich.runs[a.linkPopRun].Link = url
+	a.linkPopRun = -1
+	a.linkPopOpen = false
+	a.richDirty()
+	a.invalidate()
+}
+
+// linkPopover renders the URL editor over the document (renameDialog style).
+func (a *App) linkPopover(c *ui.Context) {
+	t := c.Theme()
+	ui.Modal(c, &a.linkPopOpen, func() {
+		ui.Column(c).Width(460).Gap(12).Padding(18).Radius(12).
+			Background(t.Background).Border(1, t.Border).
+			Shadow(0, 18, 50, 0, ui.RGBA(0, 0, 0, 0.22)).Children(func() {
+			ui.Text(c, "编辑链接").FontSize(14).FontWeight(600)
+			ui.Text(c, a.linkPopLabel).FontSize(12).TextColor(t.TextMuted).
+				SingleLine().Ellipsis("…")
+			input := ui.TextInput(c, &a.linkPopURL).AutoFocus().Label("URL")
+			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+				if ui.Button(c, "取消").Clicked() {
+					a.linkPopOpen = false
+					a.invalidate()
+				}
+				if ui.PrimaryButton(c, "确定").Clicked() || input.Submitted() {
+					a.applyLinkPop()
+				}
+			})
+		})
+	})
 }
 
 func (a *App) indentEdit(start, end int, outdent bool) {

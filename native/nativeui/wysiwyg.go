@@ -722,6 +722,28 @@ func (a *App) richInput(c *ui.Context, ev ui.InputEvent, layout *ui.TextLayout) 
 			a.richDirty()
 			a.invalidate()
 			return true
+		case ui.KeyK:
+			// 光标在链接上：打开 URL 弹层；有选区：把选区变链接
+			if !a.editLinkAtCaret() {
+				if start, end := r.selection(); start != end {
+					r.snapshot()
+					r.splitAt(start)
+					r.splitAt(end)
+					offset := 0
+					for i := range r.runs {
+						n := runLen(r.runs[i])
+						rs, re := offset, offset+n
+						if re > start && rs < end {
+							r.runs[i].Link = "https://"
+						}
+						offset = re
+					}
+					r.runs = mergeRuns(r.runs)
+					a.richDirty()
+				}
+			}
+			a.invalidate()
+			return true
 		case ui.Key0:
 			r.level, r.prefix = 0, ""
 			a.richDirty()

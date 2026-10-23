@@ -186,3 +186,44 @@ func TestE2ESwitchFilesKeepsSavedState(t *testing.T) {
 		t.Fatalf("a.path = %q, want %q", a.path, one)
 	}
 }
+
+func TestE2ETableCmdEnterAddsRow(t *testing.T) {
+	dir := t.TempDir()
+	one := filepath.Join(dir, "表.md")
+	if err := os.WriteFile(one, []byte("| a | b |\n| --- | --- |\n| 1 | 2 |\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := New()
+	a.setWorkspace(dir)
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	if err := tt.Click("表.md"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("1"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.cellEdit == nil {
+		t.Fatal("cell edit did not start")
+	}
+	tt.Key(ui.Cmd, ui.KeyEnter)
+	tt.Frame()
+	if a.cellEdit == nil || a.cellEdit.row != 2 {
+		t.Fatalf("cell edit did not move to the inserted row: %+v", a.cellEdit)
+	}
+	tt.Type("新行")
+	tt.Frame()
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	a.save()
+	got := waitFileContains(t, one, "新行")
+	if !strings.Contains(got, "新行") {
+		t.Fatalf("saved table missing the new row; got:\n%s", got)
+	}
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	if len(lines) != 4 {
+		t.Fatalf("expected header+alignment+2 body rows, got %d lines:\n%s", len(lines), got)
+	}
+}
