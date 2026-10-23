@@ -271,3 +271,47 @@ func TestInlineMathStaysTypesetAtomInRich(t *testing.T) {
 		t.Fatal("no math run in the rich editor")
 	}
 }
+
+func TestNestedListEditsAsSourceAndRoundTrips(t *testing.T) {
+	a := New()
+	a.source = "- 父项\n  - 嵌套项\n"
+	a.refreshDoc()
+	if a.beginRichEditAt(0, -1, -1) {
+		t.Fatal("a list item with nested children must not open the rich editor")
+	}
+	if a.rich != nil {
+		t.Fatal("rich editor started on a nested list")
+	}
+
+	// the source surface round-trips the nested marker exactly
+	a.beginBlockEdit(0)
+	if !strings.Contains(a.editSource, "  - 嵌套项") {
+		t.Fatalf("editSource = %q", a.editSource)
+	}
+	// indent the nested line one level deeper with Tab
+	a.editSelStart, a.editSelEnd = len(a.editSource), len(a.editSource)
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	tt.Key(0, ui.KeyTab)
+	tt.Frame()
+	if !strings.Contains(a.editSource, "    - 嵌套项") {
+		t.Fatalf("Tab did not indent the nested line: %q", a.editSource)
+	}
+	a.applyBlockEdit()
+	a.commitBlock()
+	if !strings.Contains(a.source, "    - 嵌套项") {
+		t.Fatalf("indent did not round-trip: %q", a.source)
+	}
+
+	// Shift+Tab outdents back
+	a.beginBlockEdit(0)
+	a.editSelStart, a.editSelEnd = len(a.editSource), len(a.editSource)
+	tt.Frame()
+	tt.Key(ui.Shift, ui.KeyTab)
+	tt.Frame()
+	a.applyBlockEdit()
+	a.commitBlock()
+	if !strings.Contains(a.source, "  - 嵌套项") {
+		t.Fatalf("outdent did not round-trip: %q", a.source)
+	}
+}

@@ -77,7 +77,10 @@ The fix is an editor-kernel replacement, not more shortcuts.
   - Verified (closeout): the task checkbox is clickable while the item is in
     rich editing (toggles the run model, commit serializes [x]/[ ]), and
     Enter on an ordered item increments its marker (nextListPrefix).
-  - Still to polish: nested-list indentation from source round-trip.
+  - Implemented (closeout): a list item with nested children no longer opens
+    the rich editor (its run model cannot round-trip the nested lines) — it
+    edits as multi-line source with Tab/Shift+Tab indent/outdent, and the
+    nested markers round-trip byte-exactly.
 
 - **Phase 3 — tables/code/math/images (done, first pass)**
   - Tables edit per cell without pipes; code hides fences and shows a language

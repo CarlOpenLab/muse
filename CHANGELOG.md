@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add table structure commands: right-click a rendered table to insert/delete rows and columns anchored to the cell being edited, and Cmd+Enter inserts a row below the edited cell; a new alignment cell mirrors the neighbour's colon style and the last column cannot be deleted. / 新增表格结构命令：右键渲染出的表格按正在编辑的单元格锚点增删行列，⌘↵ 在下方插入一行继续编辑；新列的对齐单元格镜像邻格冒号风格，最后一列不可删除。
+- Cmd+K in the rich editor now opens a URL popover when the caret is on a link (the target edits through the run model) and turns a selection into a link; the URL cannot be empty or contain ')'. / 富文本 ⌘K 在光标位于链接上时打开 URL 弹层（经 run 模型改写地址），有选区则把选区变为链接；URL 不能为空或含 ')'。
+- Auto-pair (), [], {}, quotes and backticks in the rich editor: a selection wraps, a collapsed caret inserts a pair with the caret inside, and typing a closer right before its twin skips over it; markdown markers stay literal. / 富文本自动配对 ()[]{} 引号反引号：有选区包裹，塌陷插入成对并把光标放进对内，在配对字符前输入闭字符跳过；Markdown 标记保持字面。
+- Rich editing crosses into the adjacent block with Up/Down at a block's first/last edge, using the same boundary semantics as the source editor. / 富文本在块首/块尾按 Up/Down 跨到相邻可富编辑块，边界语义与源码编辑器一致。
+- HTML blocks open a raw source editor on click again, writing back live through the normal block-edit pipeline. / HTML 块点击后重新打开原始源码编辑，经正常块编辑管线实时回写。
+- Image blocks gained a display-width stepper in the image editor; an explicit width persists as an equivalent HTML img width attribute that mdoc parses back into ImgWidth, and 重置 returns to the markdown form. / 图片编辑器新增显示宽度步进；显式宽度以等价 HTML img width 属性持久化（mdoc 解析回 ImgWidth），重置回到 Markdown 形式。
+
 - Support IME composition in the rich editor: the composition string is shown underlined at the caret and the committed text goes through the normal insert path, so composed Chinese/Japanese input is no longer dropped. / 富文本编辑支持 IME 组合输入：组合串在光标处加下划线预览，提交文本走正常插入路径，中文/日文组合输入不再丢失。
 - Remove the remaining Markdown source surface for tables (cells edit individually, no whole-table pipes) and stop opening a source TextArea for Rule/HTML blocks. / 移除表格整块源码编辑（单元格独立编辑、无管道符），Rule/HTML 块不再打开源码 TextArea。
 - Render inline math in rich text as an atomic visible run: `$x^2$` shows as `x²`, the TeX source is preserved on commit, and deleting part of the atom removes it whole. / 富文本行内公式改成可见原子：`$x^2$` 显示为 `x²`，提交时保留 TeX 源码，删除原子的一部分会整块删除。

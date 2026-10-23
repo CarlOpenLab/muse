@@ -49,7 +49,9 @@ func (a *App) canRichEdit(i int) bool {
 	case mdoc.Paragraph, mdoc.Heading:
 		return true
 	case mdoc.List:
-		return len(bs[0].Items) == 1
+		// A list item with nested children edits as multi-line source instead:
+		// the rich run model cannot round-trip the nested lines.
+		return len(bs[0].Items) == 1 && len(bs[0].Items[0].Children) == 0
 	case mdoc.Quote:
 		return true
 	}
