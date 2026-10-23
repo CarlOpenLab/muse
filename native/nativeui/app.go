@@ -935,9 +935,6 @@ func (a *App) resetDoc() {
 }
 
 func (a *App) save() {
-	if a.win == nil {
-		return
-	}
 	if a.imageEdit != nil {
 		a.commitImage()
 	}
@@ -1033,7 +1030,7 @@ func (a *App) saveAs() {
 		a.commitRich()
 	}
 	var name, source string
-	mygo.RunOnMain(func() {
+	a.onMain(func() {
 		name = "Untitled.md"
 		if a.path != "" {
 			name = filepath.Base(a.path)
