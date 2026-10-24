@@ -411,6 +411,7 @@ if (finePointer && !reduced) {
         if (rid !== runId) return;
         const b = makeBlock();
         page.appendChild(b);
+        page.scrollTop = page.scrollHeight;
         status.textContent = `正在输入 — ${block.label}`;
         await typeBlock(b, block, rid);
         if (rid !== runId) return;
@@ -418,6 +419,7 @@ if (finePointer && !reduced) {
         $('.ed-rich', b).innerHTML = block.rich;
         $('.ed-rich', b).removeAttribute('aria-hidden');
         b.classList.add('is-dissolved');
+        page.scrollTop = page.scrollHeight;
         status.textContent = `已渲染 — ${block.label} · 标记已隐去`;
         await wait(scenarioKey === 'all' ? 1050 : 1500);
       }
@@ -528,6 +530,8 @@ if (finePointer && !reduced) {
         span.style.display = 'block';
         span.innerHTML = c.h;
         stream.appendChild(span);
+        const chatEl = document.getElementById('chat');
+        if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
         await wait(c.d + 240);
       }
       if (rid !== runId) return;

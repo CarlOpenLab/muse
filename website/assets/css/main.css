@@ -590,6 +590,8 @@ code {
 .window--editor { transform: perspective(1600px) rotateX(0deg); }
 .window__page {
   position: relative;
+  height: 470px;
+  overflow: hidden;
   padding: clamp(26px, 4vw, 46px) clamp(24px, 4vw, 52px);
   font-size: 15.5px;
   line-height: 1.75;
@@ -689,7 +691,7 @@ span.ed-caret { display: inline-block; }
 
 /* ---------- chat ---------- */
 .ai-stage { max-width: 860px; margin-inline: auto; }
-.chat { padding: clamp(20px, 3vw, 34px); display: grid; gap: 20px; min-height: 330px; }
+.chat { padding: clamp(20px, 3vw, 34px); display: grid; gap: 20px; height: 360px; overflow: hidden; }
 .chat__row { display: flex; }
 .chat__row--user { justify-content: flex-end; }
 .chat__row--ai { gap: 12px; align-items: flex-start; }
