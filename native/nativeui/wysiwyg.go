@@ -13,17 +13,22 @@ import (
 // The visible runs carry styles and source mappings; Markdown markers never
 // enter the editing surface. The document source is rebuilt on commit.
 type richEditor struct {
-	block   int
-	prefix  string // heading/list/quote marker, e.g. "# ", "- ", "> "
-	level   int
-	chrome  string // "", "list", "quote"
-	indent  int
-	marker  string
-	task    bool
-	checked bool
-	runs    []mdoc.InlineRun
-	anchor  int
-	caret   int
+	block     int
+	size      float32   // 本块的字号（标题放大）
+	lineOf    []int     // 每个光标位置的视觉行号
+	lineTops  []float32 // 每行行框顶部（渲染行距空间）
+	lineHs    []float32 // 每行行框高度
+	lineCount int
+	prefix    string // heading/list/quote marker, e.g. "# ", "- ", "> "
+	level     int
+	chrome    string // "", "list", "quote"
+	indent    int
+	marker    string
+	task      bool
+	checked   bool
+	runs      []mdoc.InlineRun
+	anchor    int
+	caret     int
 
 	clickX, clickY float32
 	clickSet       bool
@@ -598,13 +603,49 @@ func (r *richEditor) richLineHeight() float32 {
 	return 1.75
 }
 
+// lineTopAt/lineHeightAt return the render-space line box for line L.
+func (r *richEditor) lineTopAt(L int) float32 {
+	if L >= 0 && L < len(r.lineTops) {
+		return r.lineTops[L]
+	}
+	return 0
+}
+
+func (r *richEditor) lineHeightAt(L int) float32 {
+	if L >= 0 && L < len(r.lineHs) {
+		return r.lineHs[L]
+	}
+	return r.richLineHeight() * r.size
+}
+
+// chromeWidth is the bullet/quote gutter width of the block.
+func (r *richEditor) chromeWidth() float32 {
+	switch r.chrome {
+	case "list":
+		w := float32(20 + r.indent*7)
+		if r.indent > 0 {
+			w += 7
+		}
+		return w
+	case "quote":
+		return 17
+	}
+	return 0
+}
+
 // richPointToIndex maps a click (element-relative) to a caret index in the
-// metrics layout, honoring the render line spacing.
-func (r *richEditor) richPointToIndex(layout *ui.TextLayout, x, y, size float32) int {
+// metrics layout, honoring the render line spacing (per-line tops).
+func (r *richEditor) richPointToIndex(layout *ui.TextLayout, x, y float32) int {
 	metricH := layout.Caret(0).H
-	line := int(y / (r.richLineHeight() * size))
-	if line < 0 {
-		line = 0
+	if metricH <= 0 || len(r.lineTops) == 0 {
+		return 0
+	}
+	x -= r.chromeWidth()
+	line := 0
+	for L := 0; L < r.lineCount; L++ {
+		if y >= r.lineTops[L] {
+			line = L
+		}
 	}
 	return r.runeFromUTF16(layout.IndexAt(ui.Point{X: x, Y: float32(line)*metricH + metricH*0.5}))
 }
@@ -633,7 +674,8 @@ func (a *App) richView(c *ui.Context) {
 			padTop += 5
 		}
 	}
-	// 内边距差补偿（行距已按构造与渲染一致，残差为确定性 DIP 值）
+	// 行距部分已按构造与渲染一致；残差为各块类的内边距差
+	// （确定性 DIP 值，实测校准：标题 -5.3/-4.7/-3.9，列表 -10，引用 -12）
 	heightFix := float32(0)
 	switch r.chrome {
 	case "list":
@@ -647,7 +689,7 @@ func (a *App) richView(c *ui.Context) {
 		case 2:
 			heightFix = 4.7
 		case 3:
-			heightFix = 4.2
+			heightFix = 3.9
 		}
 	}
 	chromeW := float32(0)
@@ -671,11 +713,36 @@ func (a *App) richView(c *ui.Context) {
 	_, _ = c.MeasureText(width, spans...) // 预热共享 shaper
 	layout := ui.ShapeText(r.visibleText(), font, width)
 	n := len([]rune(r.visibleText()))
-	lineOf, lines := richLineMap(layout, n)
+	lineOf, lineCount := richLineMap(layout, n)
 	lh := r.richLineHeight()
-	boxH := float32(lines) * lh * size
+	// 每行真实行高：Height = max(倍数×字号, 行内字形 ascent+descent)，
+	// 与元素渲染（ui.RichText + LineHeight）同一公式（internal/text/layout.go）。
+	baseFM := (ui.Font{Family: t.Font, Size: size}).Metrics()
+	lineTops := make([]float32, lineCount)
+	lineHs := make([]float32, lineCount)
+	boxH := float32(0)
+	for L := 0; L < lineCount; L++ {
+		start := firstIndexOfLine(lineOf, lineCount, L)
+		end := firstIndexOfLine(lineOf, lineCount, L+1)
+		if end == -1 {
+			end = n
+		}
+		A, D := baseFM.Ascent, baseFM.Descent
+		for _, pc := range splitSpansAt(spans, start, end) {
+			fm := (ui.Font{Family: pc.Font, Size: pc.Size}).Metrics()
+			A, D = max(A, fm.Ascent), max(D, fm.Descent)
+		}
+		H := max(lh*size, A+D)
+		lineTops[L], lineHs[L] = boxH, H
+		boxH += H
+	}
+	r.size = size
+	r.lineOf = lineOf
+	r.lineCount = lineCount
+	r.lineTops = lineTops
+	r.lineHs = lineHs
 	if r.clickSet {
-		idx := r.richPointToIndex(layout, r.clickX-10-chromeW, r.clickY-padTop, size)
+		idx := r.richPointToIndex(layout, r.clickX-10-chromeW, r.clickY-padTop)
 		r.setCaret(r.runeFromUTF16(idx), false)
 		r.clickSet = false
 	}
@@ -697,45 +764,39 @@ func (a *App) richView(c *ui.Context) {
 					ui.Text(c, r.marker).FontSize(size * 0.8).TextColor(t.TextMuted).
 						Width(20).TextAlign(ui.End).SingleLine()
 				}
-				a.richBox(c, r, layout, spans, t, width, boxH, lh, size, lineOf, lines)
+				a.richBox(c, r, layout, spans, t, width, size, lineOf, lineCount, lineTops, lineHs, boxH)
 			})
 		case "quote":
 			ui.Column(c).Grow(0).Shrink(0).Height(boxH).BorderWidth(0, 0, 0, 3).BorderColor(t.Border).Padding(0, 0, 0, 14).Children(func() {
-				a.richBox(c, r, layout, spans, t, width, boxH, lh, size, lineOf, lines)
+				a.richBox(c, r, layout, spans, t, width, size, lineOf, lineCount, lineTops, lineHs, boxH)
 			})
 		default:
-			a.richBox(c, r, layout, spans, t, width, boxH, lh, size, lineOf, lines)
+			a.richBox(c, r, layout, spans, t, width, size, lineOf, lineCount, lineTops, lineHs, boxH)
 		}
 	})
 }
 
-func (a *App) richBox(c *ui.Context, r *richEditor, layout *ui.TextLayout, spans []ui.Span, t *ui.Theme, width, boxH, lh, size float32, lineOf []int, lines int) {
+func (a *App) richBox(c *ui.Context, r *richEditor, layout *ui.TextLayout, spans []ui.Span, t *ui.Theme, width, size float32, lineOf []int, lineCount int, lineTops, lineHs []float32, boxH float32) {
 	// TextCaret lets the element take text from the system's input methods.
 	// Without it the IM is never consulted on key events, so characters from
 	// a real keyboard never reach InputText — the "can't type" root cause.
 	ui.Box(c).FillWidth().Height(boxH).Focusable().Focus().
-		TextCaret(ui.Rect{X: 0, Y: 0, W: 1, H: lh * size}).
+		TextCaret(ui.Rect{X: 0, Y: 0, W: 1, H: r.lineHeightAt(r.caret)}).
 		HandleInput(func(ev ui.InputEvent) bool {
 			return a.richInput(c, ev, layout)
 		}).
 		Draw(func(p *ui.Painter, box ui.Rect) {
+			gutter := r.chromeWidth()
 			n := len([]rune(r.visibleText()))
 			caretX := make([]float32, n+1)
 			for i := 0; i <= n; i++ {
 				caretX[i] = layout.Caret(i).X
 			}
-			// 与元素渲染完全同分布：mygo 的行框把字形垂直居中
-			// baseline = lineTop + (lineH − asc − desc)/2 + asc（layout.go line()）
-			fm := (ui.Font{Size: size}).Metrics()
-			lineH := lh * size
-			gap := lineH - fm.Ascent - fm.Descent
-			lineTop := func(L int) float32 { return float32(L) * lineH }
-			drawY := func(L int) float32 { return lineTop(L) + gap/2 }
-			// 选区高亮（按行展开到渲染行距）
+			// 选区高亮（每行的行框）
 			if s, e := r.selection(); s != e {
 				for L := lineOf[s]; L <= lineOf[e]; L++ {
-					startIdx := firstIndexOfLine(lineOf, lines, L)
-					endIdx := firstIndexOfLine(lineOf, lines, L+1)
+					startIdx := firstIndexOfLine(lineOf, lineCount, L)
+					endIdx := firstIndexOfLine(lineOf, lineCount, L+1)
 					if endIdx == -1 {
 						endIdx = n
 					}
@@ -749,30 +810,31 @@ func (a *App) richBox(c *ui.Context, r *richEditor, layout *ui.TextLayout, spans
 					if x1 < x0 {
 						x0, x1 = x1, x0
 					}
-					p.Fill(ui.Rect{X: box.X + x0, Y: box.Y + lineTop(L), W: x1 - x0, H: lineH},
+					p.Fill(ui.Rect{X: box.X + gutter + x0, Y: box.Y + r.lineTopAt(L), W: x1 - x0, H: r.lineHeightAt(L)},
 						ui.RGBA(80, 120, 255, 0.18), 2)
 				}
 			}
-			// 逐行绘制（spans 按行边界切分，样式字段全保留）
-			for L := 0; L < lines; L++ {
-				start, end := firstIndexOfLine(lineOf, lines, L), firstIndexOfLine(lineOf, lines, L+1)
+			// 逐行绘制（每行行框与元素渲染同公式：max(倍数×字号, ascent+descent)）；
+			// 文本从 chrome 槽位之后开始，宽度扣除槽位
+			for L := 0; L < lineCount; L++ {
+				start, end := firstIndexOfLine(lineOf, lineCount, L), firstIndexOfLine(lineOf, lineCount, L+1)
 				if end == -1 {
 					end = n
 				}
 				lineSpans := splitSpansAt(spans, start, end)
 				if len(lineSpans) > 0 {
-					p.RichText(box.X, box.Y+drawY(L), box.W, lineSpans...)
+					p.RichText(box.X+gutter, box.Y+r.lineTopAt(L), box.W-gutter, lineSpans...)
 				}
 			}
 			// 组合串与光标
-			cx := caretX[r.caret]
-			cy := drawY(lineOf[r.caret])
+			cx := gutter + caretX[r.caret]
+			cy := r.lineTopAt(lineOf[r.caret])
 			if r.compose != "" {
 				p.RichText(box.X+cx, box.Y+cy, box.W, ui.Span{
-					Text: r.compose, Size: size, Color: t.Accent, Underline: true,
+					Text: r.compose, Size: r.size, Color: t.Accent, Underline: true,
 				})
 			}
-			p.Fill(ui.Rect{X: box.X + cx, Y: box.Y + lineTop(lineOf[r.caret]), W: 1.5, H: lineH}, t.Text, 0)
+			p.Fill(ui.Rect{X: box.X + cx, Y: box.Y + cy, W: 1.5, H: r.lineHeightAt(r.caret)}, t.Text, 0)
 		})
 }
 
@@ -869,7 +931,7 @@ func (a *App) richInput(c *ui.Context, ev ui.InputEvent, layout *ui.TextLayout) 
 		if r.level > 0 {
 			size = mdoc.HeadingSize(r.level, size)
 		}
-		idx := r.richPointToIndex(layout, ev.X, ev.Y, size)
+		idx := r.richPointToIndex(layout, ev.X, ev.Y)
 		r.setCaret(r.runeFromUTF16(idx), ev.Mods&ui.Shift != 0)
 		return true
 	case ui.InputText:
