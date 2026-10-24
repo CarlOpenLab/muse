@@ -315,3 +315,39 @@ func TestNestedListEditsAsSourceAndRoundTrips(t *testing.T) {
 		t.Fatalf("outdent did not round-trip: %q", a.source)
 	}
 }
+
+func TestClickBlockKeepsFollowingContentStable(t *testing.T) {
+	a := New()
+	a.source = "# 一级标题\n\n## 二级标题\n\n普通段落文字。\n\n- 列表项\n\n> 引用行\n\n尾段文字。\n"
+	a.refreshDoc()
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+
+	// 点击进入编辑时，下方内容不得位移（否则每次点击都会“高度变化闪烁”）
+	stable := func(clickText, probeText string) {
+		t.Helper()
+		before, ok := tt.Find(probeText)
+		if !ok {
+			t.Fatalf("%q: probe %q missing before click", clickText, probeText)
+		}
+		if err := tt.Click(clickText); err != nil {
+			t.Fatalf("%q: click: %v", clickText, err)
+		}
+		tt.Frame()
+		after, ok := tt.Find(probeText)
+		if !ok {
+			t.Fatalf("%q: probe %q missing in edit mode", clickText, probeText)
+		}
+		if d := after.Y - before.Y; d > 0.5 || d < -0.5 {
+			t.Fatalf("clicking %q shifts %q by %.1fpx", clickText, probeText, d)
+		}
+		tt.Key(0, ui.KeyEscape)
+		tt.Frame()
+	}
+
+	stable("一级标题", "二级标题")
+	stable("二级标题", "普通段落文字。")
+	stable("普通段落文字。", "列表项")
+	stable("列表项", "引用行")
+	stable("引用行", "尾段文字。")
+}

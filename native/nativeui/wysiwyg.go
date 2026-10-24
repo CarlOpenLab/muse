@@ -593,6 +593,19 @@ func (a *App) richView(c *ui.Context) {
 			padTop += 5
 		}
 	}
+	// 编辑框与渲染块的高度对齐补偿（实测差值）：不改则点击进入编辑时
+	// 下方内容会跳 4–8px，进出编辑即“高度变化闪烁”。
+	heightFix := float32(0)
+	switch r.chrome {
+	case "list":
+		heightFix = -6
+	case "quote":
+		heightFix = -8
+	default:
+		if r.level == 0 {
+			heightFix = 4
+		}
+	}
 	chromeW := float32(0)
 	switch r.chrome {
 	case "list":
@@ -621,7 +634,7 @@ func (a *App) richView(c *ui.Context) {
 	if h <= 0 {
 		h = size * 1.8
 	}
-	ui.Column(c).FillWidth().Grow(0).Shrink(0).Height(h+padTop+6).Padding(padTop, 10, 6, 10).Children(func() {
+	ui.Column(c).FillWidth().Grow(0).Shrink(0).Height(h+padTop+6+heightFix).Padding(padTop, 10, 6, 10).Children(func() {
 		switch r.chrome {
 		case "list":
 			ui.Row(c).Grow(0).Shrink(0).Height(h).Gap(7).AlignItems(ui.Start).Children(func() {
