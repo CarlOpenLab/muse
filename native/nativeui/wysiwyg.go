@@ -569,6 +569,46 @@ func (r *richEditor) runeFromUTF16(idx int) int {
 	return len(runes)
 }
 
+// richLineMap derives the visual line index of every caret position
+// (0..n) from the shaped layout, and the line count. Line WRAPPING is a
+// function of glyph advances only, so the line structure is identical at
+// any line height.
+func richLineMap(layout *ui.TextLayout, n int) (lineOf []int, lines int) {
+	lineOf = make([]int, n+1)
+	line, lastY, lineH := 0, float32(0), float32(0)
+	for i := 0; i <= n; i++ {
+		rect := layout.Caret(i)
+		if i == 0 {
+			lastY, lineH = rect.Y, rect.H
+		} else if rect.Y > lastY+lineH*0.5 {
+			line++
+			lastY = rect.Y
+		}
+		lineOf[i] = line
+	}
+	return lineOf, line + 1
+}
+
+// richLineHeight is the line-height multiplier the document renderer uses
+// for this block kind (mdoc/view.go): headings 1.3, everything else 1.75.
+func (r *richEditor) richLineHeight() float32 {
+	if r.level > 0 {
+		return 1.3
+	}
+	return 1.75
+}
+
+// richPointToIndex maps a click (element-relative) to a caret index in the
+// metrics layout, honoring the render line spacing.
+func (r *richEditor) richPointToIndex(layout *ui.TextLayout, x, y, size float32) int {
+	metricH := layout.Caret(0).H
+	line := int(y / (r.richLineHeight() * size))
+	if line < 0 {
+		line = 0
+	}
+	return r.runeFromUTF16(layout.IndexAt(ui.Point{X: x, Y: float32(line)*metricH + metricH*0.5}))
+}
+
 func (a *App) richView(c *ui.Context) {
 	r := a.rich
 	if r == nil {
@@ -593,17 +633,21 @@ func (a *App) richView(c *ui.Context) {
 			padTop += 5
 		}
 	}
-	// 编辑框与渲染块的高度对齐补偿（实测差值）：不改则点击进入编辑时
-	// 下方内容会跳 4–8px，进出编辑即“高度变化闪烁”。
+	// 内边距差补偿（行距已按构造与渲染一致，残差为确定性 DIP 值）
 	heightFix := float32(0)
 	switch r.chrome {
 	case "list":
-		heightFix = -6
+		heightFix = -10
 	case "quote":
-		heightFix = -8
+		heightFix = -12
 	default:
-		if r.level == 0 {
-			heightFix = 4
+		switch r.level {
+		case 1:
+			heightFix = 5.3
+		case 2:
+			heightFix = 4.7
+		case 3:
+			heightFix = 4.2
 		}
 	}
 	chromeW := float32(0)
@@ -624,20 +668,21 @@ func (a *App) richView(c *ui.Context) {
 	}
 	// Measure first: it primes MyGo's text shaper, after which the retained
 	// layout wraps at the same width instead of a cold fallback width.
-	_, h := c.MeasureText(width, spans...)
+	_, _ = c.MeasureText(width, spans...) // 预热共享 shaper
 	layout := ui.ShapeText(r.visibleText(), font, width)
+	n := len([]rune(r.visibleText()))
+	lineOf, lines := richLineMap(layout, n)
+	lh := r.richLineHeight()
+	boxH := float32(lines) * lh * size
 	if r.clickSet {
-		idx := layout.IndexAt(ui.Point{X: r.clickX - 10 - chromeW, Y: r.clickY - padTop})
+		idx := r.richPointToIndex(layout, r.clickX-10-chromeW, r.clickY-padTop, size)
 		r.setCaret(r.runeFromUTF16(idx), false)
 		r.clickSet = false
 	}
-	if h <= 0 {
-		h = size * 1.8
-	}
-	ui.Column(c).FillWidth().Grow(0).Shrink(0).Height(h+padTop+6+heightFix).Padding(padTop, 10, 6, 10).Children(func() {
+	ui.Column(c).FillWidth().Grow(0).Shrink(0).Height(boxH+padTop+6+heightFix).Padding(padTop, 10, 6, 10).Children(func() {
 		switch r.chrome {
 		case "list":
-			ui.Row(c).Grow(0).Shrink(0).Height(h).Gap(7).AlignItems(ui.Start).Children(func() {
+			ui.Row(c).Grow(0).Shrink(0).Height(boxH).Gap(7).AlignItems(ui.Start).Children(func() {
 				if r.indent > 0 {
 					ui.Box(c).Width(float32(r.indent) * 7)
 				}
@@ -652,47 +697,118 @@ func (a *App) richView(c *ui.Context) {
 					ui.Text(c, r.marker).FontSize(size * 0.8).TextColor(t.TextMuted).
 						Width(20).TextAlign(ui.End).SingleLine()
 				}
-				a.richBox(c, r, layout, spans, t, width, h, size)
+				a.richBox(c, r, layout, spans, t, width, boxH, lh, size, lineOf, lines)
 			})
 		case "quote":
-			ui.Column(c).Grow(0).Shrink(0).Height(h).BorderWidth(0, 0, 0, 3).BorderColor(t.Border).Padding(0, 0, 0, 14).Children(func() {
-				a.richBox(c, r, layout, spans, t, width, h, size)
+			ui.Column(c).Grow(0).Shrink(0).Height(boxH).BorderWidth(0, 0, 0, 3).BorderColor(t.Border).Padding(0, 0, 0, 14).Children(func() {
+				a.richBox(c, r, layout, spans, t, width, boxH, lh, size, lineOf, lines)
 			})
 		default:
-			a.richBox(c, r, layout, spans, t, width, h, size)
+			a.richBox(c, r, layout, spans, t, width, boxH, lh, size, lineOf, lines)
 		}
 	})
 }
 
-func (a *App) richBox(c *ui.Context, r *richEditor, layout *ui.TextLayout, spans []ui.Span, t *ui.Theme, width, h, size float32) {
+func (a *App) richBox(c *ui.Context, r *richEditor, layout *ui.TextLayout, spans []ui.Span, t *ui.Theme, width, boxH, lh, size float32, lineOf []int, lines int) {
 	// TextCaret lets the element take text from the system's input methods.
 	// Without it the IM is never consulted on key events, so characters from
 	// a real keyboard never reach InputText — the "can't type" root cause.
-	cr := layout.Caret(r.utf16Index(r.caret))
-	ui.Box(c).FillWidth().Height(h).Focusable().Focus().
-		TextCaret(ui.Rect{X: cr.X, Y: cr.Y, W: 1, H: cr.H}).
+	ui.Box(c).FillWidth().Height(boxH).Focusable().Focus().
+		TextCaret(ui.Rect{X: 0, Y: 0, W: 1, H: lh * size}).
 		HandleInput(func(ev ui.InputEvent) bool {
 			return a.richInput(c, ev, layout)
 		}).
 		Draw(func(p *ui.Painter, box ui.Rect) {
-			s, e := r.selection()
-			if s != e {
-				for _, rect := range layout.SelectionRects(ui.TextInputRange{
-					Start: r.utf16Index(s),
-					End:   r.utf16Index(e),
-				}) {
-					p.Fill(ui.Rect{X: box.X + rect.X, Y: box.Y + rect.Y, W: rect.W, H: rect.H},
+			n := len([]rune(r.visibleText()))
+			caretX := make([]float32, n+1)
+			for i := 0; i <= n; i++ {
+				caretX[i] = layout.Caret(i).X
+			}
+			// 与元素渲染完全同分布：mygo 的行框把字形垂直居中
+			// baseline = lineTop + (lineH − asc − desc)/2 + asc（layout.go line()）
+			fm := (ui.Font{Size: size}).Metrics()
+			lineH := lh * size
+			gap := lineH - fm.Ascent - fm.Descent
+			lineTop := func(L int) float32 { return float32(L) * lineH }
+			drawY := func(L int) float32 { return lineTop(L) + gap/2 }
+			// 选区高亮（按行展开到渲染行距）
+			if s, e := r.selection(); s != e {
+				for L := lineOf[s]; L <= lineOf[e]; L++ {
+					startIdx := firstIndexOfLine(lineOf, lines, L)
+					endIdx := firstIndexOfLine(lineOf, lines, L+1)
+					if endIdx == -1 {
+						endIdx = n
+					}
+					x0, x1 := caretX[startIdx], caretX[endIdx]
+					if L == lineOf[s] {
+						x0 = caretX[s]
+					}
+					if L == lineOf[e] {
+						x1 = caretX[e]
+					}
+					if x1 < x0 {
+						x0, x1 = x1, x0
+					}
+					p.Fill(ui.Rect{X: box.X + x0, Y: box.Y + lineTop(L), W: x1 - x0, H: lineH},
 						ui.RGBA(80, 120, 255, 0.18), 2)
 				}
 			}
-			p.RichText(box.X, box.Y, box.W, spans...)
+			// 逐行绘制（spans 按行边界切分，样式字段全保留）
+			for L := 0; L < lines; L++ {
+				start, end := firstIndexOfLine(lineOf, lines, L), firstIndexOfLine(lineOf, lines, L+1)
+				if end == -1 {
+					end = n
+				}
+				lineSpans := splitSpansAt(spans, start, end)
+				if len(lineSpans) > 0 {
+					p.RichText(box.X, box.Y+drawY(L), box.W, lineSpans...)
+				}
+			}
+			// 组合串与光标
+			cx := caretX[r.caret]
+			cy := drawY(lineOf[r.caret])
 			if r.compose != "" {
-				p.RichText(box.X+cr.X, box.Y+cr.Y, box.W, ui.Span{
+				p.RichText(box.X+cx, box.Y+cy, box.W, ui.Span{
 					Text: r.compose, Size: size, Color: t.Accent, Underline: true,
 				})
 			}
-			p.Fill(ui.Rect{X: box.X + cr.X, Y: box.Y + cr.Y, W: 1.5, H: cr.H}, t.Text, 0)
+			p.Fill(ui.Rect{X: box.X + cx, Y: box.Y + lineTop(lineOf[r.caret]), W: 1.5, H: lineH}, t.Text, 0)
 		})
+}
+
+// firstIndexOfLine returns the first caret index on line L; -1 when L is
+// past the last line.
+func firstIndexOfLine(lineOf []int, lines, L int) int {
+	if L >= lines {
+		return -1
+	}
+	for i, l := range lineOf {
+		if l == L {
+			return i
+		}
+	}
+	return -1
+}
+
+// splitSpansAt cuts spans to the visible runes [start, end), splitting any
+// span that crosses a boundary; all style fields are preserved.
+func splitSpansAt(spans []ui.Span, start, end int) []ui.Span {
+	out := []ui.Span{}
+	gi := 0
+	for _, sp := range spans {
+		rs := []rune(sp.Text)
+		spanStart, spanEnd := gi, gi+len(rs)
+		gi = spanEnd
+		if spanEnd <= start || spanStart >= end {
+			continue
+		}
+		from := max(spanStart, start) - spanStart
+		to := min(spanEnd, end) - spanStart
+		piece := sp
+		piece.Text = string(rs[from:to])
+		out = append(out, piece)
+	}
+	return out
 }
 
 func richSpans(runs []mdoc.InlineRun, t *ui.Theme, size float32, weight int) []ui.Span {
@@ -749,7 +865,11 @@ func (a *App) richInput(c *ui.Context, ev ui.InputEvent, layout *ui.TextLayout) 
 		a.invalidate()
 		return true
 	case ui.InputPointerDown:
-		idx := layout.IndexAt(ui.Point{X: ev.X, Y: ev.Y})
+		size := float32(a.fontSize)
+		if r.level > 0 {
+			size = mdoc.HeadingSize(r.level, size)
+		}
+		idx := r.richPointToIndex(layout, ev.X, ev.Y, size)
 		r.setCaret(r.runeFromUTF16(idx), ev.Mods&ui.Shift != 0)
 		return true
 	case ui.InputText:
