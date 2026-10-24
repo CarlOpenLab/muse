@@ -652,7 +652,12 @@ func (a *App) richView(c *ui.Context) {
 }
 
 func (a *App) richBox(c *ui.Context, r *richEditor, layout *ui.TextLayout, spans []ui.Span, t *ui.Theme, width, h, size float32) {
+	// TextCaret lets the element take text from the system's input methods.
+	// Without it the IM is never consulted on key events, so characters from
+	// a real keyboard never reach InputText — the "can't type" root cause.
+	cr := layout.Caret(r.utf16Index(r.caret))
 	ui.Box(c).FillWidth().Height(h).Focusable().Focus().
+		TextCaret(ui.Rect{X: cr.X, Y: cr.Y, W: 1, H: cr.H}).
 		HandleInput(func(ev ui.InputEvent) bool {
 			return a.richInput(c, ev, layout)
 		}).
@@ -668,7 +673,6 @@ func (a *App) richBox(c *ui.Context, r *richEditor, layout *ui.TextLayout, spans
 				}
 			}
 			p.RichText(box.X, box.Y, box.W, spans...)
-			cr := layout.Caret(r.utf16Index(r.caret))
 			if r.compose != "" {
 				p.RichText(box.X+cr.X, box.Y+cr.Y, box.W, ui.Span{
 					Text: r.compose, Size: size, Color: t.Accent, Underline: true,
