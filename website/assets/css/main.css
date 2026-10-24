@@ -491,8 +491,10 @@ code {
   display: flex; align-items: center; gap: 44px;
   width: max-content;
   animation: marquee 26s linear infinite;
+  /* 静息克制：悬停才滑动（无 GPU 环境下常驻滑动会带动整页微抖） */
+  animation-play-state: paused;
 }
-.marquee:hover .marquee__track { animation-play-state: paused; }
+.marquee:hover .marquee__track { animation-play-state: running; }
 @keyframes marquee { to { transform: translateX(-50%); } }
 .marquee__item {
   font-family: var(--font-mono);
@@ -1141,6 +1143,16 @@ body.is-loaded .hero__line > span { transform: none; }
   .stack__lane { grid-template-columns: 44px 1fr; }
   .stack__desc { grid-column: 2; }
 }
+
+/* ============================================================
+   software rendering (no GPU): pause purely decorative motion
+   ============================================================ */
+html.no-gpu { scroll-behavior: auto; }
+.no-gpu .marquee__track { animation: none; }
+.no-gpu .hero__fallback::before, .no-gpu .hero__fallback::after { animation: none; }
+.no-gpu .scrollhint-line::after { animation: none; }
+.no-gpu .hero__card { animation: none; }
+.no-gpu .preloader__mark img { animation: none; }
 
 /* ============================================================
    reduced motion

@@ -4,6 +4,31 @@
    theme · cursor · reveals · parallax · magnetic · counters
    ============================================================ */
 
+// 软件渲染环境检测：连续 40 帧平均超过 24ms（<41fps）视为慢环境，
+// 纯装饰的持续动画（跑马灯/极光漂移等）自动暂停，避免整页逐帧重绘抖动
+(function slowRenderDetect() {
+  // 滚动窗口持续监测：任何 40 帧窗口平均 >19ms，或单帧 >46ms，
+  // 判定为慢渲染环境（之后不再恢复动画，避免来回切换）
+  let last = performance.now();
+  const win = [];
+  function tick(t) {
+    win.push(t - last);
+    last = t;
+    if (win.length > 40) {
+      win.shift();
+    }
+    if (win.length === 40) {
+      const avg = win.reduce((a, b) => a + b, 0) / 40;
+      if (avg > 19 || Math.max(...win) > 46) {
+        document.documentElement.classList.add('no-gpu');
+        return;
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+
 const $ = (s, c = document) => c.querySelector(s);
 const $$ = (s, c = document) => [...c.querySelectorAll(s)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -79,7 +104,25 @@ const theme = (() => {
 (() => {
   const canvas = $('#aurora');
   const gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'low-power' });
-  if (!gl) { canvas.classList.add('is-dead'); return; }
+  if (!gl) {
+    canvas.classList.add('is-dead');
+    return;
+  }
+  // 软件 GL（SwiftShader/llvmpipe）上着色器与持续动画都会抖：识别后整体
+  // 切到静态渐变回退，真 GPU 环境保持全部动效
+  try {
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer = String(dbg
+      ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
+      : gl.getParameter(gl.RENDERER));
+    if (/swiftshader|llvmpipe|softpipe|software/i.test(renderer)) {
+      canvas.classList.add('is-dead');
+      document.documentElement.classList.add('no-gpu');
+      return;
+    }
+  } catch {
+    // renderer 读取失败则按原样继续
+  }
 
   const VERT = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
   const FRAG = `
@@ -315,7 +358,12 @@ if (finePointer && !reduced) {
 
   let runId = 0;
   let visible = true;
+  let hovered = false;
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.05 }).observe(page);
+  // 指针停在演示上（用户在阅读）时暂停打字，移开恢复
+  const stage = page.closest('.editor-stage');
+  stage.addEventListener('pointerenter', () => { hovered = true; });
+  stage.addEventListener('pointerleave', () => { hovered = false; });
 
   function makeBlock() {
     const b = document.createElement('div');
@@ -343,9 +391,10 @@ if (finePointer && !reduced) {
         else if (seg.cls) span.className = seg.cls;
         line.insertBefore(span, caret);
         for (const ch of seg.t) {
+          while (hovered && rid === runId) { await wait(150); }
           if (rid !== runId || !visible) { span.textContent += ch; continue; }
           span.textContent += ch;
-          await wait(34 + Math.random() * 46);
+          await wait(55);
         }
       }
       await wait(160);
