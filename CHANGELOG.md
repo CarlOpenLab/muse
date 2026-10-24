@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix typing from a real keyboard in the rich editor: the editor element never registered with the system's text-input services (no TextCaret), so the input method was never consulted on key events and typed characters never reached the editor — arrows, Enter and shortcuts worked while typing did nothing. / 修复富文本真实键盘无法输入：编辑元素从未向系统文本输入服务注册（缺 TextCaret），按键时输入法从不被咨询，字符无法进入编辑器——方向键/回车/快捷键正常，唯独打不出字。
+
 - Add table structure commands: right-click a rendered table to insert/delete rows and columns anchored to the cell being edited, and Cmd+Enter inserts a row below the edited cell; a new alignment cell mirrors the neighbour's colon style and the last column cannot be deleted. / 新增表格结构命令：右键渲染出的表格按正在编辑的单元格锚点增删行列，⌘↵ 在下方插入一行继续编辑；新列的对齐单元格镜像邻格冒号风格，最后一列不可删除。
 - Cmd+K in the rich editor now opens a URL popover when the caret is on a link (the target edits through the run model) and turns a selection into a link; the URL cannot be empty or contain ')'. / 富文本 ⌘K 在光标位于链接上时打开 URL 弹层（经 run 模型改写地址），有选区则把选区变为链接；URL 不能为空或含 ')'。
 - Auto-pair (), [], {}, quotes and backticks in the rich editor: a selection wraps, a collapsed caret inserts a pair with the caret inside, and typing a closer right before its twin skips over it; markdown markers stay literal. / 富文本自动配对 ()[]{} 引号反引号：有选区包裹，塌陷插入成对并把光标放进对内，在配对字符前输入闭字符跳过；Markdown 标记保持字面。
