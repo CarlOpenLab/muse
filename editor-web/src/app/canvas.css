@@ -39,3 +39,13 @@ body {
 .muse-app[data-ready='false'] {
   visibility: hidden;
 }
+
+/* 空内容占位符：decoration 打上 .empty-node[data-placeholder]，
+ * ::before 画出灰字；float + height:0 让光标停在占位符上。 */
+.muse-web-canvas .empty-node::before {
+  content: attr(data-placeholder);
+  color: var(--muse-muted, #a9a9b4);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}

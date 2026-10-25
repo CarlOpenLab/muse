@@ -39,6 +39,8 @@ onMounted(async () => {
   canvas.onImagePaste((mime, base64) => bridge?.imagePaste(mime, base64));
   bridge.start();
   ready.value = true;
+  // 调试/E2E 钩子：无宿主时也能从控制台或测试驱动画布。
+  (window as unknown as { __museCanvas?: CanvasEditor }).__museCanvas = canvas;
   // Outside the app (browser tab, e2e) no host ever pushes document.set;
   // load a demo so the canvas is self-sufficient.
   if (!window.mygo) {

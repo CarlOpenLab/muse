@@ -38,3 +38,8 @@ npm run dev                    # 5273 端口浏览器调试（无宿主自动演
 - 13/13 vitest：协议语义 + mygo 传输层映射
 - 浏览器 E2E：点击 h1/h2/li 与 h1 内打字，所有块包围盒零变化
 - Linux 沙箱：WebKitGTK 中 WebView 加载 embed 前端，渲染 Go 推送的文档
+
+## 空内容占位符
+
+`src/milkdown/placeholder.ts`：空标题「标题」/ 全空「开始写作…」/ 末尾空段
+「输入正文…」，decoration + `::before` 绘制，颜色走 `--muse-muted`。

@@ -21,6 +21,7 @@ import { Slice } from '@milkdown/prose/model';
 import type { EditorView } from '@milkdown/prose/view';
 import 'prosemirror-view/style/prosemirror.css';
 import 'katex/dist/katex.min.css';
+import { createPlaceholderPlugin } from './placeholder';
 import type { CanvasEditor } from '../canvasApi';
 import type { ThemeName } from '../bridge/protocol';
 
@@ -53,6 +54,7 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     .use(history)
     .use(math)
     .use(listener)
+    .use(createPlaceholderPlugin())
     .create();
 
   const run = <T>(fn: (view: EditorView) => T): T | false => {
