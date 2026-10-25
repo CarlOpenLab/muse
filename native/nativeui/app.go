@@ -69,7 +69,12 @@ type App struct {
 	saveReply     chan string
 	saveMu        sync.Mutex
 	folderToggled map[string]time.Time
-	webSel        struct {
+
+	// quick open (⌘O): fuzzy file jump inside the workspace
+	quickOpen      bool
+	quickOpenValue string
+	quickOpenSel   int
+	webSel         struct {
 		from, to int
 		text     string
 	}
@@ -241,6 +246,7 @@ func (a *App) View(c *ui.Context) {
 	a.settingsDialog(c)
 	a.renameDialog(c)
 	a.linkPopover(c)
+	a.quickOpenDialog(c)
 }
 
 // windowBG is a single flat color, not a wash: the light side is a neutral

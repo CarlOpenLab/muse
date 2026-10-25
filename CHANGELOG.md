@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- ⌘O quick switcher (Obsidian-style): a fuzzy file jump inside the workspace — type to subsequence-match against paths relative to the workspace root (absolute-path characters never count), ↑↓ moves the selection with an accent-highlighted row, ↵ opens (TextInput OnSubmit), Esc dismisses, clicking a row opens it too; rows show the file name with its folder on the right, and the footer states the match count. ⌘O opens the system dialog instead when no workspace is open; the plain 打开… menu item remains. Headless regression covers open → filter → open-by-selection. / ⌘O 快速跳转（Obsidian 式）：工作区内文件模糊跳转——按相对路径做子序列匹配（绝对路径字符不计分），↑↓ 移动高亮选中行（强调色），↵ 打开（TextInput OnSubmit）、Esc 关闭、点击行也可打开；行右侧显示所在文件夹，底部显示匹配数。无工作区时 ⌘O 退回系统文件对话框，菜单保留「打开…」。无头回归覆盖 打开 → 过滤 → 选中打开。
+
 - Settings typography and AI insertion now reach the web canvas: the font-size slider pushes theme.set tokens (--muse-body-size) so the prose re-sizes live alongside the native shell (verified 15.5→20→15.5px), and AI 插入文档 pushes the new document and scrolls to the inserted first line. The panel toolbar icons, empty-state copy and search/outline rows were re-checked against the tokens (no hardcoded colors found outside canvas.css/shell.css). / 字号设置与 AI 插入现在作用于 WebView 画布：字号滑杆经 theme.set tokens（--muse-body-size）实时改正文字号（验证 15.5→20→15.5px）；AI「插入文档」推送新文档并滚到插入首行。面板图标/空态文案/搜索与大纲行核对过 token（画布样式外无硬编码色）。
 
 - Polish: outline/search jumps glide (smooth scroll to 24px above the target, verified mid-animation) instead of an instant jump, and the canvas scrollbar is a slim themed overlay that follows the muse tokens in both color schemes. / 打磨：大纲/搜索跳改为平滑滚动（停在目标上方 24px，已验证滚动中间态），画布滚动条换成跟随主题 token 的细滚动条，深浅色都不突兀。

@@ -169,7 +169,8 @@ func (a *App) installMenu() {
 			Label: "文件",
 			Submenu: []*mygo.MenuItem{
 				{Label: "新建", Accelerator: "CmdOrCtrl+N", Click: click(a.newDoc)},
-				{Label: "打开…", Accelerator: "CmdOrCtrl+O", Click: click(a.openFileDialog)},
+				{Label: "跳转到文件…", Accelerator: "CmdOrCtrl+O", Click: click(a.openQuickOpen)},
+				{Label: "打开…", Click: click(a.openFileDialog)},
 				{Label: "打开文件夹…", Accelerator: "Shift+CmdOrCtrl+O", Click: click(a.openFolderDialog)},
 				mygo.Separator(),
 				{Label: "保存", Accelerator: "CmdOrCtrl+S", Click: click(a.save)},
