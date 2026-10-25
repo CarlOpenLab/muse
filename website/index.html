@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/spacegrotesk-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/jetbrainsmono-var.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/main.css?v=20261026c">
+  <link rel="stylesheet" href="assets/css/main.css?v=20261026e">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Muse","operatingSystem":"Windows, macOS, Linux","applicationCategory":"TextEditor","description":"完全原生的桌面 Markdown 编辑器，由 Go 与 MyGo 直接绘制，内置会用工具的写作 Agent。","offers":{"@type":"Offer","price":"0"},"author":{"@type":"Organization","name":"CarlOpenLab"}}
   </script>
@@ -125,11 +125,16 @@
                   <div class="approval__actions"><span class="approval__done-label mono">✓ 已同意 · 修改已应用</span></div>
                 </div>
                 <div class="tool"><svg><use href="#i-edit"/></svg><span>编辑文档</span><span class="tool__target">灵感手记.md</span><span class="tool__ok">✓</span></div>
+                <div class="agent-block">
+                  <p class="md">结尾换好了——现在收在那句留白上。<code>⌘S</code> 保存后就生效；不满意随时让我改回去。</p>
+                </div>
               </div>
-              <div class="composer">
-                <div class="composer__row">
-                  <div class="composer__input">让 Agent 总结、改写或编辑这篇文档…</div>
-                  <span class="composer__send"><svg><use href="#i-arrow-up"/></svg></span>
+              <div class="composer-zone">
+                <div class="composer">
+                  <div class="composer__row">
+                    <div class="composer__input">让 Agent 总结、改写或编辑这篇文档…</div>
+                    <span class="composer__send"><svg><use href="#i-arrow-up"/></svg></span>
+                  </div>
                 </div>
                 <div class="composer__foot mono">
                   <span class="chip">每次询问 ▾</span>
@@ -142,9 +147,13 @@
               <div class="doc">
                 <h3 class="doc__title">灵感手记</h3>
                 <p class="doc__p">把<strong>标记</strong>隐去，把<em>想法</em>留在纸上。</p>
-                <p class="doc__p doc__p--dim">点击任何段落，直接在排版后的文字里编辑。</p>
+                <ul class="doc__list">
+                  <li>地铁上记下的那句对话，放进了第二段</li>
+                  <li>结尾留白——合上笔记本，故事自己走</li>
+                </ul>
+                <p class="doc__p doc__p--dim">点击任何段落，直接在排版后的文字里编辑；修改过的结尾等着你 <b>⌘S</b>。</p>
+                <p class="doc__p doc__p--dim">标题会自动进大纲；图与公式和正文同一套排版。</p>
               </div>
-              <div class="statusbar mono" aria-hidden="true"><span>1,204 字</span><span>·</span><span>28 行</span><span class="statusbar__end">⌘P 命令面板</span></div>
             </div>
           </div>
         </div>
@@ -175,10 +184,12 @@
                 <button class="win__replay mono" id="agentReplay" type="button">↻ 重播</button>
               </div>
               <div class="chat" id="agentChat" aria-live="polite"></div>
-              <div class="composer">
-                <div class="composer__row">
-                  <div class="composer__input">让 Agent 总结、改写或编辑这篇文档…</div>
-                  <span class="composer__send composer__send--idle" aria-hidden="true"><svg><use href="#i-arrow-up"/></svg></span>
+              <div class="composer-zone">
+                <div class="composer">
+                  <div class="composer__row">
+                    <div class="composer__input">让 Agent 总结、改写或编辑这篇文档…</div>
+                    <span class="composer__send composer__send--idle" aria-hidden="true"><svg><use href="#i-arrow-up"/></svg></span>
+                  </div>
                 </div>
                 <div class="composer__foot">
                   <div class="seg" role="radiogroup" aria-label="权限预设" id="permSeg">
@@ -187,6 +198,7 @@
                     <button class="seg__btn" data-perm="readonly" role="radio" aria-checked="false" type="button">只读</button>
                   </div>
                   <span class="composer__model mono">opencode-go/deepseek-v4.1-flash</span>
+                  <span class="composer__clear">清空</span>
                 </div>
               </div>
             </div>
@@ -372,8 +384,8 @@
                 <h3 class="doc__title">访谈纪要</h3>
                 <p class="doc__p">她把三次采访的转折都记在了第三页——Agent 已经把要点摘成大纲。</p>
                 <p class="doc__p doc__p--dim">侧栏的图标栏就是面板开关：文件、大纲、缪斯，一次一个。</p>
+                <p class="doc__p doc__p--dim">改名、移动、删除都留在工作区之内。</p>
               </div>
-              <div class="statusbar mono" aria-hidden="true"><span>2,317 字</span><span>·</span><span>41 行</span></div>
             </div>
           </div>
         </div>
