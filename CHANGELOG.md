@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- New file / new folder move into the files panel as a visible toolbar row at the top of the list content (Obsidian's explorer-header way), instead of hiding in the drag header; they create into the selected folder when one is selected, else the workspace root. / 「新建文件 / 新建文件夹」并入文件面板，在列表内容顶部以工具栏成排展示（Obsidian 资源管理器头部方式），不再藏在拖拽头里；选中文件夹时在其中创建，否则落在根目录。
+
 - Independent placeholders for the title and body slots (Typora-style): a blank document is a real two-slot template — empty heading shows 写下标题… while the empty paragraph below shows 在此落笔… at the same time, each caret-independent; after the title has text the body hint becomes 继续书写…. A never-typed document serializes to "" so files stay clean, and new documents/files are created empty on the host to match. / 标题位与正文位独立占位（Typora 式）：空文档是真实的双槽模板——空标题显示「写下标题…」，其下空段落同时显示「在此落笔…」，光标互不相干；标题有字后正文提示变「继续书写…」。从未输入过的文档序列化为 ""，存盘干净；宿主侧新建文档/文件也改为真空内容与之配合。
 
 - Rail declutter: the redundant 打开文件 button is gone (⌘O and the files panel empty state cover it — the empty state now offers 或打开单个文件), and a hairline divider separates the action group (新建 / 打开文件夹) from the view group (文件 / 大纲 / 搜索 / AI). / 侧栏精简：移除重复的「打开文件」按钮（⌘O 与文件面板空态覆盖——空态新增「或打开单个文件」入口），动作组（新建 / 打开文件夹）与视图组（文件 / 大纲 / 搜索 / AI）之间加一条细线分隔。

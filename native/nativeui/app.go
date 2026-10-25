@@ -411,10 +411,6 @@ func (a *App) panelHeader(c *ui.Context) {
 	ui.Row(c).Height(44).Shrink(0).Padding(0, 8, 0, left).Gap(4).DragWindow().
 		Children(func() {
 			ui.Text(c, a.panelTitle()).FontSize(12.5).FontWeight(600).Grow(1).SingleLine().Ellipsis("…")
-			if a.panel == panelFiles && a.root != "" {
-				a.smallIcon(c, iconFilePlus, "新建文件", a.newFileInRoot)
-				a.smallIcon(c, iconFolderPlus, "新建文件夹", a.newFolderInRoot)
-			}
 		})
 }
 
@@ -460,6 +456,13 @@ func (a *App) filesView(c *ui.Context) {
 		})
 		return
 	}
+
+	// 新建文件/新建文件夹在列表内容顶部成排展示（Obsidian 的资源管理器
+	// 头部方式），落在选中的文件夹里；未选中任何目录时落在根目录。
+	ui.Row(c).Shrink(0).Padding(6, 10, 4, 6).Gap(2).Children(func() {
+		a.panelToolButton(c, iconFilePlus, "新建文件", func() { a.newFileIn(a.createTarget()) })
+		a.panelToolButton(c, iconFolderPlus, "新建文件夹", func() { a.newFolderIn(a.createTarget()) })
+	})
 
 	rows := a.fileRows()
 	if len(rows) == 0 {
@@ -1105,6 +1108,27 @@ func (a *App) saveAs() {
 			a.clearTreeCache()
 		})
 	}()
+}
+
+// createTarget is where panel "new" actions land: the selected folder when
+// one is selected, otherwise the workspace root.
+func (a *App) createTarget() string {
+	if a.selectedPath != "" && a.isDir[a.selectedPath] {
+		return a.selectedPath
+	}
+	return a.root
+}
+
+// panelToolButton is a compact labeled button for the panel toolbar.
+func (a *App) panelToolButton(c *ui.Context, icon *ui.SVG, label string, fn func()) {
+	t := c.Theme()
+	b := ui.ButtonBase(c).Height(24).Radius(6).Padding(0, 7).Gap(5).
+		AlignItems(ui.Center).Label(label).Tooltip(label)
+	b.OnClick(fn)
+	b.Children(func() {
+		ui.Icon(c, icon).Size(12, 12).TextColor(t.TextMuted)
+		ui.Text(c, label).FontSize(11.5).TextColor(t.Text)
+	})
 }
 
 func (a *App) newFileInRoot() {
