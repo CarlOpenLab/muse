@@ -41,5 +41,5 @@ npm run dev                    # 5273 端口浏览器调试（无宿主自动演
 
 ## 空内容占位符
 
-`src/milkdown/placeholder.ts`：空标题「标题」/ 全空「开始写作…」/ 末尾空段
-「输入正文…」，decoration + `::before` 绘制，颜色走 `--muse-muted`。
+`src/milkdown/placeholder.ts`：空标题「写下标题…」/ 全空「在此落笔…」/ 末尾
+空段「继续书写…」，decoration + `::before` 绘制，颜色走 `--muse-muted`。
