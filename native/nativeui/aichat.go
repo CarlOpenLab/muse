@@ -10,7 +10,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"runtime"
+
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -34,26 +34,27 @@ func (a *App) aiView(c *ui.Context) {
 		return
 	}
 
-	ui.Column(c).Fill().Children(func() {
-		ui.Scroll(c).Grow(1).TrackScroll(&a.aiScroll).Children(func() {
-			ui.Column(c).FillWidth().Padding(10, 12, 12, 12).Gap(12).Children(func() {
-				if len(a.aiMessages) == 0 {
-					a.aiEmpty(c)
-					return
-				}
-				for mi := range a.aiMessages {
-					a.aiMessage(c, mi)
-				}
-				if a.aiBusy {
-					a.aiBusyRow(c)
-				}
-				if a.aiErr != "" {
-					a.aiErrorRow(c)
-				}
-			})
+	// 滚动区与输入区直接挂到面板列上（这里不再包一层固定列）：多包
+	// 一层 grow=0 的列会带上「最小高度=全部内容」的地板，内容一长就
+	// 把输入区挤出面板。
+	ui.Scroll(c).Grow(1).TrackScroll(&a.aiScroll).Children(func() {
+		ui.Column(c).FillWidth().Padding(10, 12, 12, 12).Gap(12).Children(func() {
+			if len(a.aiMessages) == 0 {
+				a.aiEmpty(c)
+				return
+			}
+			for mi := range a.aiMessages {
+				a.aiMessage(c, mi)
+			}
+			if a.aiBusy {
+				a.aiBusyRow(c)
+			}
+			if a.aiErr != "" {
+				a.aiErrorRow(c)
+			}
 		})
-		a.aiComposer(c)
 	})
+	a.aiComposer(c)
 }
 
 // aiEmpty 是没有对话时的空态：说明 Agent 能做什么，并给出示例。
@@ -125,18 +126,8 @@ func (a *App) aiUserBubble(c *ui.Context, text string) {
 // aiAgentBlock 是靠左的助手回复：思考、工具、正文各一段。
 func (a *App) aiAgentBlock(c *ui.Context, m *chatMessage) {
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
-		lastText := -1
-		for i := range m.Parts {
-			if m.Parts[i].Kind == partText && strings.TrimSpace(m.Parts[i].Text) != "" {
-				lastText = i
-			}
-		}
 		for i := range m.Parts {
 			a.aiPart(c, m, i)
-		}
-		// 对话结束后，最后一段正文带插入/复制操作。
-		if !a.aiBusy && lastText >= 0 {
-			a.aiTextActions(c, m.Parts[lastText].Text)
 		}
 	})
 }
@@ -207,11 +198,17 @@ func (a *App) aiThinkPart(c *ui.Context, p *chatPart) {
 	})
 }
 
-// aiToolPart 是一次工具调用：一行带图标与状态，点开看参数与结果。
+// aiToolPart 是一次工具调用。只读工具是一行状态；要改文档的工具
+// 走审批卡（参考 beUI 的 tool-approval）：待确认时亮出要做的修改和
+// 同意/拒绝按钮，决定之后收起成普通的一行结果。
 func (a *App) aiToolPart(c *ui.Context, p *chatPart) {
 	t := c.Theme()
 	tool := p.Tool
 	if tool == nil {
+		return
+	}
+	if tool.State == toolApproval {
+		a.aiApprovalCard(c, p)
 		return
 	}
 	label := toolLabel(tool.Name)
@@ -272,6 +269,97 @@ func (a *App) aiToolPart(c *ui.Context, p *chatPart) {
 	})
 }
 
+// aiApprovalCard 是待确认的修改卡：标题、要做的修改、同意/拒绝。
+func (a *App) aiApprovalCard(c *ui.Context, p *chatPart) {
+	t := c.Theme()
+	tool := p.Tool
+	label := toolLabel(tool.Name)
+	target := toolTarget(tool.Args)
+
+	title := "请求修改文档"
+	if tool.Name == "write_document" {
+		title = "请求新建文档"
+	} else if tool.Name == "insert_into_document" {
+		title = "请求插入内容"
+	}
+
+	card := ui.Column(c).FillWidth().Radius(10).Padding(9, 10).Gap(7)
+	if t.Dark {
+		card.Background(t.Accent.Alpha(0.12))
+	} else {
+		card.Background(t.Accent.Alpha(0.07))
+	}
+	card.Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).FillWidth().Children(func() {
+			ui.Icon(c, toolIcon(tool.Name)).Size(13, 13).TextColor(t.Accent)
+			ui.Textf(c, "%s？", title).FontSize(11.5).FontWeight(600).TextColor(t.Text)
+			ui.Spacer(c)
+			if target != "" {
+				ui.Text(c, target).FontSize(10).TextColor(t.TextMuted).
+					MaxWidth(120).SingleLine().Ellipsis("…")
+			}
+		})
+		if desc := toolDescription(tool); desc != "" {
+			ui.Text(c, desc).FontSize(10).TextColor(t.TextMuted).Wrap().LineHeight(1.5)
+		}
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			allow := ui.ButtonBase(c).Height(24).Padding(0, 12).Radius(7).
+				Label("同意修改").Description("同意修改")
+			allow.Background(t.Accent)
+			if allow.Hovered() {
+				allow.Background(t.AccentHover)
+			}
+			allow.OnClick(func() { a.decideApproval(tool.ID, true) })
+			allow.Children(func() {
+				ui.Text(c, "同意修改").FontSize(10.5).FontWeight(600).TextColor(t.AccentText)
+			})
+			deny := ui.ButtonBase(c).Height(24).Padding(0, 12).Radius(7).
+				Label("拒绝").Description("拒绝")
+			deny.Background(t.Background).Border(1, t.Border)
+			if deny.Hovered() {
+				deny.Background(t.SurfaceHover)
+			}
+			deny.OnClick(func() { a.decideApproval(tool.ID, false) })
+			deny.Children(func() {
+				ui.Text(c, "拒绝").FontSize(10.5).TextColor(t.TextMuted)
+			})
+			ui.Text(c, label).FontSize(10).TextColor(t.TextMuted).Grow(1).
+				SingleLine().Ellipsis("…")
+		})
+	})
+}
+
+// toolDescription 是审批卡上给用户看的「要做什么」：从参数里挑一句
+// 人话，而不是整个 JSON。
+func toolDescription(tool *toolCall) string {
+	var args struct {
+		Path    string `json:"path"`
+		OldText string `json:"old_text"`
+		NewText string `json:"new_text"`
+		Content string `json:"content"`
+		Text    string `json:"text"`
+	}
+	if json.Unmarshal([]byte(tool.Args), &args) != nil {
+		return strings.TrimSpace(tool.Args)
+	}
+	clip := func(s string, n int) string {
+		s = strings.TrimSpace(s)
+		if len(s) > n {
+			return s[:n] + "…"
+		}
+		return s
+	}
+	switch tool.Name {
+	case "edit_document":
+		return fmt.Sprintf("把「%s」改成「%s」。", clip(args.OldText, 80), clip(args.NewText, 80))
+	case "write_document":
+		return fmt.Sprintf("写入 %s（%d 字符）。", baseName(args.Path), len(args.Content))
+	case "insert_into_document":
+		return fmt.Sprintf("插入「%s」。", clip(args.Text, 120))
+	}
+	return strings.TrimSpace(tool.Args)
+}
+
 // aiTextPart 是正文段：mdoc 流式渲染。
 func (a *App) aiTextPart(c *ui.Context, text string) {
 	mdoc.BlocksView(c, mdoc.Parse(text).Blocks, mdoc.Options{
@@ -280,16 +368,6 @@ func (a *App) aiTextPart(c *ui.Context, text string) {
 		BaseDir:      a.docDir(),
 		Padding:      0,
 		IndentStep:   14,
-	})
-}
-
-// aiTextActions 是正文下面的操作：插入文档 / 复制。
-func (a *App) aiTextActions(c *ui.Context, text string) {
-	a.aiMiniButton(c, "插入文档", func() { a.insertAIContent(text) })
-	a.aiMiniButton(c, "复制", func() {
-		clipboardWrite(strings.TrimSpace(text))
-		a.notice("已复制")
-		a.invalidate()
 	})
 }
 
@@ -346,14 +424,10 @@ func (a *App) aiComposer(c *ui.Context) {
 				a.aiSendButton(c)
 			})
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(2, 4, 0, 2).Children(func() {
-				ui.Textf(c, "Enter 换行 · %s 发送", sendModifierLabel()).
-					FontSize(10).TextColor(t.TextMuted).Grow(1)
-				if a.aiBusy {
-					ui.Text(c, a.aiPhase).FontSize(10).TextColor(t.TextMuted).
-						SingleLine().Ellipsis("…")
-				} else {
-					ui.Text(c, a.ai.Model).FontSize(10).TextColor(t.TextMuted).
-						SingleLine().Ellipsis("…")
+				// 模型名可能很长：占满剩余宽度并省略，别把清空挤走。
+				ui.Text(c, a.ai.Model).FontSize(10).TextColor(t.TextMuted).
+					Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+				if !a.aiBusy {
 					a.aiMiniButton(c, "清空", a.clearAIChat)
 				}
 			})
@@ -435,14 +509,6 @@ func prettyJSON(raw string) string {
 		return raw
 	}
 	return indented.String()
-}
-
-// sendModifierLabel 按平台显示发送快捷键。
-func sendModifierLabel() string {
-	if runtime.GOOS == "darwin" {
-		return "⌘Enter"
-	}
-	return "Ctrl+Enter"
 }
 
 // scrollAIBottom 把对话滚到最底。

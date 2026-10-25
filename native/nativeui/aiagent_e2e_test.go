@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // sseChunk 包装一个 delta JSON 为 SSE 事件。
@@ -204,5 +206,142 @@ func TestAgentLoopDegradesWithoutTools(t *testing.T) {
 	}
 	if got := a.aiMessages[1].textContent(); got != "好的。" {
 		t.Fatalf("answer = %q", got)
+	}
+}
+
+// approvalFixture 搭一个两轮的假端点：第一轮发起 edit_document，
+// 第二轮把模型收到的 tool 结果回显成正文，方便断言。
+func approvalFixture(t *testing.T, secondRound func(toolContent string) string) (srv *httptest.Server, requests *[][]byte) {
+	requests = &[][]byte{}
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []map[string]any `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		*requests = append(*requests, nil)
+		raw, _ := json.Marshal(body)
+		(*requests)[len(*requests)-1] = raw
+		w.Header().Set("Content-Type", "text/event-stream")
+		if len(body.Messages) < 5 { // 第一轮：system,system,user,assistant,tool 还没齐
+			fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"edit_document","arguments":"{\"old_text\":\"旧标题\",\"new_text\":\"新标题\"}"}}]}}]}`))
+			fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`))
+			fmt.Fprint(w, "data: [DONE]\n\n")
+			return
+		}
+		toolContent := ""
+		for _, m := range body.Messages {
+			if m["role"] == "tool" {
+				toolContent, _ = m["content"].(string)
+			}
+		}
+		answer := secondRound(toolContent)
+		fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{"content":`+jsonQuote(answer)+`}}]}`))
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	return srv, requests
+}
+
+// approvalApp 起一个带文档的 app 并发出会触发审批的请求。
+func approvalApp(t *testing.T, srv *httptest.Server) (*App, *ui.Tester) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("MUSE_CONFIG_DIR", dir)
+	doc := dir + "/notes.md"
+	if err := os.WriteFile(doc, []byte("# 旧标题\n\n正文\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := New()
+	a.root = dir
+	a.path = doc
+	a.source = "# 旧标题\n\n正文\n"
+	a.refreshDoc()
+	a.panel = panelAI
+	a.panelWidth = a.panelTargetWidth()
+	a.ai = aiSettings{BaseURL: srv.URL, Model: "m"}
+	a.aiInput = "把标题改掉"
+	a.sendAI()
+	tt := ui.NewTester(a.View, 348, 800)
+	return a, tt
+}
+
+// waitApproval 等到出现待确认的工具段。
+func waitApproval(t *testing.T, a *App, tt *ui.Tester) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		for i := range a.aiMessages {
+			for j := range a.aiMessages[i].Parts {
+				p := &a.aiMessages[i].Parts[j]
+				if p.Kind == partTool && p.Tool != nil && p.Tool.State == toolApproval {
+					tt.Frame()
+					return
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("没有等到审批卡")
+}
+
+// waitIdle 等循环结束。
+func waitIdle(t *testing.T, a *App) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for a.aiBusy && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if a.aiBusy {
+		t.Fatal("agent loop did not finish in time")
+	}
+}
+
+func TestAgentApprovalReject(t *testing.T) {
+	var answer string
+	srv, _ := approvalFixture(t, func(toolContent string) string {
+		answer = toolContent
+		return "知道了。"
+	})
+	defer srv.Close()
+	a, tt := approvalApp(t, srv)
+
+	waitApproval(t, a, tt)
+	if a.source != "# 旧标题\n\n正文\n" {
+		t.Fatalf("确认前文档就被改了: %q", a.source)
+	}
+	if err := tt.Click("拒绝"); err != nil {
+		t.Fatalf("click reject: %v", err)
+	}
+	waitIdle(t, a)
+
+	if strings.Contains(a.source, "新标题") {
+		t.Fatalf("拒绝后文档不应该被修改: %q", a.source)
+	}
+	if !strings.Contains(answer, "拒绝") {
+		t.Fatalf("模型没收到拒绝信息: %q", answer)
+	}
+	if got := a.aiMessages[1].Parts[0].Tool; got == nil || got.State != toolFailed {
+		t.Fatalf("rejected tool part = %+v", a.aiMessages[1].Parts[0])
+	}
+}
+
+func TestAgentApprovalAccept(t *testing.T) {
+	srv, _ := approvalFixture(t, func(string) string { return "改好了。" })
+	defer srv.Close()
+	a, tt := approvalApp(t, srv)
+
+	waitApproval(t, a, tt)
+	if err := tt.Click("同意修改"); err != nil {
+		t.Fatalf("click approve: %v", err)
+	}
+	waitIdle(t, a)
+
+	if !strings.Contains(a.source, "# 新标题") {
+		t.Fatalf("同意后文档应该更新: %q", a.source)
+	}
+	if !a.dirty {
+		t.Fatal("同意后的修改应标记未保存")
+	}
+	if got := a.aiMessages[1].Parts[0].Tool; got == nil || got.State != toolDone {
+		t.Fatalf("approved tool part = %+v", a.aiMessages[1].Parts[0])
 	}
 }

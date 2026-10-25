@@ -40,9 +40,10 @@ const (
 type toolState string
 
 const (
-	toolRunning toolState = "running"
-	toolDone    toolState = "done"
-	toolFailed  toolState = "failed"
+	toolRunning  toolState = "running"
+	toolApproval toolState = "approval" // 等用户确认要不要执行
+	toolDone     toolState = "done"
+	toolFailed   toolState = "failed"
 )
 
 // toolCall 记录一次工具调用及其结果。
@@ -332,7 +333,7 @@ func validPrefixLen(s string, keep int) int {
 
 const agentMaxTurns = 8
 
-const agentSystemPrompt = `你是 Muse 的写作 Agent。Muse 是一款 Markdown 编辑器，工作区里的文档你可以用工具查看、搜索和编辑。
+const agentSystemPrompt = `你是 Muse 的写作 Agent。Muse 是一款 Markdown 编辑器，工作区里的文档你可以用工具查看、搜索和编辑；修改文档的工具（edit_document / write_document / insert_into_document）需要用户确认才会执行。
 编辑文档前先用 read_document 或 search_document 确认原文，再用 edit_document 做精确替换：old_text 必须与文档原文逐字一致且唯一。
 回答用简体中文，正文用 Markdown，简洁直接；不要复述你调用过的工具，用户看得到。`
 
@@ -380,6 +381,7 @@ func (a *App) agentLoop() {
 	a.onMain(func() {
 		a.aiBusy = false
 		a.aiPhase = ""
+		a.aiApprovals = nil
 		_ = saveAIChat(a.aiMessages)
 		a.invalidate()
 	})
@@ -463,10 +465,83 @@ func (a *App) agentTurn() bool {
 		if a.aiStop.Load() {
 			return false
 		}
+		if toolNeedsApproval(t.Name) {
+			ok, aborted := a.requestApproval(idx, t)
+			if aborted {
+				a.setToolOutcome(idx, t.Index, t.ID, toolFail("已中止"))
+				return false
+			}
+			if !ok {
+				// 拒绝也回传给模型，让它改道而不是硬试。
+				a.setToolOutcome(idx, t.Index, t.ID,
+					toolFail("用户拒绝了这次修改；不要原样重试，先问用户想怎么改"))
+				continue
+			}
+		}
 		out := a.execTool(t.Name, t.args.String())
 		a.setToolOutcome(idx, t.Index, t.ID, out)
 	}
 	return !a.aiStop.Load()
+}
+
+// toolNeedsApproval 报告一个工具是否要用户确认后才能执行：
+// 凡是会改文档内容的都要确认，只读的直接放行。
+func toolNeedsApproval(name string) bool {
+	switch name {
+	case "edit_document", "write_document", "insert_into_document":
+		return true
+	}
+	return false
+}
+
+// requestApproval 把一次工具调用挂成「待确认」，阻塞等用户决定。
+// 返回 (同意, 是否中止)。
+func (a *App) requestApproval(msgIdx int, t *streamTool) (ok, aborted bool) {
+	decided := make(chan bool, 1)
+	a.onMain(func() {
+		if a.aiApprovals == nil {
+			a.aiApprovals = map[string]chan bool{}
+		}
+		a.aiApprovals[t.ID] = decided
+		if p := a.toolPart(msgIdx, t.Index, t.ID); p != nil && p.Tool != nil {
+			p.Tool.State = toolApproval
+		}
+		a.aiPhase = "等待确认…"
+		a.scrollAIBottom()
+		a.invalidate()
+	})
+	for {
+		select {
+		case ok := <-decided:
+			a.onMain(func() {
+				delete(a.aiApprovals, t.ID)
+				a.aiPhase = ""
+				a.invalidate()
+			})
+			return ok, false
+		case <-time.After(120 * time.Millisecond):
+			if a.aiStop.Load() {
+				a.onMain(func() {
+					delete(a.aiApprovals, t.ID)
+					a.aiPhase = ""
+					a.invalidate()
+				})
+				return false, true
+			}
+		}
+	}
+}
+
+// decideApproval 是审批按钮的落点：把用户的决定递给等待中的循环。
+func (a *App) decideApproval(id string, ok bool) {
+	a.onMain(func() {
+		if ch := a.aiApprovals[id]; ch != nil {
+			select {
+			case ch <- ok:
+			default:
+			}
+		}
+	})
 }
 
 // chatStream 发起一轮流式请求，把增量落到 idx 这条助手消息上。

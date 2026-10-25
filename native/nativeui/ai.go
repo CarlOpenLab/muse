@@ -247,6 +247,16 @@ func loadAIChat() []chatMessage {
 		msgs = msgs[len(msgs)-100:]
 	}
 	normalizeChatParts(msgs)
+	// 上次会话中断时留下的「待确认」调用不会再有决定：标记为失败。
+	for i := range msgs {
+		for j := range msgs[i].Parts {
+			p := &msgs[i].Parts[j]
+			if p.Tool != nil && p.Tool.State == toolApproval {
+				p.Tool.State = toolFailed
+				p.Tool.Err = toolErrorJSON("会话中断，这次修改没有执行")
+			}
+		}
+	}
 	return msgs
 }
 

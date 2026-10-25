@@ -479,6 +479,67 @@ func TestAIViewEmptyShowsSuggestions(t *testing.T) {
 	}
 }
 
+// TestAIComposerStaysPinned 内容再长，输入区也要钉在面板底部。
+func TestAIComposerStaysPinned(t *testing.T) {
+	probe := func(contentLen int) (modelY float64, ok bool) {
+		a := New()
+		a.panel = panelAI
+		a.panelOpen = true
+		a.panelWidth = a.panelTargetWidth()
+		a.ai = aiSettings{BaseURL: "https://example.test/v1", Model: "very-long-model-name"}
+		if contentLen > 0 {
+			long := strings.Repeat("这是一段很长的内容，用来把对话撑出面板可视区。\n\n", 120)
+			a.aiMessages = []chatMessage{
+				{Role: "user", Content: "你好"},
+				{Role: "assistant", Parts: []chatPart{{Kind: partText, Text: long}}},
+			}
+		}
+		tt := ui.NewTester(a.View, 348, 800)
+		tt.Frame()
+		r, found := tt.Find("very-long-model-name")
+		return float64(r.Y), found
+	}
+	shortY, ok1 := probe(0)
+	longY, ok2 := probe(120)
+	if !ok1 || !ok2 {
+		t.Fatalf("模型名没渲染出来: %v %v", ok1, ok2)
+	}
+	if longY > 800 {
+		t.Fatalf("输入区被挤出面板: y=%.1f", longY)
+	}
+	if shortY != longY {
+		t.Fatalf("输入区位置随内容变化: %.1f → %.1f", shortY, longY)
+	}
+}
+
+// TestAIViewShowsApprovalCard 修改类工具待确认时渲染审批卡：
+// 标题、要做的修改、同意/拒绝。
+func TestAIViewShowsApprovalCard(t *testing.T) {
+	a := New()
+	a.panel = panelAI
+	a.panelOpen = true
+	a.panelWidth = a.panelTargetWidth()
+	a.ai = aiSettings{BaseURL: "https://example.test/v1", Model: "m"}
+	a.aiMessages = []chatMessage{
+		{Role: "user", Content: "帮我改一下"},
+		{Role: "assistant", Parts: []chatPart{
+			{Kind: partTool, Tool: &toolCall{
+				ID:    "call_1",
+				Name:  "edit_document",
+				Args:  `{"old_text":"第一段","new_text":"第一段（改）"}`,
+				State: toolApproval,
+			}},
+		}},
+	}
+	tt := ui.NewTester(a.View, 348, 800)
+	tt.Frame()
+	for _, want := range []string{"请求修改文档", "把「第一段」改成「第一段（改）」。", "同意修改", "拒绝"} {
+		if !tt.HasText(want) {
+			t.Fatalf("审批卡缺 %q; texts=%q", want, tt.Texts())
+		}
+	}
+}
+
 func TestInsertAIContentAppendsToDocument(t *testing.T) {
 	a := New()
 	a.source = "# 无标题\n\n旧内容\n"
