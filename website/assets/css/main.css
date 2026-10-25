@@ -287,9 +287,21 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 .doc__p strong { color: var(--ink); }
 .doc__p--dim { color: var(--ink-faint); }
 .doc__p--dim b { font-family: var(--font-mono); font-weight: 600; color: var(--ink-dim); }
-.doc__list { margin: 2px 0 12px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
-.doc__list li { font-size: 14px; color: var(--ink-dim); }
-.doc__list li::marker { color: var(--accent); }
+.doc__h2 { margin: 16px 0 8px; font-size: 16.5px; font-weight: 650; letter-spacing: -0.01em; }
+.doc__quote {
+  margin: 0 0 12px; padding: 2px 0 2px 14px;
+  border-left: 2.5px solid var(--accent);
+  font-size: 13.5px; color: var(--muted); line-height: 1.7;
+}
+.doc__task { list-style: none; margin: 2px 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.doc__task li { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--ink-dim); }
+.task__box {
+  width: 14px; height: 14px; border-radius: 4px; flex: none;
+  border: 1.5px solid var(--muted);
+}
+.task__box.is-on { background: var(--accent); border-color: var(--accent); display: grid; place-items: center; }
+.task__box.is-on::after { content: "✓"; font-size: 9px; font-weight: 700; color: var(--accent-text); }
+.doc__code { font-family: var(--font-mono); font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
 .statusbar {
   display: flex; gap: 8px; align-items: center;
   padding: 9px 6px 2px; font-size: 10.5px; color: var(--ink-faint);
