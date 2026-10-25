@@ -1,53 +1,67 @@
 # Muse
 
-完全原生的桌面 Markdown 编辑器，使用 **Go** 与 [MyGo](https://mygo.egoist.dev/) 直接绘制窗口、图标栏、上下文栏和编辑器：**没有 WebView、没有 Electron、没有前端构建**。
+**所写，即所见。** 完全原生的桌面 Markdown 编辑器，内置会用工具的写作 Agent——每一帧由 Go 直接绘制，零 WebView。
 
-## 功能
+[![Release](https://img.shields.io/github/v/release/CarlOpenLab/muse?color=24292f)](https://github.com/CarlOpenLab/muse/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-24292f)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.27+-24292f)](native/go.mod)
 
-- **Typora 式原地编辑**：点段落或标题直接编辑富文本，编辑时不显示 `#`、`**`、链接或代码标记，光标/选区落在渲染文字上；列表项与引用行也已富文本编辑（项目符号/编号/引用竖线作为块装饰）；代码块编辑隐藏围栏并显示语言徽标，表格单元格按格编辑，行列经右键菜单增删（锚定正在编辑的单元格）；带嵌套子块的列表项以多行源码面编辑（Tab/Shift+Tab 缩进往返字节一致），公式隐藏 `$$` 并实时排版预览，行内公式显示为 Unicode 原子并保留 TeX 源码，IME 组合输入在光标处预览，图片用替代文字/地址/标题字段编辑；
-- **原生 Markdown 渲染**：标题层级、表格、任务列表、本地/远程/HTML 图片、引用、代码与语法高亮、HTML 标题，行内公式、块级公式与矩阵都用 go-latex 排版；
-- **键盘行为**：方向键/Home/End/PageUp/PageDown、Shift 选区与 Cmd/Option+方向词移都由原生文本区处理；方向键可跨块，块首/块尾 Shift+Up/Down 选区跨到上/下一块；Cmd+B/I/U/E 包裹 Markdown 强调/代码；Cmd+K 插入链接，光标在链接上时打开 URL 弹层编辑地址（有选区则把选区变为链接）；Cmd+0–6 切换段落/标题级别；Tab/Shift+Tab 缩进/反缩进列表行（表格内移动单元格，⌘↵ 在下方插入一行）；括号/引号/反引号自动配对；Enter 新建段落/块；Shift+Enter 硬换行；Esc/⌘↵ 完成；
-- **文件**：打开文件/文件夹、文件树、大纲跳转、搜索跳转、相对/绝对路径复制、重命名、废纸篓、Finder 显示；文件树只显示可编辑文本（md/txt/json/yaml/源码等），图片/PDF/压缩包等二进制隐藏并拒绝打开；系统对话框不阻塞 UI；
-- **AI**：原生 OpenAI 兼容对话，流式输出并用 mdoc 渲染；对话持久化、模型发现、插入文档、清空对话；设置页可配置 Base URL、API Key、模型和系统提示，配置与 `chat.json` 都存在 `~/Library/Application Support/Muse/`（0600）；
-- **主题**：纯色浅色 / 近黑深色；
-- **Mermaid**：原生流程图子集（`graph`/`flowchart` TD/LR、带标签节点/连线和虚线）、时序图（参与者、实线/虚线消息、自消息、备注）、状态图（开始/结束、带标签转移）、饼图、类图（成员与关系）与甘特图（分区、依赖、时长、里程碑）。
+[English](README.md) | 简体中文
 
-## 运行
+官网：**https://carlopenlab.github.io/muse/**
+
+基于 [MyGo](https://mygo.egoist.dev/) 构建：窗口、图标栏、上下文面板与编辑器直接绘制在 GPU 上（Metal / Direct3D 11 / OpenGL）。**没有 WebView、没有 Electron、没有前端构建**——一个 Go 二进制。
+
+## 编辑器
+
+- **Typora 式原地编辑** — 点击段落、标题、列表项、引用或表格单元格，直接在渲染后的富文本上编辑；`#`、`**`、链接、围栏、表格线等标记统统隐去。`Tab`/`Shift+Tab` 缩进列表与行走表格单元格；`⌘B/I/U/E` 包裹强调与代码，`⌘K` 编辑链接，`⌘0–6` 切换标题级别。
+- **原生 Markdown 渲染** — 标题、表格、任务列表、引用、语法高亮代码、图片，块级/行内公式由 go-latex 排版。
+- **Mermaid 原生支持** — 流程图、时序图、状态图、饼图、类图与甘特图子集，与正文同一引擎排版。
+- **工作区面板** — 文件树、大纲跳转、全文搜索与 AI 助手共享一条侧栏，由图标栏切换；最近打开的文件在打开菜单里。
+
+## 缪斯 Agent
+
+AI 面板是一位真正的写作 Agent，不是聊天框：
+
+- **13 个文档工具** — 列出、读取、搜索、大纲、目录树、统计、打开、精确替换编辑、插入、写入、重命名、回收站删除、新建文件夹。
+- **工具审批卡** — 任何写操作之前，Agent 先出示要做的修改：同意这一次、本会话总是允许，或拒绝；拒绝原因会回到对话里。
+- **权限三档** — *每次询问* / *完全访问* / *只读*，输入框旁一键切换。
+- **能力分组开关** — 浏览、编辑、文件管理三组工具可在设置里按组开关；关闭的工具不会发给模型。
+- **过程全透明** — 思考可折叠回看，每次工具调用带状态、参数与结果，正文流式渲染；你的话靠右，Agent 的每一步靠左。
+- **OpenAI 兼容** — 任意端点（OpenAI、DeepSeek、本地网关）；不支持 function calling 的端点自动降级为纯对话。
+
+隐私：Agent 的工具被限制在工作区根目录之内；API Key 与对话记录只存在本机配置文件（0600）。
+
+## 安装
+
+从 [Releases](https://github.com/CarlOpenLab/muse/releases/latest) 下载（Windows / macOS / Linux），或源码构建：
 
 ```bash
-# 仓库根目录
-go run -C native .
+go run -C native .            # 运行
+go build -C native -o Muse .  # 构建二进制
+go test -C native ./...       # 测试
 ```
 
-构建：
+需要 Go 1.27+。不需要 Node、pnpm、vite。
 
-```bash
-go build -C native -o Muse .
-```
-
-测试：
-
-```bash
-go test -C native ./...
-```
-
-只需要 Go 1.27+，不再需要 Node、pnpm、vite 或 WebView。
-
-## 目录
+## 项目结构
 
 ```
 native/
 ├── main.go            原生入口
-├── nativeui/          窗口、图标栏、上下文栏、原地编辑器、AI、Mermaid
-├── mdoc/              Markdown 模型、渲染、代码高亮、公式位图
+├── nativeui/          窗口、图标栏、上下文面板、原地编辑器、Agent、Mermaid
+├── mdoc/              Markdown 模型、渲染器、语法高亮、公式图片
 ├── doc/               文档类型注册
-├── services/          原生 AI HTTP 客户端与遗留服务代码
+├── services/          原生 AI HTTP 客户端
 └── cmd/               辅助命令
 ```
 
 ## 已知限制
 
-- 段落、标题、列表项、引用行和表格单元格内的行内公式都已排版；块级矩阵、cases/aligned/array 与上下标已支持，较少见的 TeX 命令仍可能回退；
-- Mermaid 支持流程图、时序图、状态图、饼图、类图子集与甘特图子集；loop/alt 框按消息顺序展开，高级 Mermaid 特性可能回退为代码；
-- AI 对话保留最近 100 条；工具调用与多会话历史尚未接入；
-- 旧的更新、导出、最近文件等 WebView 面板尚未迁入原生构建。
+- 行内公式在段落、标题、列表项、引用与表格单元格中排版；较冷门的 TeX 命令可能回退为源码。
+- Mermaid 覆盖流程图、时序图、状态图、饼图、类图与甘特图子集；高级特性可能渲染为代码。
+- 对话记录最多保留最近 100 条。
+
+## 许可
+
+[MIT](LICENSE) © Carl Open Lab
