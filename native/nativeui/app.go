@@ -323,7 +323,6 @@ func (a *App) canvas(c *ui.Context) {
 // view is a raised card, as the demo's chosen sidebar row is.
 func (a *App) rail(c *ui.Context) {
 	bar := c.TitleBar()
-	t := c.Theme()
 	ui.Column(c).Width(railWidth).FillHeight().Children(func() {
 		ui.Box(c).Height(bar.Height).DragWindow()
 		// 最左侧只放模块切换；新建/打开都是文件模块的内容（面板顶部与菜单）。
