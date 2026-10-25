@@ -3,63 +3,73 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Muse — 所写，即所见。原生 Markdown 编辑器</title>
-  <meta name="description" content="Muse 是一款完全原生的桌面 Markdown 编辑器。没有 WebView，没有 Electron，每一帧都由 Go 直接绘制。点击段落直接编辑排版后的文字：标记隐去，缪斯到来。">
+  <title>Muse — 所写，即所见。原生 Markdown 编辑器 + 写作 Agent</title>
+  <meta name="description" content="Muse 是一款完全原生的桌面 Markdown 编辑器：没有 WebView，每一帧由 Go 直接绘制。面板里还住着一位会用工具的写作 Agent——读你的工作区，改稿之前先征得你的同意。">
   <meta property="og:title" content="Muse — 所写，即所见。">
-  <meta property="og:description" content="完全原生的 Markdown 编辑器：Typora 式原地编辑、AI 流式对话、Mermaid 与 LaTeX 原生排版，纯 Go 绘制。">
+  <meta property="og:description" content="完全原生的 Markdown 编辑器 + 会用工具的写作 Agent：13 个文档工具、工具审批卡、权限三档，纯 Go 绘制。">
   <meta property="og:image" content="assets/img/og.jpg">
   <meta property="og:type" content="website">
-  <meta name="theme-color" content="#0b0b0f">
+  <meta name="theme-color" content="#1a1a1a">
   <link rel="icon" type="image/png" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/spacegrotesk-var.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="assets/fonts/instrumentserif-400i.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="preload" href="assets/fonts/jetbrainsmono-var.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/css/main.css?v=20261026">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Muse","operatingSystem":"macOS","applicationCategory":"TextEditor","description":"完全原生的桌面 Markdown 编辑器，由 Go 与 MyGo 直接绘制。","offers":{"@type":"Offer","price":"0"},"author":{"@type":"Organization","name":"CarlOpenLab"}}
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Muse","operatingSystem":"Windows, macOS, Linux","applicationCategory":"TextEditor","description":"完全原生的桌面 Markdown 编辑器，由 Go 与 MyGo 直接绘制，内置会用工具的写作 Agent。","offers":{"@type":"Offer","price":"0"},"author":{"@type":"Organization","name":"CarlOpenLab"}}
   </script>
 </head>
 <body>
 
-  <!-- texture + chrome -->
-  <div class="grain" aria-hidden="true"></div>
-  <div class="progress" aria-hidden="true"><span class="progress__bar" id="progressBar"></span></div>
-  <div class="cursor" id="cursor" aria-hidden="true">
-    <div class="cursor__dot"></div>
-    <div class="cursor__ring"></div>
-  </div>
-
-  <!-- preloader -->
-  <div class="preloader" id="preloader" aria-hidden="true">
-    <div class="preloader__inner">
-      <div class="preloader__mark"><img src="assets/img/favicon.png" alt="" width="72" height="72"></div>
-      <div class="preloader__count mono"><span id="preCount">00</span></div>
-      <div class="preloader__label mono">MUSE · 原生 MARKDOWN 编辑器</div>
-    </div>
-    <div class="preloader__curtain preloader__curtain--a"></div>
-    <div class="preloader__curtain preloader__curtain--b"></div>
-  </div>
+  <!-- SVG sprite：图标路径与 native/icons.go 同源（Lucide） -->
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+    <defs>
+      <symbol id="i-files" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M8 10h8"/><path d="M8 14h6"/></symbol>
+      <symbol id="i-outline" viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+      <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="M9 13h6"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+      <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+      <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.3 17.7-1.4 1.4"/><path d="m19.1 4.9-1.4 1.4"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    </defs>
+  </svg>
 
   <!-- nav -->
   <header class="nav" id="nav">
-    <a class="nav__brand" href="#top" data-cursor="link">
-      <img src="assets/img/favicon.png" alt="" width="26" height="26">
-      <span class="nav__wordmark">Muse</span>
-    </a>
-    <nav class="nav__links" aria-label="章节">
-      <a href="#editor">编辑</a>
-      <a href="#ai">缪斯</a>
-      <a href="#canvas">图与公式</a>
-      <a href="#keys">键盘</a>
-      <a href="#core">内核</a>
-    </nav>
-    <div class="nav__actions">
-      <button class="theme-toggle" id="themeToggle" type="button" role="switch" aria-checked="true" aria-label="切换浅色 / 深色主题" data-cursor="link">
-        <span class="theme-toggle__icon theme-toggle__icon--sun">☀</span>
-        <span class="theme-toggle__icon theme-toggle__icon--moon">☾</span>
-        <span class="theme-toggle__knob"></span>
-      </button>
-      <a class="nav__gh mono" href="https://github.com/CarlOpenLab/muse" target="_blank" rel="noopener" data-cursor="link">GITHUB ↗</a>
-      <a class="btn btn--primary btn--small magnetic" href="#download" data-cursor="link">下载</a>
+    <div class="nav__inner">
+      <a class="nav__brand" href="#top">
+        <img src="assets/img/favicon.png" alt="" width="24" height="24">
+        <span class="nav__wordmark">Muse</span>
+      </a>
+      <nav class="nav__links" aria-label="章节">
+        <a href="#agent">缪斯 Agent</a>
+        <a href="#native">原生</a>
+        <a href="#canvas">图与公式</a>
+        <a href="#workspace">工作区</a>
+      </nav>
+      <div class="nav__actions">
+        <button class="theme-toggle" id="themeToggle" type="button" role="switch" aria-checked="true" aria-label="切换浅色 / 深色主题">
+          <svg class="theme-toggle__icon theme-toggle__icon--sun" aria-hidden="true"><use href="#i-sun"/></svg>
+          <svg class="theme-toggle__icon theme-toggle__icon--moon" aria-hidden="true"><use href="#i-moon"/></svg>
+          <span class="theme-toggle__knob" aria-hidden="true"></span>
+        </button>
+        <a class="nav__gh" href="https://github.com/CarlOpenLab/muse" target="_blank" rel="noopener">
+          <svg aria-hidden="true"><use href="#i-github"/></svg><span>GitHub</span>
+        </a>
+        <a class="btn btn--primary btn--small" href="#download">下载</a>
+      </div>
     </div>
   </header>
 
@@ -67,384 +77,319 @@
 
     <!-- ============ HERO ============ -->
     <section class="hero" id="hero">
-      <canvas class="hero__canvas" id="aurora" aria-hidden="true"></canvas>
-      <div class="hero__fallback" aria-hidden="true"></div>
-      <div class="hero__vignette" aria-hidden="true"></div>
-
-      <div class="hero__inner container">
-        <p class="eyebrow" data-reveal>CARL&nbsp;OPEN&nbsp;LAB — 原生 MARKDOWN 编辑器</p>
+      <div class="container">
+        <p class="eyebrow reveal">CARL OPEN LAB — 原生 MARKDOWN 编辑器</p>
         <h1 class="hero__title">
-          <span class="hero__line" data-reveal-line><span>所写，</span></span>
-          <span class="hero__line" data-reveal-line><span>即<em class="serif grad-text">所见</em>。</span></span>
+          <span class="reveal">所写，</span>
+          <span class="reveal">即<em class="serif">所见</em>。</span>
         </h1>
-        <div class="hero__foot">
-          <p class="hero__sub" data-reveal>
-            Muse 是一款完全原生的桌面 Markdown 编辑器——没有 WebView，没有 Electron，
-            每一帧都由 <strong>Go</strong> 直接绘制。点击任意段落，就在排版好的文字上写作：
-            标记悄然隐去，<em class="serif">缪斯</em>悄然到来。
-          </p>
-          <div class="hero__cta" data-reveal>
-            <a class="btn btn--primary btn--big magnetic" href="#download" data-cursor="link">下载 Muse</a>
-            <a class="btn btn--ghost btn--big magnetic" href="#editor" data-cursor="link">看它如何写作</a>
+        <p class="hero__lede reveal">
+          一款完全原生的 Markdown 编辑器——没有 WebView，没有 Electron，
+          每一帧都由 Go 直接绘制。现在，它的面板里住着一位
+          <strong>会用工具的写作 Agent</strong>：读你的工作区，改稿之前，先征得你的同意。
+        </p>
+        <div class="hero__cta reveal">
+          <a class="btn btn--primary" href="#download"><svg aria-hidden="true"><use href="#i-download"/></svg>下载 Muse</a>
+          <a class="btn btn--ghost" href="https://github.com/CarlOpenLab/muse" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-github"/></svg>GitHub ↗</a>
+        </div>
+      </div>
+
+      <!-- 应用窗口：hero 的主视觉就是产品本身 -->
+      <div class="container hero__stage reveal">
+        <div class="win win--hero" role="img" aria-label="Muse 应用窗口：左侧图标栏与文件树，中间是正在编辑的原地画布，右侧是缪斯 Agent 面板">
+          <div class="win__bar">
+            <span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="win__title">灵感手记.md</span>
+            <span class="win__badge mono">MUSE · 原生</span>
           </div>
-          <p class="hero__meta mono" data-reveal>MACOS · GO 1.27 · MYGO 绘制 · 单一二进制</p>
-        </div>
-      </div>
-
-      <div class="hero__card" data-parallax="26" aria-hidden="true">
-        <div class="hero-card__bar">
-          <span class="tl"></span><span class="tl"></span><span class="tl"></span>
-          <span class="mono">读我.md — 已渲染</span>
-        </div>
-        <div class="hero-card__body">
-          <div class="hero-card__h">写作的阻力，正在消失</div>
-          <p>点击段落，就在排版好的文字上编辑。语法不是你要伺候的东西——是 Muse 悄悄替你做的事。</p>
-          <div class="hero-card__tags mono"><span>无 #</span><span>无 **</span><span>无围栏</span></div>
-        </div>
-      </div>
-
-      <div class="hero__scrollhint mono" aria-hidden="true">
-        <span>SCROLL</span><i class="scrollhint-line"></i>
-      </div>
-    </section>
-
-    <!-- ============ MARQUEE ============ -->
-    <div class="marquee" aria-hidden="true">
-      <div class="marquee__track" id="marqueeTrack">
-        <span class="marquee__item">NO WEBVIEW</span><span class="marquee__star">✦</span>
-        <span class="marquee__item">NO ELECTRON</span><span class="marquee__star">✦</span>
-        <span class="marquee__item">纯 GO 绘制</span><span class="marquee__star">✦</span>
-        <span class="marquee__item">所见即所得</span><span class="marquee__star">✦</span>
-        <span class="marquee__item">单一二进制</span><span class="marquee__star">✦</span>
-        <span class="marquee__item">为 60 FPS 而生</span><span class="marquee__star">✦</span>
-      </div>
-    </div>
-
-    <!-- ============ 01 EDITOR ============ -->
-    <section class="section" id="editor">
-      <div class="container">
-        <header class="section__head">
-          <span class="section__num mono" data-reveal>01 — 编辑</span>
-          <h2 class="section__title" data-reveal>标记，<em class="serif grad-text">溶解</em>于文字</h2>
-          <p class="section__lede" data-reveal>
-            别的编辑器让你在源码和预览之间来回横跳。Muse 只有一层：点击段落，
-            就在渲染后的文字里编辑。没有 <code>#</code>，没有 <code>**</code>，没有围栏——
-            语法退到幕后，写作回到眼前。
-          </p>
-        </header>
-
-        <div class="editor-stage" data-reveal>
-          <div class="window window--editor" id="editorWindow">
-            <div class="window__bar">
-              <span class="tl"></span><span class="tl"></span><span class="tl"></span>
-              <span class="window__title mono">缪斯笔记.md</span>
-              <span class="window__badge mono">WYSIWYG</span>
+          <div class="win__body">
+            <div class="rail" aria-hidden="true">
+              <span class="rail__btn is-active"><svg><use href="#i-files"/></svg></span>
+              <span class="rail__btn"><svg><use href="#i-outline"/></svg></span>
+              <span class="rail__btn"><svg><use href="#i-search"/></svg></span>
+              <span class="rail__btn"><svg><use href="#i-spark"/></svg></span>
+              <span class="rail__btn rail__btn--end"><svg><use href="#i-gear"/></svg></span>
             </div>
-            <div class="window__body">
-              <aside class="window__side" aria-hidden="true">
-                <div class="side__label mono">文件</div>
-                <div class="side__item is-active">缪斯笔记.md</div>
-                <div class="side__item">周报.md</div>
-                <div class="side__item">读书清单.md</div>
-                <div class="side__item">ideas.md</div>
-                <div class="side__label mono">大纲</div>
-                <div class="side__outline"><i style="--w:72%"></i></div>
-                <div class="side__outline"><i style="--w:48%"></i></div>
-                <div class="side__outline"><i style="--w:60%"></i></div>
-              </aside>
-              <div class="window__page" id="editorPage">
-                <!-- demo blocks are injected by main.js -->
-                <div class="ed-caret" id="edCaret" aria-hidden="true"></div>
+            <div class="side" aria-hidden="true">
+              <div class="side__head">灵感手记</div>
+              <div class="tree">
+                <span class="tree__row is-active"><svg><use href="#i-file"/></svg>灵感手记.md</span>
+                <span class="tree__row"><svg><use href="#i-file"/></svg>采访提纲.md</span>
+                <span class="tree__row"><svg><use href="#i-file"/></svg>草稿箱.md</span>
+                <span class="tree__row"><svg><use href="#i-file"/></svg>todo.txt</span>
+              </div>
+              <div class="side__head side__head--sub">最近打开</div>
+              <div class="tree">
+                <span class="tree__row tree__row--muted"><svg><use href="#i-file"/></svg>采访提纲.md</span>
               </div>
             </div>
-            <div class="window__status mono">
-              <span id="edStatus">就绪</span>
-              <span>MARKDOWN · UTF-8 · 原地编辑</span>
-            </div>
-          </div>
-
-          <div class="editor-tabs" aria-label="演示场景">
-            <button class="editor-tab is-active" type="button" aria-pressed="true" data-scenario="all"  data-cursor="link">完整流程</button>
-            <button class="editor-tab" type="button" aria-pressed="false" data-scenario="heading" data-cursor="link">标题</button>
-            <button class="editor-tab" type="button" aria-pressed="false" data-scenario="emph"   data-cursor="link">强调</button>
-            <button class="editor-tab" type="button" aria-pressed="false" data-scenario="list"   data-cursor="link">列表</button>
-            <button class="editor-tab" type="button" aria-pressed="false" data-scenario="code"   data-cursor="link">代码</button>
-            <button class="editor-tab" type="button" aria-pressed="false" data-scenario="math"   data-cursor="link">公式</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ 02 AI ============ -->
-    <section class="section section--alt" id="ai">
-      <div class="container">
-        <header class="section__head">
-          <span class="section__num mono" data-reveal>02 — 缪斯</span>
-          <h2 class="section__title" data-reveal>灵感，<em class="serif grad-text">流式</em>抵达</h2>
-          <p class="section__lede" data-reveal>
-            内置 OpenAI 兼容对话：回答逐字抵达，按 Markdown 直接排版。
-            好的段落，一键插回文档。配置只留在本机（0600），模型由你选择——
-            AI 负责灵感，不负责拥有你。
-          </p>
-        </header>
-
-        <div class="ai-stage" data-reveal>
-          <div class="window window--chat">
-            <div class="window__bar">
-              <span class="tl"></span><span class="tl"></span><span class="tl"></span>
-              <span class="window__title mono">Muse AI — gpt-4o-mini</span>
-              <span class="window__badge mono is-streaming" id="aiBadge">STREAMING</span>
-            </div>
-            <div class="chat" id="chat">
-              <div class="chat__row chat__row--user">
-                <div class="chat__bubble chat__bubble--user">帮我把这段周报开头改得更简洁：<br>“本周我们主要围绕编辑器内核开展了一系列工作……”</div>
+            <div class="canvas">
+              <div class="doc">
+                <h3 class="doc__title">灵感手记</h3>
+                <p class="doc__p">把<strong>标记</strong>隐去，把<em>想法</em>留在纸上。</p>
+                <p class="doc__p doc__p--dim">点击任何段落，直接在排版后的文字里编辑。</p>
               </div>
-              <div class="chat__row chat__row--ai">
-                <div class="chat__avatar" aria-hidden="true">✦</div>
-                <div class="chat__bubble chat__bubble--ai">
-                  <div class="chat__stream" id="aiStream"></div>
-                  <div class="chat__caret" id="aiCaret" aria-hidden="true"></div>
-                  <div class="chat__actions" id="aiActions">
-                    <button class="chip" type="button" data-cursor="link">⌘I 插入文档</button>
-                    <button class="chip" type="button" data-cursor="link">↺ 重新生成</button>
-                  </div>
+              <div class="statusbar mono" aria-hidden="true"><span>1,204 字</span><span>·</span><span>28 行</span><span class="statusbar__end">⌘P 命令面板</span></div>
+            </div>
+            <div class="agent agent--idle" aria-hidden="true">
+              <div class="agent__head"><svg><use href="#i-spark"/></svg>缪斯 · AI 助手</div>
+              <div class="chat chat--idle">
+                <div class="bubble bubble--user">把结尾改得更有余味一点</div>
+                <div class="agent-block">
+                  <div class="think"><svg><use href="#i-spark"/></svg><span>已思考 1.8 秒</span><svg class="think__chev"><use href="#i-chevron"/></svg></div>
+                  <div class="tool"><svg><use href="#i-eye"/></svg><span>读取文档</span><span class="tool__target">灵感手记.md</span><span class="tool__ok">✓</span></div>
+                  <p class="md">结尾停在「未完待续」——改成一句留白的收束，已替换最后一段，等你确认。</p>
                 </div>
               </div>
-            </div>
-            <div class="chat__input mono" aria-hidden="true">
-              <span id="aiInputEcho"></span><i class="chat__input-caret"></i>
-              <span class="chat__input-hint">问缪斯任何事…</span>
+              <div class="composer">
+                <div class="composer__input">让 Agent 总结、改写或编辑这篇文档…</div>
+                <span class="composer__send" aria-hidden="true"><svg><use href="#i-arrow-up"/></svg></span>
+              </div>
+              <div class="agent__bar mono"><span class="chip">每次询问 ▾</span><span class="agent__model">opencode-go/deepseek-v4.1-flash</span></div>
             </div>
           </div>
         </div>
       </div>
+
+      <div class="container hero__facts mono reveal">
+        <span>0 WebView</span><i></i><span>1 个 Go 二进制</span><i></i><span>3 种 GPU 后端</span><i></i><span>13 个 Agent 工具</span>
+      </div>
     </section>
 
-    <!-- ============ 03 CANVAS: mermaid + math ============ -->
+    <!-- ============ 01 缪斯 AGENT ============ -->
+    <section class="section" id="agent">
+      <div class="container">
+        <header class="section__head">
+          <span class="eyebrow reveal">01 — 缪斯 AGENT</span>
+          <h2 class="section__title reveal">会读工作区的<em class="serif">写作伙伴</em></h2>
+          <p class="section__lede reveal">
+            13 个文档工具：列出、读取、搜索、大纲、目录树、统计、重命名、回收站删除……
+            每一步都落在对话里——<strong>看得见，批得了</strong>。
+          </p>
+        </header>
+
+        <div class="section__stage reveal">
+          <div class="win win--agent">
+            <div class="win__bar">
+              <span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="win__title">缪斯 · AI 助手</span>
+              <button class="win__replay mono" id="agentReplay" type="button">↻ 重播</button>
+            </div>
+            <div class="agent">
+              <div class="chat" id="agentChat" aria-live="polite"></div>
+              <div class="composer">
+                <div class="composer__input">让 Agent 总结、改写或编辑这篇文档…</div>
+                <span class="composer__send composer__send--idle" aria-hidden="true"><svg><use href="#i-arrow-up"/></svg></span>
+              </div>
+              <div class="agent__bar">
+                <div class="seg" role="radiogroup" aria-label="权限预设" id="permSeg">
+                  <button class="seg__btn is-on" data-perm="ask" role="radio" aria-checked="true" type="button">每次询问</button>
+                  <button class="seg__btn" data-perm="full" role="radio" aria-checked="false" type="button">完全访问</button>
+                  <button class="seg__btn" data-perm="readonly" role="radio" aria-checked="false" type="button">只读</button>
+                </div>
+                <span class="agent__model mono">opencode-go/deepseek-v4.1-flash</span>
+              </div>
+            </div>
+          </div>
+
+          <aside class="agent-notes">
+            <div class="agent-note reveal">
+              <svg class="agent-note__icon" aria-hidden="true"><use href="#i-shield"/></svg>
+              <h3>工具审批卡</h3>
+              <p>每次改文档前，Agent 把要做什么递到你面前：同意这一次、本会话都允许，或者拒绝。拒绝的原因会回到对话里，Agent 自己改道。</p>
+            </div>
+            <div class="agent-note reveal">
+              <svg class="agent-note__icon" aria-hidden="true"><use href="#i-spark"/></svg>
+              <h3>权限三档</h3>
+              <p>每次询问、完全访问、只读——就在输入框旁边切换。会话内生效，重启恢复默认。</p>
+            </div>
+            <div class="agent-note reveal">
+              <svg class="agent-note__icon" aria-hidden="true"><use href="#i-gear"/></svg>
+              <h3>能力按组开关</h3>
+              <p>浏览搜索、编辑内容、管理文件三组工具在设置里独立开关；没开的组不会发给模型，也不会被执行。</p>
+            </div>
+            <div class="agent-note reveal">
+              <svg class="agent-note__icon" aria-hidden="true"><use href="#i-check"/></svg>
+              <h3>过程全可见</h3>
+              <p>思考可折叠回看，每次工具调用带状态与参数，左右分列——你的话靠右，Agent 的每一步靠左。</p>
+            </div>
+          </aside>
+        </div>
+
+        <p class="section__hint reveal">↑ 演示是真的：点「同意修改」，或把权限切到「只读」再重播。</p>
+      </div>
+    </section>
+
+    <!-- ============ 02 原生 ============ -->
+    <section class="section section--alt" id="native">
+      <div class="container">
+        <header class="section__head">
+          <span class="eyebrow reveal">02 — 原生</span>
+          <h2 class="section__title reveal">没有 WebView，<em class="serif">每一帧</em>由 Go 绘制</h2>
+          <p class="section__lede reveal">
+            整个应用是一个 Go 二进制：MyGo 把界面画在 GPU 上（Metal / Direct3D 11 / OpenGL），
+            mdoc 负责把 Markdown 排成版式。点击段落，直接在排好版的文字里编辑——标记隐去，缪斯到来。
+          </p>
+        </header>
+
+        <div class="native__grid">
+          <div class="native__stats reveal">
+            <div class="stat"><span class="stat__num mono">0</span><span class="stat__label">WebView / Electron</span></div>
+            <div class="stat"><span class="stat__num mono">1</span><span class="stat__label">个二进制，扔进 U 盘就能跑</span></div>
+            <div class="stat"><span class="stat__num mono">3</span><span class="stat__label">种 GPU 后端：Metal · D3D11 · OpenGL</span></div>
+            <div class="stat"><span class="stat__num mono">0600</span><span class="stat__label">本地配置与密钥的文件权限</span></div>
+          </div>
+
+          <div class="win win--editor reveal">
+            <div class="win__bar">
+              <span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="win__title">原地编辑</span>
+            </div>
+            <div class="editor-demo">
+              <pre class="editor-demo__src mono" id="typeSrc" aria-hidden="true"></pre>
+              <div class="editor-demo__doc" id="typeDoc" aria-hidden="true">
+                <h3>灵感手记</h3>
+                <p>把<strong>标记</strong>隐去，<em>想法</em>直接成段。</p>
+              </div>
+              <span class="editor-demo__caret" id="typeCaret" aria-hidden="true"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="kbd-row reveal" aria-label="键盘快捷键">
+          <span class="kbd"><b>⌘P</b> 命令面板</span>
+          <span class="kbd"><b>⌘O</b> 快速打开</span>
+          <span class="kbd"><b>⌘K</b> 链接</span>
+          <span class="kbd"><b>⌘S</b> 保存</span>
+          <span class="kbd"><b>⌘↩</b> Agent 发送</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 03 图与公式 ============ -->
     <section class="section" id="canvas">
       <div class="container">
         <header class="section__head">
-          <span class="section__num mono" data-reveal>03 — 图与公式</span>
-          <h2 class="section__title" data-reveal>同一支笔，画出<em class="serif grad-text">一切</em></h2>
-          <p class="section__lede" data-reveal>
-            流程图、时序图、饼图、甘特图，由 Mermaid 子集原生绘制；
-            行内与块级公式由 go-latex 排版。图不是贴进来的图片，
-            而是和文字同一套渲染管线画出来的。
+          <span class="eyebrow reveal">03 — 图与公式</span>
+          <h2 class="section__title reveal">同一支笔，画出<em class="serif">一切</em></h2>
+          <p class="section__lede reveal">
+            Mermaid 流程图、LaTeX 公式、表格与任务列表——都由 mdoc 原生排版，
+            与正文同一套字体与主题，不截图、不贴图。
           </p>
         </header>
 
-        <div class="duo">
-          <figure class="panel panel--mermaid" data-reveal>
-            <figcaption class="panel__label mono">MERMAID · 原生流程图</figcaption>
-            <svg class="mermaid" viewBox="0 0 520 300" role="img" aria-label="流程图：灵感经过 Muse 变成草稿，再变成书">
-              <defs>
-                <linearGradient id="nodeGrad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="var(--mm-a)"/>
-                  <stop offset="1" stop-color="var(--mm-b)"/>
-                </linearGradient>
-                <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                  <path d="M0,0 L10,5 L0,10 z" fill="var(--mm-line)"/>
-                </marker>
-              </defs>
-              <!-- edges -->
-              <path class="mm-edge draw" d="M118 150 C 158 150, 168 150, 208 150" marker-end="url(#arrow)"/>
-              <path class="mm-edge draw" d="M312 150 C 352 150, 362 150, 402 150" marker-end="url(#arrow)"/>
-              <path class="mm-edge draw mm-edge--dashed" d="M260 122 C 330 70, 400 70, 452 118" marker-end="url(#arrow)"/>
-              <text class="mm-edge-label mono" x="330" y="62">AI</text>
-              <!-- nodes -->
-              <g class="mm-node">
-                <rect x="28" y="122" width="90" height="56" rx="12"/>
-                <text x="73" y="155">灵感</text>
-              </g>
-              <g class="mm-node mm-node--accent">
-                <rect x="208" y="122" width="104" height="56" rx="12"/>
-                <text x="260" y="155">Muse</text>
-              </g>
-              <g class="mm-node">
-                <rect x="402" y="122" width="90" height="56" rx="12"/>
-                <text x="447" y="155">草稿</text>
-              </g>
-              <g class="mm-node">
-                <rect x="402" y="222" width="90" height="56" rx="28"/>
-                <text x="447" y="255">成书</text>
-              </g>
-              <path class="mm-edge draw" d="M447 178 L447 222" marker-end="url(#arrow)"/>
-            </svg>
-          </figure>
-
-          <div class="panel-col">
-            <figure class="panel panel--math" data-reveal>
-              <figcaption class="panel__label mono">GO-LATEX · 块级公式</figcaption>
-              <div class="math math--display" id="mathMain">
-                <span class="math__int">∫</span>
-                <span class="math__lims"><span>∞</span><span>0</span></span>
-                <span class="math__e">e<sup>−x²</sup></span>
-                <span class="math__dx">dx</span>
-                <span class="math__eq">=</span>
-                <span class="math__frac"><span class="math__num">√<span class="math__radicand">π</span></span><span class="math__den">2</span></span>
+        <div class="canvas-grid">
+          <div class="win reveal">
+            <div class="win__bar"><span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="win__title mono">```mermaid```</span></div>
+            <div class="canvas-demo">
+              <pre class="mono canvas-demo__code">graph LR
+  标记 --&gt; 排版
+  排版 --&gt; 导出</pre>
+              <div class="canvas-demo__render" role="img" aria-label="渲染出的流程图：标记 → 排版 → 导出">
+                <span class="fnode">标记</span><span class="fedge" aria-hidden="true"></span>
+                <span class="fnode">排版</span><span class="fedge" aria-hidden="true"></span>
+                <span class="fnode">导出</span>
               </div>
-            </figure>
-            <figure class="panel panel--math" data-reveal>
-              <figcaption class="panel__label mono">INLINE · 行内原子</figcaption>
-              <p class="math-inline">质能方程 <span class="math math--atom">E&nbsp;=&nbsp;mc<sup>2</sup></span> 写进段落时，只是一个安静的原子——<span class="math math--atom">α&nbsp;=&nbsp;(1+√5)/2</span> 也是。</p>
-            </figure>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ 04 KEYS ============ -->
-    <section class="section section--alt" id="keys">
-      <div class="container">
-        <header class="section__head">
-          <span class="section__num mono" data-reveal>04 — 键盘</span>
-          <h2 class="section__title" data-reveal>双手的<em class="serif grad-text">编排</em></h2>
-          <p class="section__lede" data-reveal>
-            ⌘B 加粗，⌘K 链接，⌘0–6 换层级，Tab 缩进列表，Shift+Enter 硬换行。
-            双手不离键盘时，Muse 接得住每一个意图。
-          </p>
-        </header>
-
-        <div class="keys-stage" data-reveal>
-          <div class="keys-doc">
-            <p class="keys-line" id="keysLine"><span class="keys-sel" id="keysSel">原生的力量</span></p>
-            <p class="keys-ghost">—— 语法由 Muse 替你写好，双手无需离开键盘。</p>
-          </div>
-          <ul class="keys-list" id="keysList">
-            <li class="keys-row" data-keys="b">
-              <span class="keys-kbd"><kbd>⌘</kbd><kbd>B</kbd></span>
-              <span class="keys-name">加粗</span>
-              <span class="keys-effect mono"><strong>原生的力量</strong> ← **原生的力量**</span>
-            </li>
-            <li class="keys-row" data-keys="k">
-              <span class="keys-kbd"><kbd>⌘</kbd><kbd>K</kbd></span>
-              <span class="keys-name">链接</span>
-              <span class="keys-effect mono"><strong>文字</strong> ← [文字](url)</span>
-            </li>
-            <li class="keys-row" data-keys="2">
-              <span class="keys-kbd"><kbd>⌘</kbd><kbd>2</kbd></span>
-              <span class="keys-name">二级标题</span>
-              <span class="keys-effect mono"><strong>H2</strong> ← ## 原生的力量</span>
-            </li>
-            <li class="keys-row" data-keys="tab">
-              <span class="keys-kbd"><kbd>⇥</kbd></span>
-              <span class="keys-name">缩进列表</span>
-              <span class="keys-effect mono"><strong>嵌套一层</strong> ← Tab 缩进</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ 05 CORE ============ -->
-    <section class="section" id="core">
-      <div class="container">
-        <header class="section__head">
-          <span class="section__num mono" data-reveal>05 — 内核</span>
-          <h2 class="section__title" data-reveal>纯净的<em class="serif grad-text">原生</em></h2>
-          <p class="section__lede" data-reveal>
-            整个应用是一个 Go 二进制：窗口、图标栏、上下文面板、编辑器、AI、图表，
-            全部由 MyGo 直接绘制。没有浏览器内核，就没有浏览器的重量。
-          </p>
-        </header>
-
-        <div class="stats" data-reveal>
-          <div class="stat">
-            <div class="stat__num mono"><span data-count="0">0</span></div>
-            <div class="stat__label">WebView</div>
-            <div class="stat__note mono">一个都没有</div>
-          </div>
-          <div class="stat">
-            <div class="stat__num mono"><span data-count="0">0</span></div>
-            <div class="stat__label">Electron</div>
-            <div class="stat__note mono">彻底告别</div>
-          </div>
-          <div class="stat">
-            <div class="stat__num mono"><span data-count="1">0</span></div>
-            <div class="stat__label">个二进制</div>
-            <div class="stat__note mono">go build 即得</div>
-          </div>
-          <div class="stat">
-            <div class="stat__num mono"><span data-count="60">0</span><span class="stat__unit">FPS</span></div>
-            <div class="stat__label">绘制目标</div>
-            <div class="stat__note mono">每一帧都算数</div>
-          </div>
-        </div>
-
-        <div class="stack" data-reveal>
-          <div class="stack__lane"><span class="mono stack__tag">L1</span><span class="stack__name">Go 1.27</span><span class="stack__desc">语言与生态，一个二进制交付</span></div>
-          <div class="stack__lane"><span class="mono stack__tag">L2</span><span class="stack__name">MyGo</span><span class="stack__desc">窗口、图标栏、上下文面板，直接绘制</span></div>
-          <div class="stack__lane"><span class="mono stack__tag">L3</span><span class="stack__name">mdoc</span><span class="stack__desc">Markdown 模型、渲染、高亮、公式位图</span></div>
-          <div class="stack__lane"><span class="mono stack__tag">L4</span><span class="stack__name">每一帧</span><span class="stack__desc">纯色画布 + 白色编辑卡，8px 呼吸位</span></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ 06 THEMES ============ -->
-    <section class="section section--alt" id="themes">
-      <div class="container">
-        <header class="section__head">
-          <span class="section__num mono" data-reveal>06 — 主题</span>
-          <h2 class="section__title" data-reveal>纯白，或<em class="serif grad-text">近黑</em></h2>
-          <p class="section__lede" data-reveal>
-            和产品一样：一面是纯白画布上的白色编辑卡，一面是近黑里的微光。
-            拨动开关——整个页面会像 Muse 一样换一种心情。
-          </p>
-        </header>
-
-        <div class="themes-stage" data-reveal>
-          <button class="themes-switch" id="themesSwitch" type="button" aria-label="切换整个页面的主题" data-cursor="link">
-            <span class="themes-switch__track"><span class="themes-switch__knob"></span></span>
-            <span class="mono themes-switch__label" id="themesLabel">LIGHT ↔ DARK</span>
-          </button>
-          <div class="themes-pair">
-            <div class="themes-card themes-card--light" data-parallax="-14">
-              <div class="themes-card__bar"><span class="tl"></span><span class="tl"></span><span class="tl"></span></div>
-              <div class="themes-card__doc">
-                <div class="themes-card__h"></div>
-                <div class="themes-card__p" style="--w:92%"></div>
-                <div class="themes-card__p" style="--w:78%"></div>
-                <div class="themes-card__quote"></div>
-                <div class="themes-card__p" style="--w:85%"></div>
-              </div>
-              <span class="themes-card__tag mono">PURE WHITE</span>
             </div>
-            <div class="themes-card themes-card--dark" data-parallax="14">
-              <div class="themes-card__bar"><span class="tl"></span><span class="tl"></span><span class="tl"></span></div>
-              <div class="themes-card__doc">
-                <div class="themes-card__h"></div>
-                <div class="themes-card__p" style="--w:92%"></div>
-                <div class="themes-card__p" style="--w:78%"></div>
-                <div class="themes-card__quote"></div>
-                <div class="themes-card__p" style="--w:85%"></div>
-              </div>
-              <span class="themes-card__tag mono">NEAR BLACK</span>
+          </div>
+          <div class="win reveal">
+            <div class="win__bar"><span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="win__title mono">$$ 公式 $$</span></div>
+            <div class="canvas-demo canvas-demo--formula">
+              <p class="formula">e<sup>iπ</sup> + 1 = 0</p>
+              <p class="canvas-demo__note">go-latex 渲染，跟随主题与字号。</p>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ============ DOWNLOAD ============ -->
-    <section class="section section--cta" id="download">
+    <!-- ============ 04 工作区 ============ -->
+    <section class="section section--alt" id="workspace">
       <div class="container">
-        <p class="eyebrow" data-reveal>MACOS · GO 1.27+ · 从源码构建</p>
-        <h2 class="cta__title" data-reveal>
-          <span class="hero__line" data-reveal-line><span>把<em class="serif grad-text">缪斯</em></span></span>
-          <span class="hero__line" data-reveal-line><span>带回家。</span></span>
-        </h2>
-        <div class="cta__row" data-reveal>
-          <a class="btn btn--primary btn--big magnetic" href="https://github.com/CarlOpenLab/muse/releases" target="_blank" rel="noopener" data-cursor="link">GitHub Releases ↗</a>
-          <button class="btn btn--ghost btn--big magnetic" id="copyBuild" type="button" data-cursor="link" data-copy="git clone https://github.com/CarlOpenLab/muse && cd muse && go build -C native -o Muse .">
-            复制构建命令
-          </button>
+        <header class="section__head">
+          <span class="eyebrow reveal">04 — 工作区</span>
+          <h2 class="section__title reveal">工作区，<em class="serif">一次</em>打开</h2>
+          <p class="section__lede reveal">
+            文件树、最近打开、大纲、全文搜索共享一条侧栏；Agent 的工具也工作在这片工作区里，
+            路径出不了根目录。
+          </p>
+        </header>
+
+        <div class="win win--workspace reveal">
+          <div class="win__bar"><span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="win__title">访谈项目</span></div>
+          <div class="workspace">
+            <div class="side">
+              <div class="side__head">访谈项目</div>
+              <div class="tree">
+                <span class="tree__row is-active"><svg><use href="#i-file"/></svg>访谈纪要.md</span>
+                <span class="tree__row"><svg><use href="#i-file"/></svg>人物小传.md</span>
+                <span class="tree__row"><svg><use href="#i-folder"/></svg>素材/</span>
+                <span class="tree__row tree__row--muted"><svg><use href="#i-file"/></svg>todo.txt</span>
+              </div>
+              <div class="side__head side__head--sub">最近打开</div>
+              <div class="tree">
+                <span class="tree__row tree__row--muted"><svg><use href="#i-file"/></svg>人物小传.md</span>
+              </div>
+            </div>
+            <div class="canvas">
+              <div class="doc">
+                <h3 class="doc__title">访谈纪要</h3>
+                <p class="doc__p">她把三次采访的转折都记在了第三页——Agent 已经把要点摘成大纲。</p>
+              </div>
+            </div>
+            <div class="outline">
+              <div class="side__head">大纲</div>
+              <div class="outline__list mono">
+                <span class="outline__row outline__row--h1">访谈纪要</span>
+                <span class="outline__row outline__row--h2">第一次见面</span>
+                <span class="outline__row outline__row--h2">转折点</span>
+                <span class="outline__row outline__row--h3">第三页的备注</span>
+                <span class="outline__row outline__row--h2">下一步</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="terminal mono" data-reveal aria-hidden="true">
-          <span class="terminal__prompt">$</span> git clone https://github.com/CarlOpenLab/muse<br>
-          <span class="terminal__prompt">$</span> go build -C native -o Muse .<br>
-          <span class="terminal__prompt terminal__prompt--ok">$</span> ./Muse <span class="terminal__cursor"></span>
+      </div>
+    </section>
+
+    <!-- ============ 内核 ============ -->
+    <section class="section section--core" id="core">
+      <div class="container">
+        <header class="section__head">
+          <span class="eyebrow reveal">05 — 内核</span>
+          <h2 class="section__title reveal">一小块<em class="serif">诚实的</em>技术栈</h2>
+        </header>
+        <div class="core-grid mono reveal">
+          <span>Go 1.27</span><span>MyGo UI · GPU 直绘</span><span>mdoc · 自研 Markdown 管线</span>
+          <span>goldmark</span><span>go-latex</span><span>Mermaid 子集</span>
+          <span>fsnotify</span><span>purego</span><span>零依赖官网（本页）</span>
         </div>
-        <p class="cta__note mono" data-reveal>没有 NODE · 没有 PNPM · 没有 VITE · 没有 WEBVIEW</p>
+      </div>
+    </section>
+
+    <!-- ============ 下载 ============ -->
+    <section class="section section--download" id="download">
+      <div class="container">
+        <header class="section__head">
+          <span class="eyebrow reveal">下载</span>
+          <h2 class="section__title reveal">把 Muse <em class="serif">带走</em></h2>
+          <p class="section__lede reveal">开源（MIT），Windows / macOS / Linux 三平台构建，从 GitHub Releases 获取最新版本。</p>
+        </header>
+        <div class="dl-grid">
+          <a class="dl-card reveal" href="https://github.com/CarlOpenLab/muse/releases/latest" target="_blank" rel="noopener">
+            <span class="dl-card__os">Windows</span><span class="dl-card__meta mono">x64 · 安装包</span>
+          </a>
+          <a class="dl-card reveal" href="https://github.com/CarlOpenLab/muse/releases/latest" target="_blank" rel="noopener">
+            <span class="dl-card__os">macOS</span><span class="dl-card__meta mono">Apple Silicon · dmg</span>
+          </a>
+          <a class="dl-card reveal" href="https://github.com/CarlOpenLab/muse/releases/latest" target="_blank" rel="noopener">
+            <span class="dl-card__os">Linux</span><span class="dl-card__meta mono">x64 · 构建产物</span>
+          </a>
+        </div>
+        <div class="dl__more reveal">
+          <a class="btn btn--primary" href="https://github.com/CarlOpenLab/muse/releases/latest" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-download"/></svg>前往 Releases</a>
+          <a class="btn btn--ghost" href="https://github.com/CarlOpenLab/muse" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-github"/></svg>源码与文档</a>
+        </div>
       </div>
     </section>
   </main>
@@ -452,23 +397,18 @@
   <footer class="footer">
     <div class="container footer__inner">
       <div class="footer__brand">
-        <img src="assets/img/favicon.png" alt="Muse 图标" width="34" height="34">
-        <div>
-          <div class="footer__name">Muse <em class="serif">— the muse for markdown</em></div>
-          <div class="footer__byline mono">CARL OPEN LAB · 用 GO 绘制，为写作而生</div>
-        </div>
+        <img src="assets/img/favicon.png" alt="" width="20" height="20">
+        <span>所写，即所见。</span>
       </div>
       <nav class="footer__links" aria-label="页脚">
-        <a href="#editor">编辑</a>
-        <a href="#ai">缪斯</a>
-        <a href="#core">内核</a>
-        <a href="https://github.com/CarlOpenLab/muse" target="_blank" rel="noopener">GitHub ↗</a>
+        <a href="https://github.com/CarlOpenLab/muse" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/CarlOpenLab/muse/releases/latest" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/CarlOpenLab/muse/issues" target="_blank" rel="noopener">Issues</a>
       </nav>
-      <div class="footer__legal mono">© 2026 CARL OPEN LAB — 所写，即所见。</div>
+      <span class="footer__copy mono">© 2026 CARL OPEN LAB · MIT</span>
     </div>
   </footer>
 
-  <div class="toast mono" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="assets/js/main.js"></script>
+  <script type="module" src="assets/js/main.js?v=20261026"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 # Muse — 官网
 
-> 所写，即所见。Awwwards / FWA / Webby 级别的产品官网，为 [Muse](https://github.com/CarlOpenLab/muse) 而作。
+> 所写，即所见。为 [Muse](https://github.com/CarlOpenLab/muse) 而作的产品官网。
 
 一个零依赖、零构建的静态单页：纯手写 HTML / CSS / 原生 ES Module。所有素材本地自托管，离线可用。
 
@@ -18,10 +18,10 @@ python3 -m http.server -d website 8765
 
 ```
 website/
-├── index.html              单页结构：预加载 / Hero / 编辑演示 / AI / 图与公式 / 键盘 / 内核 / 主题 / 下载
+├── index.html              单页结构：Hero（应用窗口） / 缪斯 Agent / 原生 / 图与公式 / 工作区 / 内核 / 下载
 └── assets/
-    ├── css/main.css        设计系统（令牌取自 native/nativeui/app.go 的真实色板）+ 全部分区样式
-    ├── js/main.js          预加载器 · CSS/WebGL 极光 · 自打字 WYSIWYG 演示 · AI 流式 · 键盘编排 · 主题
+    ├── css/main.css        设计令牌逐字取自 native/nativeui/app.go 的 applyTheme() + 窗口 chrome + 双主题
+    ├── js/main.js          主题切换 · 滚动显现 · hero 原地编辑打字演示 · Agent 审批流状态机
     ├── fonts/              Space Grotesk / Instrument Serif / JetBrains Mono（可变字体）
     │                       + Noto Serif SC 22 字子集（标题衬线强调字，6KB）
     └── img/                favicon 与 og 图（由 ../resources/icon.png 生成）
@@ -29,16 +29,19 @@ website/
 
 ## 设计说明
 
-- **品牌色板**直接取自产品源码：暗色画布 `#1a1a1a` / 文字 `#ececf0` / 强调 `#6b93ff`，亮色强调 `#3b6cf6`；
-  极光渐变（粉 `#f2c4ec` → 薰衣草 `#b9a6f5` → 长春花蓝 `#7c8cf8`）来自 logo。
-- **核心叙事**就是产品本身：01 区的窗口会自己打 Markdown 再把标记“溶解”成富文本；
-  02 区 AI 流式回答逐块渲染；06 区的开关切换的是整个页面主题。
-- **渐进增强**：WebGL 不可用时自动降级为多层动画 CSS 极光；`prefers-reduced-motion`
-  下关闭全部动效；触屏设备隐藏自定义光标；无 JS 时内容完整可读。
-- 演示中的功能描述均对应仓库真实能力（原地编辑、⌘ 快捷键、Mermaid 子集、go-latex、AI 对话与 0600 本地配置）。
+- **「官网即应用」**：色板逐字取自产品源码（`applyTheme()`）——暗色窗口 `#1a1a1a` / 面板 `#232328` /
+  表面 `#2a2a30` / 强调 `#6b93ff`；亮色 `#f5f5f5` / `#ffffff` / `#3b6cf6`。导航栏的主题开关切换整站，与产品行为一致。
+- **主视觉是产品本身**：所有演示都是 DOM 复刻的应用窗口——56px 图标栏、文件树、编辑卡片、Agent 面板，
+  图标路径与 `native/nativeui/icons.go` 同源（Lucide）。
+- **Agent 演示是真的**：进入视口自动播放一段真实交互脚本——用户提问、思考（可折叠）、读取文档、
+  **工具审批卡暂停**。点「同意修改 / 总是允许 / 拒绝」走不同分支；把权限预设切到「完全访问」跳过审批，
+  切到「只读」看 Agent 被拒后如何改道。
+- **双主线**：原生（Go 直绘、无 WebView、mdoc）× Agent（13 个工具、审批、权限）；键盘快捷键以芯片形式并入原生区。
+- **装饰做减法**：没有极光 WebGL、没有自定义光标、没有预加载器；动效只有滚动显现与演示本身。
+- **渐进增强**：`prefers-reduced-motion` 下关闭全部动效；无 JS 时内容完整可读；窄屏逐级收起面板。
 
 ## 无障碍与性能
 
-- 全部图标/装饰 `aria-hidden`，交互元素有 `aria-label` / `aria-pressed` / `role="switch"`；
-- `:focus-visible` 全局焦点环；
-- 动画只用 `transform/opacity`；字体 `font-display: swap`；DPR 上限 1.25；离屏演示自动暂停。
+- 全部图标/装饰 `aria-hidden`，交互元素有 `aria-label` / `role="switch"` / `role="radiogroup"`；
+- `:focus-visible` 全局焦点环；Agent 演示容器 `aria-live="polite"`；
+- 动画只用 `transform/opacity`；字体 `font-display: swap`；离线可用。
