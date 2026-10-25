@@ -74,7 +74,12 @@ type App struct {
 	quickOpen      bool
 	quickOpenValue string
 	quickOpenSel   int
-	webSel         struct {
+
+	// command palette (⌘P): searchable menu actions
+	cmdPalette bool
+	cmdValue   string
+	cmdSel     int
+	webSel     struct {
 		from, to int
 		text     string
 	}
@@ -247,6 +252,7 @@ func (a *App) View(c *ui.Context) {
 	a.renameDialog(c)
 	a.linkPopover(c)
 	a.quickOpenDialog(c)
+	a.commandPaletteDialog(c)
 }
 
 // windowBG is a single flat color, not a wash: the light side is a neutral

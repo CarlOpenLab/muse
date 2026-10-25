@@ -34,7 +34,7 @@ func (a *App) quickOpenCandidates() []fileRow {
 		// 相对路径参与匹配：绝对路径会把用户主目录/临时目录里的字符
 		// 也算成命中。
 		rel := strings.TrimPrefix(r.path, a.root)
-		if s := fuzzyScore(strings.ToLower(rel), q); s >= 0 {
+		if s, ok := fuzzyScore(strings.ToLower(rel), q); ok {
 			matches = append(matches, scored{r, s})
 		}
 	}
@@ -51,9 +51,11 @@ func (a *App) quickOpenCandidates() []fileRow {
 	return out
 }
 
-// fuzzyScore returns >=0 when needle is a subsequence of hay; lower is
-// better (consecutive and word-start hits rank first).
-func fuzzyScore(hay, needle string) int {
+// fuzzyScore reports whether needle is a subsequence of hay (ok), with a
+// rank where lower is better (consecutive and word-start hits first). The
+// rank may be negative — a fully consecutive match earns real negatives —
+// so callers must use ok, not the sign.
+func fuzzyScore(hay, needle string) (int, bool) {
 	score, at := 0, 0
 	for i := 0; i < len(needle); i++ {
 		found := -1
@@ -64,7 +66,7 @@ func fuzzyScore(hay, needle string) int {
 			}
 		}
 		if found < 0 {
-			return -1
+			return 0, false
 		}
 		if found == at && i > 0 {
 			score -= 2 // consecutive
@@ -75,7 +77,7 @@ func fuzzyScore(hay, needle string) int {
 		score += found - at
 		at = found + 1
 	}
-	return score
+	return score, true
 }
 
 // openQuickOpen shows the palette, or the system file dialog when no
