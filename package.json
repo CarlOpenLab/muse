@@ -1,6 +1,6 @@
 {
   "name": "muse",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "license": "MIT",
   "description": "Muse — a fully native MyGo Markdown editor",

@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.4
+
+- Fix: clicking a heading to edit it no longer shoves everything below down by 5.3px. The rich editor still added the early calibration heights for H1/H2/H3 (+5.3/4.7/3.9px) after rendering and editing had already grown to the same height, so the compensation itself became the gap; headings now take no extra height, while the real list/quote padding residuals (-10/-12px) stay. Exercised by the previously red TestClickBlockKeepsFollowingContentStable; `go test ./...` is green. / 修复：点击标题进入编辑不再把下方内容整体推下 5.3px。渲染态与编辑态的高度早已一致，富文本编辑器却仍在给 H1/H2/H3 加早期校准的 +5.3/4.7/3.9px，补偿本身变成了间隙；现在标题不再额外加高，只保留列表/引用真实的内边距差（-10/-12px）。此前一直红的 TestClickBlockKeepsFollowingContentStable 现已通过，`go test ./...` 全绿。
 
 - The model page no longer spends the accent on buttons: the 服务 switch draws its chosen half as a raised card in the theme's own colors (white card + border in light, 10% white in dark, muted text when unchosen) instead of a blue chip, and 保存模型设置 is a neutral filled button (theme text color as fill, background as label; hover steps to TextMuted). No accent color is left in the page except focus rings. Checked in both themes. / 模型页不再把强调色用在按钮上：「服务」选中项改为主题自身颜色的浮起卡片（浅色白底+描边，深色 10% 白，未选中为弱化文字），不再是蓝色胶囊；「保存模型设置」改为中性实心按钮（主题文字色作底色、背景色作文字，悬停降到 TextMuted）。页面里除焦点环外已无强调色。深浅两套主题都已核对截图。
 
