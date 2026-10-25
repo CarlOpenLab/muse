@@ -149,7 +149,6 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 (function agentDemo() {
   const chat = document.getElementById('agentChat');
   const replayBtn = document.getElementById('agentReplay');
-  const seg = document.getElementById('permSeg');
   if (!chat) return;
 
   let perm = 'ask';      // ask | full | readonly
@@ -342,17 +341,39 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     start();
   });
 
-  seg.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-perm]');
-    if (!btn) return;
-    perm = btn.dataset.perm;
-    seg.querySelectorAll('.seg__btn').forEach((b) => {
-      const on = b === btn;
-      b.classList.toggle('is-on', on);
-      b.setAttribute('aria-checked', String(on));
+  // 权限预设：下拉选择（同真实应用的 MenuButton）
+  const drop = document.getElementById('permDrop');
+  const dropBtn = document.getElementById('permBtn');
+  const dropMenu = drop.querySelector('.dropdown__menu');
+  const labels = { ask: '每次询问', full: '完全访问', readonly: '只读' };
+  const closeMenu = () => {
+    dropMenu.hidden = true;
+    dropBtn.setAttribute('aria-expanded', 'false');
+  };
+  dropBtn.addEventListener('click', () => {
+    const open = dropMenu.hidden;
+    dropMenu.hidden = !open;
+    dropBtn.setAttribute('aria-expanded', String(open));
+  });
+  dropMenu.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-perm]');
+    if (!item) return;
+    perm = item.dataset.perm;
+    dropBtn.textContent = labels[perm] + ' ▾';
+    dropMenu.querySelectorAll('.dropdown__item').forEach((it) => {
+      const on = it === item;
+      it.classList.toggle('is-on', on);
+      it.setAttribute('aria-checked', String(on));
     });
+    closeMenu();
     clearAll();
     start();
+  });
+  document.addEventListener('click', (e) => {
+    if (!drop.contains(e.target)) closeMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMenu();
   });
 
   // 进入视口自动播放一次

@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/spacegrotesk-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/jetbrainsmono-var.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/main.css?v=20261026k">
+  <link rel="stylesheet" href="assets/css/main.css?v=20261026m">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Muse","operatingSystem":"Windows, macOS, Linux","applicationCategory":"TextEditor","description":"完全原生的桌面 Markdown 编辑器，由 Go 与 MyGo 直接绘制，内置会用工具的写作 Agent。","offers":{"@type":"Offer","price":"0"},"author":{"@type":"Organization","name":"CarlOpenLab"}}
   </script>
@@ -192,10 +192,13 @@
                   </div>
                 </div>
                 <div class="composer__foot">
-                  <div class="seg" role="radiogroup" aria-label="权限预设" id="permSeg">
-                    <button class="seg__btn is-on" data-perm="ask" role="radio" aria-checked="true" type="button">每次询问</button>
-                    <button class="seg__btn" data-perm="full" role="radio" aria-checked="false" type="button">完全访问</button>
-                    <button class="seg__btn" data-perm="readonly" role="radio" aria-checked="false" type="button">只读</button>
+                  <div class="dropdown" id="permDrop">
+                    <button class="chip chip--btn" id="permBtn" type="button" aria-haspopup="menu" aria-expanded="false">每次询问 ▾</button>
+                    <div class="dropdown__menu" role="menu" aria-label="权限预设" hidden>
+                      <button class="dropdown__item is-on" data-perm="ask" role="menuitemradio" aria-checked="true" type="button">每次询问</button>
+                      <button class="dropdown__item" data-perm="full" role="menuitemradio" aria-checked="false" type="button">完全访问</button>
+                      <button class="dropdown__item" data-perm="readonly" role="menuitemradio" aria-checked="false" type="button">只读</button>
+                    </div>
                   </div>
                   <span class="composer__model mono">deepseek</span>
                   <span class="composer__clear">清空</span>
@@ -443,6 +446,6 @@
     </div>
   </footer>
 
-  <script type="module" src="assets/js/main.js?v=20261026l"></script>
+  <script type="module" src="assets/js/main.js?v=20261026m"></script>
 </body>
 </html>
