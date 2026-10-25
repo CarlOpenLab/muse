@@ -552,3 +552,31 @@ func TestInsertAIContentAppendsToDocument(t *testing.T) {
 		t.Fatal("document not marked dirty")
 	}
 }
+
+// TestAIComposerPermMenu 底栏有权限预设下拉，选择即生效。
+func TestAIComposerPermMenu(t *testing.T) {
+	a := New()
+	a.panel = panelAI
+	a.panelOpen = true
+	a.panelWidth = a.panelTargetWidth()
+	a.ai = aiSettings{BaseURL: "https://example.test/v1", Model: "m"}
+	tt := ui.NewTester(a.View, 348, 800)
+	tt.Frame()
+	if !tt.HasText("每次询问") {
+		t.Fatalf("权限按钮缺省应显示每次询问; texts=%q", tt.Texts())
+	}
+	if err := tt.Click("每次询问"); err != nil {
+		t.Fatalf("open perm menu: %v", err)
+	}
+	tt.Frame()
+	if err := tt.ChooseMenuItem("完全访问"); err != nil {
+		t.Fatalf("choose full access: %v", err)
+	}
+	tt.Frame()
+	if a.aiPerm != permFull {
+		t.Fatalf("aiPerm = %q, want full", a.aiPerm)
+	}
+	if !tt.HasText("完全访问") {
+		t.Fatalf("按钮应显示完全访问; texts=%q", tt.Texts())
+	}
+}

@@ -279,8 +279,6 @@ func (a *App) clearAIChat() {
 	a.aiMessages = nil
 	a.aiErr = ""
 	a.aiScroll.Y = 0
-	// 清空是重新开始：「总是允许」一并收回。
-	a.aiAlwaysAllow.Store(false)
 	_ = saveAIChat(a.aiMessages)
 	a.invalidate()
 }

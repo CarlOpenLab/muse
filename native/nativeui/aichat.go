@@ -417,12 +417,13 @@ func (a *App) aiErrorRow(c *ui.Context) {
 	})
 }
 
-// aiComposer 是底部的输入区：多行输入卡片 + 发送/停止 + 提示行。
+// aiComposer 是底部的输入区：输入卡片在上，权限预设 / 模型 / 清空
+// 这排状态放卡片下面的底栏。
 func (a *App) aiComposer(c *ui.Context) {
 	t := c.Theme()
-	ui.Column(c).Shrink(0).Padding(2, 10, 10, 10).Children(func() {
+	ui.Column(c).Shrink(0).Padding(2, 10, 10, 10).Gap(5).Children(func() {
 		card := ui.Column(c).FillWidth().Radius(12).Background(t.Surface).
-			Padding(6, 6, 6, 10).Gap(2)
+			Padding(6, 6, 6, 10)
 		card.Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.End).Children(func() {
 				ta := ui.TextAreaBase(c, &a.aiInput).Grow(1).
@@ -433,28 +434,39 @@ func (a *App) aiComposer(c *ui.Context) {
 				}
 				a.aiSendButton(c)
 			})
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(2, 4, 0, 2).Children(func() {
-				// 模型名可能很长：占满剩余宽度并省略，别把清空挤走。
-				ui.Text(c, a.ai.Model).FontSize(10).TextColor(t.TextMuted).
-					Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
-				if a.aiAlwaysAllow.Load() {
-					// 「总是允许」生效中的标记，点一下恢复确认。
-					a.aiMiniButton(c, "修改免确认", func() {
-						a.aiAlwaysAllow.Store(false)
-						a.invalidate()
-					})
-				}
-				if !a.aiBusy {
-					a.aiMiniButton(c, "清空", a.clearAIChat)
-				}
-			})
 		})
 		if card.FocusWithin() {
 			card.Border(1, t.Accent)
 		} else {
 			card.Border(1, t.Border)
 		}
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(0, 4).Children(func() {
+			a.aiPermButton(c)
+			// 模型名可能很长：占满剩余宽度并省略，别把清空挤走。
+			ui.Text(c, a.ai.Model).FontSize(10).TextColor(t.TextMuted).
+				Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+			if !a.aiBusy {
+				a.aiMiniButton(c, "清空", a.clearAIChat)
+			}
+		})
 	})
+}
+
+// aiPermButton 是底栏上的权限预设：当前预设名 + 下拉三档。
+func (a *App) aiPermButton(c *ui.Context) {
+
+	perm := a.aiPerm
+	if perm == "" {
+		perm = permAsk
+	}
+	ui.MenuButton(c, perm.label(), func(m *ui.Menu) {
+		for _, p := range aiPerms {
+			if m.Item(p.label()).Checked(p == perm).Chosen() {
+				a.aiPerm = p
+				a.invalidate()
+			}
+		}
+	}).Height(22).FontSize(10.5).Radius(6).Padding(0, 4)
 }
 
 // aiSendButton 是输入框右侧的圆形动作键：空闲时发送，进行中停止。

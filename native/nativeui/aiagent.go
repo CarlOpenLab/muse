@@ -465,17 +465,26 @@ func (a *App) agentTurn() bool {
 		if a.aiStop.Load() {
 			return false
 		}
-		if toolNeedsApproval(t.Name) && !a.aiAlwaysAllow.Load() {
-			dec, aborted := a.requestApproval(idx, t)
-			if aborted {
-				a.setToolOutcome(idx, t.Index, t.ID, toolFail("已中止"))
-				return false
-			}
-			if dec == approvalDeny {
-				// 拒绝也回传给模型，让它改道而不是硬试。
+		if toolNeedsApproval(t.Name) {
+			// 权限预设决定怎么走：只读直接拒绝，完全访问直接执行，
+			// 每次询问弹审批卡。
+			switch perm := a.currentPerm(); perm {
+			case permReadonly:
 				a.setToolOutcome(idx, t.Index, t.ID,
-					toolFail("用户拒绝了这次修改；不要原样重试，先问用户想怎么改"))
+					toolFail("当前权限预设是只读，不能修改文档；请把想改的内容直接写给用户，或让用户把权限切换到「每次询问」或「完全访问」"))
 				continue
+			case permAsk:
+				dec, aborted := a.requestApproval(idx, t)
+				if aborted {
+					a.setToolOutcome(idx, t.Index, t.ID, toolFail("已中止"))
+					return false
+				}
+				if dec == approvalDeny {
+					// 拒绝也回传给模型，让它改道而不是硬试。
+					a.setToolOutcome(idx, t.Index, t.ID,
+						toolFail("用户拒绝了这次修改；不要原样重试，先问用户想怎么改"))
+					continue
+				}
 			}
 		}
 		out := a.execTool(t.Name, t.args.String())
@@ -492,6 +501,39 @@ func toolNeedsApproval(name string) bool {
 		return true
 	}
 	return false
+}
+
+// aiPerm 是修改类工具的权限预设。
+type aiPerm string
+
+const (
+	permAsk      aiPerm = "ask"      // 每次询问（默认）
+	permFull     aiPerm = "full"     // 完全访问：免确认
+	permReadonly aiPerm = "readonly" // 只读：修改类工具直接拒绝
+)
+
+var aiPerms = []aiPerm{permAsk, permFull, permReadonly}
+
+// label 是权限预设的界面名。
+func (p aiPerm) label() string {
+	switch p {
+	case permFull:
+		return "完全访问"
+	case permReadonly:
+		return "只读"
+	default:
+		return "每次询问"
+	}
+}
+
+// currentPerm 读一次权限预设（循环 goroutine 安全）。
+func (a *App) currentPerm() aiPerm {
+	var p aiPerm
+	a.onMain(func() { p = a.aiPerm })
+	if p == "" {
+		return permAsk
+	}
+	return p
 }
 
 // approvalDecision 是审批卡上用户能给的三种决定。
@@ -525,7 +567,8 @@ func (a *App) requestApproval(msgIdx int, t *streamTool) (dec approvalDecision, 
 			a.onMain(func() {
 				delete(a.aiApprovals, t.ID)
 				if dec == approvalAlways {
-					a.aiAlwaysAllow.Store(true)
+					// 卡上的「总是允许」= 本会话切到完全访问。
+					a.aiPerm = permFull
 				}
 				a.aiPhase = ""
 				a.invalidate()

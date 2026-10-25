@@ -179,12 +179,12 @@ type App struct {
 	// aiApprovals 是等待用户确认的工具调用（主线程读写）：调用 ID →
 	// 决定通道，审批卡按钮经 decideApproval 递结果。
 	aiApprovals map[string]chan approvalDecision
-	// aiAlwaysAllow 是「总是允许」：本会话内修改类工具免确认，
-	// 审批卡与输入区的标记都能开关它。
-	aiAlwaysAllow atomic.Bool
-	aiModels      []services.ProviderModel
-	aiModelsBusy  bool
-	aiModelsErr   string
+	// aiPerm 是修改类工具的权限预设（每次询问/完全访问/只读），
+	// 会话内有效；审批卡上的「总是允许」会把它切到完全访问。
+	aiPerm       aiPerm
+	aiModels     []services.ProviderModel
+	aiModelsBusy bool
+	aiModelsErr  string
 
 	// search: one hit per block, and the row chosen
 	query       string

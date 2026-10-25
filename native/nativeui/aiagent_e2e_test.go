@@ -241,8 +241,8 @@ func approvalFixture(t *testing.T, secondRound func(toolContent string) string) 
 	return srv, requests
 }
 
-// approvalApp 起一个带文档的 app 并发出会触发审批的请求。
-func approvalApp(t *testing.T, srv *httptest.Server) (*App, *ui.Tester) {
+// approvalApp 起一个带文档的 app，按给定权限预设发出会触发审批的请求。
+func approvalApp(t *testing.T, srv *httptest.Server, perm aiPerm) (*App, *ui.Tester) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("MUSE_CONFIG_DIR", dir)
@@ -257,6 +257,7 @@ func approvalApp(t *testing.T, srv *httptest.Server) (*App, *ui.Tester) {
 	a.refreshDoc()
 	a.panel = panelAI
 	a.panelWidth = a.panelTargetWidth()
+	a.aiPerm = perm // 必须在 sendAI 前设好，循环会立刻读到
 	a.ai = aiSettings{BaseURL: srv.URL, Model: "m"}
 	a.aiInput = "把标题改掉"
 	a.sendAI()
@@ -302,7 +303,7 @@ func TestAgentApprovalReject(t *testing.T) {
 		return "知道了。"
 	})
 	defer srv.Close()
-	a, tt := approvalApp(t, srv)
+	a, tt := approvalApp(t, srv, permAsk)
 
 	waitApproval(t, a, tt)
 	if a.source != "# 旧标题\n\n正文\n" {
@@ -327,7 +328,7 @@ func TestAgentApprovalReject(t *testing.T) {
 func TestAgentApprovalAccept(t *testing.T) {
 	srv, _ := approvalFixture(t, func(string) string { return "改好了。" })
 	defer srv.Close()
-	a, tt := approvalApp(t, srv)
+	a, tt := approvalApp(t, srv, permAsk)
 
 	waitApproval(t, a, tt)
 	if err := tt.Click("同意修改"); err != nil {
@@ -375,7 +376,7 @@ func TestAgentApprovalAlways(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	a, tt := approvalApp(t, srv)
+	a, tt := approvalApp(t, srv, permAsk)
 
 	waitApproval(t, a, tt)
 	if err := tt.Click("总是允许"); err != nil {
@@ -383,8 +384,8 @@ func TestAgentApprovalAlways(t *testing.T) {
 	}
 	waitIdle(t, a)
 
-	if !a.aiAlwaysAllow.Load() {
-		t.Fatal("总是允许没有生效")
+	if a.aiPerm != permFull {
+		t.Fatalf("总是允许应切到完全访问: %q", a.aiPerm)
 	}
 	if !strings.Contains(a.source, "# 新标题") || !strings.Contains(a.source, "正文改") {
 		t.Fatalf("两处修改都应该执行: %q", a.source)
@@ -399,5 +400,33 @@ func TestAgentApprovalAlways(t *testing.T) {
 				t.Fatalf("第二处修改不应再询问: %+v", p.Tool)
 			}
 		}
+	}
+}
+
+// TestAgentReadonlyRejectsEdits 只读预设下修改类工具直接拒绝，
+// 拒绝原因回传给模型，文档不动。
+func TestAgentReadonlyRejectsEdits(t *testing.T) {
+	var answer string
+	srv, _ := approvalFixture(t, func(toolContent string) string {
+		answer = toolContent
+		return "好的，只读模式我不改文档。"
+	})
+	defer srv.Close()
+
+	a, _ := approvalApp(t, srv, permReadonly)
+	waitIdle(t, a)
+
+	if strings.Contains(a.source, "新标题") {
+		t.Fatalf("只读模式下文档不应被修改: %q", a.source)
+	}
+	if !strings.Contains(answer, "只读") {
+		t.Fatalf("模型没收到只读说明: %q", answer)
+	}
+	tool := a.aiMessages[1].Parts[0].Tool
+	if tool == nil || tool.State != toolFailed {
+		t.Fatalf("readonly tool part = %+v", a.aiMessages[1].Parts[0])
+	}
+	if !strings.Contains(tool.Err, "只读") {
+		t.Fatalf("tool err = %q", tool.Err)
 	}
 }
