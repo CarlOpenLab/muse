@@ -1,6 +1,6 @@
 # RFC-001：编辑器内核选型——原生外壳 + Web Canvas，还是继续全原生
 
-- **状态**：Proposed（请求评审，尚未实施）
+- **状态**：已实施 M1（2026-10-25）——目标方案落地：MyGo 原生 `ui.WebView` 元素承载 Vue 3 + Milkdown 画布（`native/nativeui/webeditor.go` + `editor-web/src/app/`），桥协议经 mygo IPC（`Muse.*` 绑定方法 + `muse:bridge` 事件）运行，WebKitGTK 缺失或 `MUSE_NATIVE_EDITOR=1` 时自动回退全原生编辑器。早期 Proposed/M0/M0.5 PoC 的结论与过程见下文与 [rfc-001-m0-poc-report.md](rfc-001-m0-poc-report.md)。
 - **日期**：2026-10-23
 - **相关**：[native-migration.md](native-migration.md)、[WYSIWYG-PLAN.md](../WYSIWYG-PLAN.md)
 - **影响范围**：正文编辑器内核、构建/发布链路、测试体系、AI 选区桥

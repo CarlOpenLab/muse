@@ -1,39 +1,40 @@
-# editor-web — RFC-001 M0/M0.5 PoC
+# editor-web — Muse 的 WebView 画布（RFC-001 目标方案）
 
-Muse 正文画布的 Web 侧 PoC:在 Go/MyGo 原生外壳内,用 WebView 承载
-Vditor(方案 C / M0)或 Milkdown(方案 B / M0.5),按 RFC §5.2 桥协议与宿主通信。
-
-> 结论与数据见 [docs/rfc-001-m0-poc-report.md](../docs/rfc-001-m0-poc-report.md)。
-
-## 运行
-
-```bash
-cd editor-web
-npm install
-npm run dev        # http://127.0.0.1:5273
-npm test           # 桥协议一致性测试(vitest, 8 条)
-npm run build      # 产出 dist/(供未来 go:embed)
-```
-
-| URL | 内容 |
-| --- | --- |
-| `/?editor=milkdown&harness=1` | Milkdown 画布 + 页内原生宿主模拟器 |
-| `/?editor=vditor&harness=1` | Vditor 画布 + 页内原生宿主模拟器 |
-| `/?editor=…&selftest=1` | 16 个 fixture 的往返自测 |
+正文编辑面是一个 Vue 3 + Milkdown/ProseMirror 页面，由 MyGo 原生窗口的
+`ui.WebView` 元素承载（宿主见 `native/nativeui/webeditor.go`）。渲染即编辑、
+没有"读态 ↔ 编辑态"切换，原生路线的点击跳变/闪烁从构造上不存在。
 
 ## 结构
 
-```
-src/
-├── bridge/protocol.ts   RFC §5.2 消息类型(带 id/revision 约束)
-├── bridge/webBridge.ts  Web 侧桥:防抖 200ms、revision 防回写、保存冲刷、id 回显
-├── bridge/nativeSim.ts  页内模拟 Go 宿主(harness 模式),桥接检查面板
-├── canvasApi.ts         双画布统一接口(命令/选区/主题/粘贴)
-├── vditor/main.ts       方案 C 画布(M0)
-├── milkdown/main.ts     方案 B 画布(M0.5,commonmark+gfm+history+math+listener)
-├── theme/tokens.ts      主题令牌,取自 native/nativeui/app.go
-└── fixtures/index.ts    RFC §7 往返语料 + 语义检查 + 规范化规则
+- `src/app/` — Vue 壳：`App.vue` 挂载画布、接桥、无宿主时加载演示文档
+- `src/milkdown/main.ts` — Milkdown 画布工厂（commonmark + gfm + history + math）
+- `src/bridge/protocol.ts` — RFC-001 §5.2 桥协议消息（传输无关）
+- `src/bridge/webBridge.ts` — Web 侧协议实现：revision 守卫、200ms 防抖，
+  传输优先级 mygo runtime → WKScriptMessageHandler → 浏览器 harness
+- `src/vditor/`、`src/poc.ts`、`poc.html` — M0/M0.5 PoC 对照页（`/poc.html`）
+- `tests/` — vitest：协议语义 + mygo 传输层映射
+
+## 桥
+
+Go 侧 `mygo.BindAs("Muse", …)` 暴露 `Muse.Ready / DocumentChanged /
+SaveRequested / SelectionChanged / OpenLink / ImagePaste / CommandReply`；
+Go 事件 `muse:bridge` 携带 `document.set` / `theme.set` / `command` 载荷。
+保存时 Go 发 `command{requestSave}`，画布回 `Muse.SaveRequested`，不依赖
+最后一次防抖。
+
+## 构建
+
+```bash
+npm install && npm run build   # 产物写入 native/nativeui/web/dist（embed）
+npm test                       # vitest，13 用例
+npm run dev                    # 5273 端口浏览器调试（无宿主自动演示文档）
 ```
 
-宿主接入(macOS):`WKScriptMessageHandler` 名 `museNative`,native → web 用
-`evaluateJavaScript('museHandle(JSON)')`;协议与语义以 `tests/protocol.test.ts` 为契约。
+`go build` 前先 `npm run build`（仓库内已带最新 dist，直接 go build 也可跑）。
+真机环境变量：`MUSE_NATIVE_EDITOR=1` 强制全原生编辑器（回退）。
+
+## 已验证
+
+- 13/13 vitest：协议语义 + mygo 传输层映射
+- 浏览器 E2E：点击 h1/h2/li 与 h1 内打字，所有块包围盒零变化
+- Linux 沙箱：WebKitGTK 中 WebView 加载 embed 前端，渲染 Go 推送的文档

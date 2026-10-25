@@ -1,0 +1,41 @@
+/* WebView 画布在原生窗口里的填充：画布本体由 shell.css 的 .muse-prose
+ * 排版（与 PoC 同一份），这里只负责铺满与主题底色。 */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+#app,
+.muse-app {
+  height: 100%;
+}
+
+.muse-app {
+  background: var(--muse-window, transparent);
+}
+
+.muse-web-canvas {
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 36px 48px 40vh;
+}
+
+.muse-app[data-theme='dark'] {
+  --shell-bg: #1a1a1a;
+  color-scheme: dark;
+}
+
+.muse-app[data-theme='light'] {
+  --shell-bg: #ffffff;
+  color-scheme: light;
+}
+
+/* 主题变量由 theme/tokens.ts 写在 :root（applyTokens），画布跟着走。 */
+
+/* 首帧：宿主还没推 document.set 时不闪白。 */
+.muse-app[data-ready='false'] {
+  visibility: hidden;
+}

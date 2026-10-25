@@ -22,10 +22,19 @@ interface WebKitHost {
   messageHandlers: { museNative: { postMessage(msg: string): void } };
 }
 
+/** MyGo's injected runtime (internal/bridge/bridge.js): window.mygo IS the
+ *  runtime — calls bound Go methods as promises, delivers Go events by
+ *  name. Transport #0 below. */
+export interface MygoRuntime {
+  call(method: string, ...args: unknown[]): Promise<unknown>;
+  on(name: string, fn: (payload: unknown) => void): () => void;
+}
+
 declare global {
   interface Window {
     webkit?: WebKitHost;
     museNativeCallback?: (id: number, payload: unknown) => void;
+    mygo?: MygoRuntime;
   }
 }
 
@@ -60,7 +69,11 @@ export class WebBridge {
 
   /** Wire the transport and emit `ready`. Call once after the editor mounts. */
   start(): void {
-    if (window.webkit?.messageHandlers?.museNative) {
+    if (window.mygo) {
+      // MyGo WebView host: Go emits the RFC protocol messages as one event;
+      // we answer through bound Go methods (see mygoSend).
+      window.mygo.on('muse:bridge', (payload) => this.receive(payload as NativeToWeb));
+    } else if (window.webkit?.messageHandlers?.museNative) {
       // Real host: native pushes messages by evaluating museHandle(msg).
       (window as unknown as { museHandle: (raw: string) => void }).museHandle = (
         raw: string,
@@ -85,6 +98,7 @@ export class WebBridge {
   /** Web → Native send. */
   send(msg: WebToNative): void {
     this.opts.onTrace?.('→ native', msg);
+    if (this.mygoSend(msg)) return;
     const raw = JSON.stringify(msg);
     const host = window.webkit?.messageHandlers?.museNative;
     if (host) {
@@ -92,6 +106,40 @@ export class WebBridge {
     } else {
       window.dispatchEvent(new CustomEvent('muse:outbox', { detail: { raw } }));
     }
+  }
+
+  /** MyGo transport: one bound Go method per protocol message. */
+  private mygoSend(msg: WebToNative): boolean {
+    const r = window.mygo;
+    if (!r) return false;
+    switch (msg.type) {
+      case 'ready':
+        void r.call('Muse.Ready', msg.editor, msg.version);
+        break;
+      case 'document.changed':
+        void r.call('Muse.DocumentChanged', msg.markdown, msg.revision);
+        break;
+      case 'document.saveRequested':
+        void r.call('Muse.SaveRequested', msg.markdown);
+        break;
+      case 'selection.changed':
+        if (msg.id === undefined) {
+          void r.call('Muse.SelectionChanged', msg.from, msg.to, msg.text);
+        } else {
+          void r.call('Muse.SelectionReply', msg.id, msg.from, msg.to, msg.text);
+        }
+        break;
+      case 'link.open':
+        void r.call('Muse.OpenLink', msg.href);
+        break;
+      case 'image.paste':
+        void r.call('Muse.ImagePaste', msg.mime, msg.base64);
+        break;
+      case 'command.reply':
+        void r.call('Muse.CommandReply', msg.id, msg.ok, msg.error ?? '');
+        break;
+    }
+    return true;
   }
 
   /** Debounced content change (RFC: 150–250ms, guards with revision). */

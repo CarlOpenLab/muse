@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -16,6 +17,11 @@ import (
 func Run() {
 	app := New()
 	mygo.App.SetName("Muse")
+	// The WebView canvas (editor-web/ → nativeui/web/dist) rides along in
+	// the binary; MUSE_NATIVE_EDITOR=1 or a missing web engine falls back
+	// to the all-native editor.
+	serveWebFrontend()
+	mygo.BindAs("Muse", &webBridgeService{a: app})
 	mygo.App.WhenReady(func() {
 		switch os.Getenv("MUSE_THEME") {
 		case "light":
@@ -75,6 +81,7 @@ func (a *App) openWindow() {
 		TitleBarHeight:       44,
 		TrafficLightPosition: &mygo.Point{X: 12, Y: 15},
 	})
+	a.initWebEditor()
 	a.installMenu()
 	a.updateTitle()
 	a.win.OnClose(func(e *mygo.CloseEvent) {
@@ -109,9 +116,34 @@ func (a *App) openWindow() {
 	a.win.Focus()
 	mygo.App.Focus()
 
+	if path := os.Getenv("MUSE_CAPTURE_WEB"); path != "" {
+		go func() {
+			delay := 5 * time.Second
+			if ms := os.Getenv("MUSE_CAPTURE_DELAY_MS"); ms != "" {
+				if n, err := strconv.Atoi(ms); err == nil {
+					delay = time.Duration(n) * time.Millisecond
+				}
+			}
+			time.Sleep(delay)
+			if a.webView != nil {
+				if png, err := a.webView.CapturePage(); err == nil {
+					_ = os.WriteFile(path, png, 0o644)
+				} else {
+					log.Printf("capture web canvas: %v", err)
+				}
+			}
+			mygo.App.Exit(0)
+		}()
+	}
 	if path := os.Getenv("MUSE_CAPTURE"); path != "" {
 		go func() {
-			time.Sleep(1200 * time.Millisecond)
+			delay := 1200 * time.Millisecond
+			if ms := os.Getenv("MUSE_CAPTURE_DELAY_MS"); ms != "" {
+				if n, err := strconv.Atoi(ms); err == nil {
+					delay = time.Duration(n) * time.Millisecond
+				}
+			}
+			time.Sleep(delay)
 			if png, err := a.win.CapturePage(); err == nil {
 				_ = os.WriteFile(path, png, 0o644)
 			}
@@ -155,7 +187,7 @@ func (a *App) installMenu() {
 				{Label: "搜索", Accelerator: "CmdOrCtrl+F", Click: click(func() { a.togglePanel(panelSearch) })},
 				{Label: "AI 助手", Click: click(func() { a.togglePanel(panelAI) })},
 				mygo.Separator(),
-				{Label: "切换主题", Accelerator: "CmdOrCtrl+Shift+T", Click: click(func() { a.themeMode = 1 - a.themeMode })},
+				{Label: "切换主题", Accelerator: "CmdOrCtrl+Shift+T", Click: click(func() { a.themeMode = 1 - a.themeMode; a.pushWebTheme() })},
 				mygo.Separator(),
 				{Label: "设置…", Accelerator: "CmdOrCtrl+,", Click: click(a.openSettings)},
 			},

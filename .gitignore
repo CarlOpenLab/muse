@@ -21,3 +21,5 @@ native/build/
 out/
 # editor-web PoC 构建产物
 editor-web/dist/
+native/muse
+editor-web/node_modules/

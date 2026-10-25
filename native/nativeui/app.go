@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -59,6 +60,18 @@ var (
 // App is the window's state: everything the view reads and the actions write.
 type App struct {
 	win *mygo.Window
+
+	// WebView canvas (webeditor.go): nil when the canvas is unavailable and
+	// the all-native editor runs instead.
+	webView    *mygo.WebView
+	webReady   bool
+	webPushRev int
+	saveReply  chan string
+	saveMu     sync.Mutex
+	webSel     struct {
+		from, to int
+		text     string
+	}
 
 	// appearance
 	themeMode int  // 0 pure white, 1 near black
@@ -335,7 +348,7 @@ func (a *App) rail(c *ui.Context) {
 			themeIcon = iconSun
 			themeLabel = "切换到浅色"
 		}
-		a.railButton(c, themeIcon, themeLabel, false, func() { a.themeMode = 1 - a.themeMode })
+		a.railButton(c, themeIcon, themeLabel, false, func() { a.themeMode = 1 - a.themeMode; a.pushWebTheme() })
 		a.railButton(c, iconSettings, "设置", a.settingsOpen, a.openSettings)
 		ui.Box(c).Height(8)
 	})
@@ -629,6 +642,12 @@ func firstMatchLine(source, needle string) string {
 func (a *App) editorContent(c *ui.Context) {
 	ui.Column(c).Fill().Children(func() {
 		a.editorHeader(c)
+		if a.webView != nil {
+			// The canvas owns the document while the web editor runs; the
+			// native per-block editors below stay for the fallback path.
+			ui.WebView(c, a.webView).Grow(1)
+			return
+		}
 		if a.editing >= 0 && (c.Shortcut(ui.Cmd, ui.KeyEnter) || c.Shortcut(0, ui.KeyEscape)) {
 			a.commitBlock()
 		}
@@ -908,6 +927,7 @@ func (a *App) applyOpen(path, data string) {
 	a.refreshDoc()
 	a.dirty = false
 	a.updateTitle()
+	a.pushWebDoc()
 }
 
 func (a *App) newDoc() {
@@ -939,11 +959,14 @@ func (a *App) resetDoc() {
 	a.selectedPath = ""
 	a.source = "# 无标题\n\n"
 	a.refreshDoc()
+	a.pushWebDoc()
 	a.dirty = false
 	a.updateTitle()
 }
 
 func (a *App) save() {
+	// The canvas owns the latest keystrokes; collect them before writing.
+	a.requestWebSave()
 	if a.imageEdit != nil {
 		a.commitImage()
 	}
