@@ -1,6 +1,6 @@
 # Muse
 
-**What you write is what you see.** A fully native desktop Markdown editor with a tool-using AI writing agent — every frame drawn by Go, zero WebView.
+**What you write is what you see.** A native-first Markdown editor with a tool-using AI writing agent — a Go shell wrapped around an embedded WYSIWYG canvas, no Electron.
 
 [![Release](https://img.shields.io/github/v/release/CarlOpenLab/muse?color=24292f)](https://github.com/CarlOpenLab/muse/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-24292f)](LICENSE)
@@ -10,11 +10,14 @@ English | [简体中文](README.zh-CN.md)
 
 Website: **https://carlopenlab.github.io/muse/**
 
-Built with [MyGo](https://mygo.egoist.dev/): the window, icon rail, context panel and editor are drawn directly on the GPU (Metal / Direct3D 11 / OpenGL). **No WebView, no Electron, no frontend build** — one Go binary.
+Built with [MyGo](https://mygo.egoist.dev/). The split:
+
+- **Native shell, drawn by Go on the GPU** (Metal / Direct3D 11 / OpenGL) — window, icon rail, file tree, outline, search, and the whole AI agent panel.
+- **Embedded WYSIWYG canvas** — the Markdown surface is a Vue 3 + Milkdown (ProseMirror) page hosted in MyGo's own WebView element, rendered and edited in one representation. It is built into the binary (`go:embed`), so there is still **one Go binary, no Electron, no Node at runtime**. When no WebView is available, a fully native block editor takes over.
 
 ## The editor
 
-- **Typora-style in-place editing** — click a paragraph, heading, list item, quote or table cell and edit it as rendered rich text. Markers (`#`, `**`, links, fences, pipes) stay out of your way; `Tab`/`Shift+Tab` indents list lines and walks table cells; `⌘B/I/U/E` wraps emphasis and code, `⌘K` edits links, `⌘0–6` switches heading levels.
+- **Typora-style in-place editing** — the canvas *is* the rendered document: click a paragraph, heading, list item, quote or table cell and edit it as rich text. Markers (`#`, `**`, links, fences, pipes) stay out of your way; `Tab`/`Shift+Tab` indents list lines and walks table cells; `⌘B/I/U/E` wraps emphasis and code, `⌘K` edits links, `⌘0–6` switches heading levels.
 - **Native Markdown rendering** — headings, tables, task lists, quotes, code with syntax highlighting, images, and block/inline math typeset with go-latex.
 - **Mermaid, natively** — flowcharts, sequence, state, pie, class and Gantt subsets, typeset by the same engine as your text.
 - **Workspace panel** — file tree, outline jump, full-text search and the AI assistant share one sidebar, switched from the icon rail; recently opened files live in the open menu.
@@ -42,18 +45,20 @@ go build -C native -o Muse .  # build a binary
 go test -C native ./...       # tests
 ```
 
-Requires Go 1.27+. No Node, no pnpm, no vite.
+Requires Go 1.27+. No Node, no pnpm, no vite — the canvas ships prebuilt and embedded; `editor-web/` is only needed if you want to hack on the canvas itself.
 
 ## Project layout
 
 ```
 native/
 ├── main.go            native entry point
-├── nativeui/          window, icon rail, context panel, inline editor, agent, Mermaid
+├── nativeui/          window, icon rail, context panel, agent, fallback block editor
+│   └── web/           embedded canvas build (served at mygo://localhost)
 ├── mdoc/              Markdown model, renderer, syntax highlighting, math images
 ├── doc/               document type registry
 ├── services/          native AI HTTP client
 └── cmd/               auxiliary commands
+editor-web/            Vue 3 + Milkdown canvas source (prebuilt into native/nativeui/web/dist)
 ```
 
 ## Known limits

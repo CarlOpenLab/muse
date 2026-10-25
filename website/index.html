@@ -4,18 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Muse — 所写，即所见。原生 Markdown 编辑器 + 写作 Agent</title>
-  <meta name="description" content="Muse 是一款完全原生的桌面 Markdown 编辑器：没有 WebView，每一帧由 Go 直接绘制。面板里还住着一位会用工具的写作 Agent——读你的工作区，改稿之前先征得你的同意。">
+  <meta name="description" content="Muse 是一款原生优先的桌面 Markdown 编辑器：Go 绘制外壳，内嵌 Milkdown 所见即所得画布，没有 Electron。面板里住着一位会用工具的写作 Agent——读你的工作区，改稿之前先征得你的同意。">
   <meta property="og:title" content="Muse — 所写，即所见。">
-  <meta property="og:description" content="完全原生的 Markdown 编辑器 + 会用工具的写作 Agent：13 个文档工具、工具审批卡、权限三档，纯 Go 绘制。">
+  <meta property="og:description" content="原生优先的 Markdown 编辑器 + 会用工具的写作 Agent：Go 外壳、内嵌 WYSIWYG 画布、13 个文档工具、工具审批卡、权限三档。">
   <meta property="og:image" content="assets/img/og.jpg">
   <meta property="og:type" content="website">
   <meta name="theme-color" content="#1a1a1a">
   <link rel="icon" type="image/png" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/spacegrotesk-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/jetbrainsmono-var.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/main.css?v=20261026o">
+  <link rel="stylesheet" href="assets/css/main.css?v=20261026p">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Muse","operatingSystem":"Windows, macOS, Linux","applicationCategory":"TextEditor","description":"完全原生的桌面 Markdown 编辑器，由 Go 与 MyGo 直接绘制，内置会用工具的写作 Agent。","offers":{"@type":"Offer","price":"0"},"author":{"@type":"Organization","name":"CarlOpenLab"}}
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Muse","operatingSystem":"Windows, macOS, Linux","applicationCategory":"TextEditor","description":"原生优先的桌面 Markdown 编辑器：Go 绘制外壳，内嵌 Milkdown 画布，内置会用工具的写作 Agent。","offers":{"@type":"Offer","price":"0"},"author":{"@type":"Organization","name":"CarlOpenLab"}}
   </script>
 </head>
 <body>
@@ -84,8 +84,9 @@
           <span class="reveal">即<em class="serif">所见</em>。</span>
         </h1>
         <p class="hero__lede reveal">
-          一款完全原生的 Markdown 编辑器——没有 WebView，没有 Electron，
-          每一帧都由 Go 直接绘制。现在，它的面板里住着一位
+          原生优先的 Markdown 编辑器——外壳由 Go 直接绘制在 GPU 上，
+          画布是内嵌的 Milkdown 所见即所得页面，没有 Electron，一个二进制。
+          现在，它的面板里住着一位
           <strong>会用工具的写作 Agent</strong>：读你的工作区，改稿之前，先征得你的同意。
         </p>
         <div class="hero__cta reveal">
@@ -163,7 +164,7 @@
       </div>
 
       <div class="container hero__facts mono reveal">
-        <span>0 WebView</span><i></i><span>1 个 Go 二进制</span><i></i><span>3 种 GPU 后端</span><i></i><span>13 个 Agent 工具</span>
+        <span>0 Electron</span><i></i><span>1 个二进制 · 画布内嵌</span><i></i><span>3 种 GPU 后端</span><i></i><span>13 个 Agent 工具</span>
       </div>
     </section>
 
@@ -254,16 +255,17 @@
       <div class="container">
         <header class="section__head">
           <span class="eyebrow reveal">02 — 原生</span>
-          <h2 class="section__title reveal">没有 WebView，<em class="serif">每一帧</em>由 Go 绘制</h2>
+          <h2 class="section__title reveal">外壳原生，<em class="serif">画布</em>内嵌</h2>
           <p class="section__lede reveal">
-            整个应用是一个 Go 二进制：MyGo 把界面画在 GPU 上（Metal / Direct3D 11 / OpenGL），
-            mdoc 负责把 Markdown 排成版式。点击段落，直接在排好版的文字里编辑——标记隐去，缪斯到来。
+            外壳（窗口、图标栏、面板与整个 AI Agent）由 MyGo 绘制在 GPU 上（Metal /
+            Direct3D 11 / OpenGL）；Markdown 画布是内嵌的 Vue 3 + Milkdown 页面——渲染与编辑同一份
+            表示，已构建进二进制。WebView 不可用时，全原生块编辑器接管。
           </p>
         </header>
 
         <div class="native__grid">
           <div class="native__stats reveal">
-            <div class="stat"><span class="stat__num mono">0</span><span class="stat__label">WebView / Electron</span></div>
+            <div class="stat"><span class="stat__num mono">0</span><span class="stat__label">Electron · 运行时零 Node 依赖</span></div>
             <div class="stat"><span class="stat__num mono">1</span><span class="stat__label">个二进制，扔进 U 盘就能跑</span></div>
             <div class="stat"><span class="stat__num mono">3</span><span class="stat__label">种 GPU 后端：Metal · D3D11 · OpenGL</span></div>
             <div class="stat"><span class="stat__num mono">0600</span><span class="stat__label">本地配置与密钥的文件权限</span></div>
