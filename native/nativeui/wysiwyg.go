@@ -674,23 +674,15 @@ func (a *App) richView(c *ui.Context) {
 			padTop += 5
 		}
 	}
-	// 行距部分已按构造与渲染一致；残差为各块类的内边距差
-	// （确定性 DIP 值，实测校准：标题 -5.3/-4.7/-3.9，列表 -10，引用 -12）
+	// 行距部分已按构造与渲染一致；残差只剩列表与引用的内边距差
+	// （确定性 DIP 值，实测校准：列表 -10，引用 -12）。标题不再补偿：
+	// 渲染态与编辑态同高，额外加高会把下方内容推 5.3/4.7/3.9px。
 	heightFix := float32(0)
 	switch r.chrome {
 	case "list":
 		heightFix = -10
 	case "quote":
 		heightFix = -12
-	default:
-		switch r.level {
-		case 1:
-			heightFix = 5.3
-		case 2:
-			heightFix = 4.7
-		case 3:
-			heightFix = 3.9
-		}
 	}
 	chromeW := float32(0)
 	switch r.chrome {
