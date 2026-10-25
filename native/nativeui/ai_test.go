@@ -3,6 +3,7 @@ package nativeui
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -28,8 +29,14 @@ func TestAISettingsRoundTrip(t *testing.T) {
 	if err := saveAISettings(want); err != nil {
 		t.Fatal(err)
 	}
-	if fi, err := os.Stat(filepath.Join(dir, "ai.json")); err != nil || fi.Mode().Perm() != 0o600 {
-		t.Fatalf("config mode = %v, err=%v", fi, err)
+	fi, err := os.Stat(filepath.Join(dir, "ai.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Windows does not carry Unix permission bits: os.WriteFile(0600) shows
+	// as 0666 there, so only the Unix builds can assert the mode.
+	if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
+		t.Fatalf("config mode = %v, want 0600", fi.Mode().Perm())
 	}
 	got := loadAISettings()
 	if got != want {

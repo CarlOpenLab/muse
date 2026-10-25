@@ -572,8 +572,9 @@ func TestPanelCollapseAnimatesInsteadOfSnapping(t *testing.T) {
 		t.Fatalf("panel width = %.1f after 2s, want 0", a.panelW)
 	}
 	a.showPanel(panelOutline)
-	time.Sleep(10 * time.Millisecond)
-	tt.Frame()
+	tt.Frame() // the frame that retargets the animation
+	time.Sleep(20 * time.Millisecond)
+	tt.Frame() // the next one moves it away from 0
 	if a.panelW <= 0 {
 		t.Fatal("reopening did not start the slide")
 	}
