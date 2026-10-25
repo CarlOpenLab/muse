@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix: theme.set reached the canvas but only flipped a local flag — the prose colors never moved because tokens were applied in the PoC shell, not the Vue app. The canvas now applies theme tokens (CSS vars on :root) on every theme.set/document.set, verified light/dark both ways. / 修复：theme.set 到达画布后只翻了本地标记——token 应用留在 PoC 壳里没进 Vue 应用，正文配色纹丝不动。现在每次 theme.set/document.set 都应用主题 token（:root CSS 变量），明暗双向验证通过。
+
 - Fix: a file whose last block is not a paragraph (e.g. a title-only document — Markdown parsing drops the trailing blank line) had no body slot at all, so clicking below the title did nothing. The canvas now keeps a trailing editable paragraph (Typora-style), so the body placeholder shows and clicking below the title just works. / 修复：末块不是段落的文档（如只有标题的文件——Markdown 解析会吞掉尾部空行）没有正文位，标题下方点不出光标。画布现在始终保留末尾可编辑段落（Typora 式），正文占位照常显示，标题下直接点击即可输入。
 
 - The files-panel new actions are icon-only squares (tooltip on hover), matching the rail's visual language. A headless regression test walks the full chain: toolbar click → 未命名.md created empty → auto-opened, and 新建文件夹 likewise. / 文件面板新建动作改为纯图标方块（悬停出提示），与侧栏视觉一致。新增无头回归测试走通整条链：点击 → 未命名.md 空文件落盘 → 自动打开，新建文件夹同理。

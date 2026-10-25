@@ -7,6 +7,7 @@
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { create } from '../milkdown/main';
+import { applyTokens } from '../theme/tokens';
 import { WebBridge } from '../bridge/webBridge';
 import type { CanvasEditor } from '../canvasApi';
 import type { ThemeName } from '../bridge/protocol';
@@ -28,8 +29,10 @@ onMounted(async () => {
     runCommand: (name, args) => canvas?.runCommand(name, args) ?? false,
     setDocument: (md) => canvas?.setMarkdown(md),
     setTheme: (t) => {
+      // tokens 写在 :root（applyTokens）——milkdown 的 setTheme 是空操作，
+      // 正文配色全靠这些 CSS 变量，切换主题必须在这里应用。
       theme.value = t;
-      canvas?.setTheme(t);
+      applyTokens(t);
     },
     getSelection: () => canvas?.getSelection() ?? { from: -1, to: -1, text: '' },
   });
@@ -39,6 +42,7 @@ onMounted(async () => {
   canvas.onImagePaste((mime, base64) => bridge?.imagePaste(mime, base64));
   bridge.start();
   ready.value = true;
+  (window as unknown as { __museBridge?: WebBridge }).__museBridge = bridge;
   // 调试/E2E 钩子：无宿主时也能从控制台或测试驱动画布。
   (window as unknown as { __museCanvas?: CanvasEditor }).__museCanvas = canvas;
   // Outside the app (browser tab, e2e) no host ever pushes document.set;
