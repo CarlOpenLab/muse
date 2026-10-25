@@ -144,8 +144,10 @@ func (a *App) initWebEditor() {
 }
 
 // webThemeName mirrors the canvas tokens (editor-web/src/theme/tokens.ts).
+// a.dark is derived during the view build — a just-clicked toggle has not
+// rebuilt yet — so derive from themeMode (0 light, 1 dark) directly.
 func (a *App) webThemeName() string {
-	if a.dark {
+	if a.themeMode == 1 {
 		return "dark"
 	}
 	return "light"

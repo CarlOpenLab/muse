@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix theme desync for real: the rail toggle sent the canvas the OLD theme because a.dark is only derived during the view rebuild — the canvas lagged one toggle behind the shell. webThemeName now derives from themeMode (0 light / 1 dark) at call time. / 真正修掉主题不同步：侧栏切换瞬间 a.dark 还没随视图重建刷新，画布收到的是旧主题、永远慢一拍；webThemeName 改为按 themeMode（0 浅 / 1 深）即时推导。
+
 - Fix: theme.set reached the canvas but only flipped a local flag — the prose colors never moved because tokens were applied in the PoC shell, not the Vue app. The canvas now applies theme tokens (CSS vars on :root) on every theme.set/document.set, verified light/dark both ways. / 修复：theme.set 到达画布后只翻了本地标记——token 应用留在 PoC 壳里没进 Vue 应用，正文配色纹丝不动。现在每次 theme.set/document.set 都应用主题 token（:root CSS 变量），明暗双向验证通过。
 
 - Fix: a file whose last block is not a paragraph (e.g. a title-only document — Markdown parsing drops the trailing blank line) had no body slot at all, so clicking below the title did nothing. The canvas now keeps a trailing editable paragraph (Typora-style), so the body placeholder shows and clicking below the title just works. / 修复：末块不是段落的文档（如只有标题的文件——Markdown 解析会吞掉尾部空行）没有正文位，标题下方点不出光标。画布现在始终保留末尾可编辑段落（Typora 式），正文占位照常显示，标题下直接点击即可输入。
