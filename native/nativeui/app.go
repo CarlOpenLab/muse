@@ -326,12 +326,7 @@ func (a *App) rail(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Width(railWidth).FillHeight().Children(func() {
 		ui.Box(c).Height(bar.Height).DragWindow()
-		a.railButton(c, iconNew, "新建", false, func() { a.newDoc() })
-		a.railButton(c, iconFolderOpen, "打开文件夹", false, func() { a.openFolderDialog() })
-		// 动作组与视图组之间一条细线；打开文件在菜单 ⌘O 与文件面板里。
-		ui.Box(c).Height(6)
-		ui.Box(c).Width(22).Height(1).Background(t.Border)
-		ui.Box(c).Height(6)
+		// 最左侧只放模块切换；新建/打开都是文件模块的内容（面板顶部与菜单）。
 		a.railButton(c, iconFiles, "文件", a.panelOpen && a.panel == panelFiles, func() {
 			a.togglePanel(panelFiles)
 		})
