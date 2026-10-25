@@ -121,11 +121,31 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   setTimeout(step, 800);
 })();
 
+/* ---------- 工作区演示：图标栏切换面板视图（同真实应用的 rail 行为） ---------- */
+(function workspaceDemo() {
+  const rail = document.querySelector('.rail--live');
+  if (!rail) return;
+  const win = rail.closest('.win');
+  const title = document.getElementById('wsPanelTitle');
+  const titles = { files: '访谈项目', outline: '大纲', agent: 'AI 助手' };
+  rail.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-view]');
+    if (!btn) return;
+    const view = btn.dataset.view;
+    rail.querySelectorAll('.rail__btn').forEach((b) => b.classList.toggle('is-active', b === btn));
+    win.querySelectorAll('.panel__view').forEach((v) => {
+      const on = v.dataset.view === view;
+      v.classList.toggle('is-on', on);
+      v.setAttribute('aria-hidden', String(!on));
+    });
+    if (title) title.textContent = titles[view] || view;
+  });
+})();
+
 /* ---------- Agent 审批流演示 ----------
    把真实的交互脚本走一遍：用户消息 → 思考 → 读文档 → 审批卡暂停 →
    按用户的选择（同意 / 总是允许 / 拒绝）走不同分支。
    权限预设影响流程：完全访问跳过审批卡，只读直接被拒。 */
-
 (function agentDemo() {
   const chat = document.getElementById('agentChat');
   const replayBtn = document.getElementById('agentReplay');

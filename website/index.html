@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/spacegrotesk-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/jetbrainsmono-var.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/main.css?v=20261026">
+  <link rel="stylesheet" href="assets/css/main.css?v=20261026c">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Muse","operatingSystem":"Windows, macOS, Linux","applicationCategory":"TextEditor","description":"完全原生的桌面 Markdown 编辑器，由 Go 与 MyGo 直接绘制，内置会用工具的写作 Agent。","offers":{"@type":"Offer","price":"0"},"author":{"@type":"Organization","name":"CarlOpenLab"}}
   </script>
@@ -94,33 +94,48 @@
         </div>
       </div>
 
-      <!-- 应用窗口：hero 的主视觉就是产品本身 -->
+      <!-- 应用窗口：hero 的主视觉就是产品本身（图标栏 → 面板 → 画布） -->
       <div class="container hero__stage reveal">
-        <div class="win win--hero" role="img" aria-label="Muse 应用窗口：左侧图标栏与文件树，中间是正在编辑的原地画布，右侧是缪斯 Agent 面板">
-          <div class="win__bar">
-            <span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="win__title">灵感手记.md</span>
-            <span class="win__badge mono">MUSE · 原生</span>
-          </div>
+        <div class="win win--hero" role="img" aria-label="Muse 应用窗口：左侧图标栏，中间是缪斯 Agent 面板，右侧是正在编辑的原地画布">
+          <span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span>
           <div class="win__body">
             <div class="rail" aria-hidden="true">
-              <span class="rail__btn is-active"><svg><use href="#i-files"/></svg></span>
+              <span class="rail__btn"><svg><use href="#i-files"/></svg></span>
               <span class="rail__btn"><svg><use href="#i-outline"/></svg></span>
               <span class="rail__btn"><svg><use href="#i-search"/></svg></span>
-              <span class="rail__btn"><svg><use href="#i-spark"/></svg></span>
-              <span class="rail__btn rail__btn--end"><svg><use href="#i-gear"/></svg></span>
+              <span class="rail__btn is-active"><svg><use href="#i-spark"/></svg></span>
+              <span class="rail__btn rail__btn--end"><svg><use href="#i-moon"/></svg></span>
+              <span class="rail__btn"><svg><use href="#i-gear"/></svg></span>
             </div>
-            <div class="side" aria-hidden="true">
-              <div class="side__head">灵感手记</div>
-              <div class="tree">
-                <span class="tree__row is-active"><svg><use href="#i-file"/></svg>灵感手记.md</span>
-                <span class="tree__row"><svg><use href="#i-file"/></svg>采访提纲.md</span>
-                <span class="tree__row"><svg><use href="#i-file"/></svg>草稿箱.md</span>
-                <span class="tree__row"><svg><use href="#i-file"/></svg>todo.txt</span>
+            <div class="panel" aria-hidden="true">
+              <div class="panel__head">
+                <span class="panel__title">AI 助手</span>
+                <span class="panel__tool"><svg><use href="#i-chevron"/></svg></span>
               </div>
-              <div class="side__head side__head--sub">最近打开</div>
-              <div class="tree">
-                <span class="tree__row tree__row--muted"><svg><use href="#i-file"/></svg>采访提纲.md</span>
+              <div class="chat chat--idle">
+                <div class="bubble bubble--user">把结尾改得更有余味一点</div>
+                <div class="agent-block">
+                  <div class="think"><svg><use href="#i-spark"/></svg><span>已思考 1.8 秒</span><span class="think__chev"><svg><use href="#i-chevron"/></svg></span></div>
+                  <div class="tool"><svg><use href="#i-eye"/></svg><span>读取文档</span><span class="tool__target">灵感手记.md</span><span class="tool__ok">✓</span></div>
+                  <p class="md">结尾停在「未完待续」——改成一句留白的收束，替换后请你确认。</p>
+                </div>
+                <div class="approval approval--done">
+                  <div class="approval__head"><svg><use href="#i-shield"/></svg><span>请求修改文档？</span><span class="approval__file">灵感手记.md</span></div>
+                  <p class="approval__desc">把「未完待续」改成「合上笔记本的那一刻，故事自己走了下去」。</p>
+                  <div class="approval__actions"><span class="approval__done-label mono">✓ 已同意 · 修改已应用</span></div>
+                </div>
+                <div class="tool"><svg><use href="#i-edit"/></svg><span>编辑文档</span><span class="tool__target">灵感手记.md</span><span class="tool__ok">✓</span></div>
+              </div>
+              <div class="composer">
+                <div class="composer__row">
+                  <div class="composer__input">让 Agent 总结、改写或编辑这篇文档…</div>
+                  <span class="composer__send"><svg><use href="#i-arrow-up"/></svg></span>
+                </div>
+                <div class="composer__foot mono">
+                  <span class="chip">每次询问 ▾</span>
+                  <span class="composer__model">opencode-go/deepseek-v4.1-flash</span>
+                  <span class="composer__clear">清空</span>
+                </div>
               </div>
             </div>
             <div class="canvas">
@@ -130,22 +145,6 @@
                 <p class="doc__p doc__p--dim">点击任何段落，直接在排版后的文字里编辑。</p>
               </div>
               <div class="statusbar mono" aria-hidden="true"><span>1,204 字</span><span>·</span><span>28 行</span><span class="statusbar__end">⌘P 命令面板</span></div>
-            </div>
-            <div class="agent agent--idle" aria-hidden="true">
-              <div class="agent__head"><svg><use href="#i-spark"/></svg>缪斯 · AI 助手</div>
-              <div class="chat chat--idle">
-                <div class="bubble bubble--user">把结尾改得更有余味一点</div>
-                <div class="agent-block">
-                  <div class="think"><svg><use href="#i-spark"/></svg><span>已思考 1.8 秒</span><svg class="think__chev"><use href="#i-chevron"/></svg></div>
-                  <div class="tool"><svg><use href="#i-eye"/></svg><span>读取文档</span><span class="tool__target">灵感手记.md</span><span class="tool__ok">✓</span></div>
-                  <p class="md">结尾停在「未完待续」——改成一句留白的收束，已替换最后一段，等你确认。</p>
-                </div>
-              </div>
-              <div class="composer">
-                <div class="composer__input">让 Agent 总结、改写或编辑这篇文档…</div>
-                <span class="composer__send" aria-hidden="true"><svg><use href="#i-arrow-up"/></svg></span>
-              </div>
-              <div class="agent__bar mono"><span class="chip">每次询问 ▾</span><span class="agent__model">opencode-go/deepseek-v4.1-flash</span></div>
             </div>
           </div>
         </div>
@@ -170,24 +169,25 @@
 
         <div class="section__stage reveal">
           <div class="win win--agent">
-            <div class="win__bar">
-              <span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="win__title">缪斯 · AI 助手</span>
-              <button class="win__replay mono" id="agentReplay" type="button">↻ 重播</button>
-            </div>
-            <div class="agent">
+            <div class="panel panel--demo">
+              <div class="panel__head">
+                <span class="panel__title">AI 助手</span>
+                <button class="win__replay mono" id="agentReplay" type="button">↻ 重播</button>
+              </div>
               <div class="chat" id="agentChat" aria-live="polite"></div>
               <div class="composer">
-                <div class="composer__input">让 Agent 总结、改写或编辑这篇文档…</div>
-                <span class="composer__send composer__send--idle" aria-hidden="true"><svg><use href="#i-arrow-up"/></svg></span>
-              </div>
-              <div class="agent__bar">
-                <div class="seg" role="radiogroup" aria-label="权限预设" id="permSeg">
-                  <button class="seg__btn is-on" data-perm="ask" role="radio" aria-checked="true" type="button">每次询问</button>
-                  <button class="seg__btn" data-perm="full" role="radio" aria-checked="false" type="button">完全访问</button>
-                  <button class="seg__btn" data-perm="readonly" role="radio" aria-checked="false" type="button">只读</button>
+                <div class="composer__row">
+                  <div class="composer__input">让 Agent 总结、改写或编辑这篇文档…</div>
+                  <span class="composer__send composer__send--idle" aria-hidden="true"><svg><use href="#i-arrow-up"/></svg></span>
                 </div>
-                <span class="agent__model mono">opencode-go/deepseek-v4.1-flash</span>
+                <div class="composer__foot">
+                  <div class="seg" role="radiogroup" aria-label="权限预设" id="permSeg">
+                    <button class="seg__btn is-on" data-perm="ask" role="radio" aria-checked="true" type="button">每次询问</button>
+                    <button class="seg__btn" data-perm="full" role="radio" aria-checked="false" type="button">完全访问</button>
+                    <button class="seg__btn" data-perm="readonly" role="radio" aria-checked="false" type="button">只读</button>
+                  </div>
+                  <span class="composer__model mono">opencode-go/deepseek-v4.1-flash</span>
+                </div>
               </div>
             </div>
           </div>
@@ -241,10 +241,6 @@
           </div>
 
           <div class="win win--editor reveal">
-            <div class="win__bar">
-              <span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="win__title">原地编辑</span>
-            </div>
             <div class="editor-demo">
               <pre class="editor-demo__src mono" id="typeSrc" aria-hidden="true"></pre>
               <div class="editor-demo__doc" id="typeDoc" aria-hidden="true">
@@ -316,36 +312,68 @@
         </header>
 
         <div class="win win--workspace reveal">
-          <div class="win__bar"><span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="win__title">访谈项目</span></div>
-          <div class="workspace">
-            <div class="side">
-              <div class="side__head">访谈项目</div>
-              <div class="tree">
-                <span class="tree__row is-active"><svg><use href="#i-file"/></svg>访谈纪要.md</span>
-                <span class="tree__row"><svg><use href="#i-file"/></svg>人物小传.md</span>
-                <span class="tree__row"><svg><use href="#i-folder"/></svg>素材/</span>
-                <span class="tree__row tree__row--muted"><svg><use href="#i-file"/></svg>todo.txt</span>
+          <span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="win__body">
+            <div class="rail rail--live" aria-hidden="true">
+              <button class="rail__btn is-active" data-view="files" type="button" aria-label="文件面板"><svg><use href="#i-files"/></svg></button>
+              <button class="rail__btn" data-view="outline" type="button" aria-label="大纲面板"><svg><use href="#i-outline"/></svg></button>
+              <span class="rail__btn"><svg><use href="#i-search"/></svg></span>
+              <button class="rail__btn" data-view="agent" type="button" aria-label="AI 面板"><svg><use href="#i-spark"/></svg></button>
+              <span class="rail__btn rail__btn--end"><svg><use href="#i-moon"/></svg></span>
+              <span class="rail__btn"><svg><use href="#i-gear"/></svg></span>
+            </div>
+            <div class="panel">
+              <div class="panel__head">
+                <span class="panel__title" id="wsPanelTitle">访谈项目</span>
+                <span class="panel__tool"><svg><use href="#i-chevron"/></svg></span>
               </div>
-              <div class="side__head side__head--sub">最近打开</div>
-              <div class="tree">
-                <span class="tree__row tree__row--muted"><svg><use href="#i-file"/></svg>人物小传.md</span>
+
+              <div class="panel__view is-on" data-view="files" aria-hidden="false">
+                <div class="files-tools" aria-hidden="true">
+                  <span class="panel__tool"><svg><use href="#i-file"/></svg></span>
+                  <span class="panel__tool"><svg><use href="#i-folder-plus"/></svg></span>
+                  <span class="panel__tool panel__tool--end"><svg><use href="#i-chevron"/></svg></span>
+                </div>
+                <div class="tree">
+                  <span class="tree__row is-active"><svg><use href="#i-file"/></svg>访谈纪要.md</span>
+                  <span class="tree__row"><svg><use href="#i-file"/></svg>人物小传.md</span>
+                  <span class="tree__row"><svg><use href="#i-folder"/></svg>素材/</span>
+                  <span class="tree__row tree__row--muted"><svg><use href="#i-file"/></svg>todo.txt</span>
+                </div>
+                <div class="side__head side__head--sub">最近打开</div>
+                <div class="tree">
+                  <span class="tree__row tree__row--muted"><svg><use href="#i-file"/></svg>人物小传.md</span>
+                </div>
+              </div>
+
+              <div class="panel__view" data-view="outline" aria-hidden="true">
+                <div class="outline__list mono">
+                  <span class="outline__row outline__row--h1">访谈纪要</span>
+                  <span class="outline__row outline__row--h2">第一次见面</span>
+                  <span class="outline__row outline__row--h2">转折点</span>
+                  <span class="outline__row outline__row--h3">第三页的备注</span>
+                  <span class="outline__row outline__row--h2">下一步</span>
+                </div>
+              </div>
+
+              <div class="panel__view" data-view="agent" aria-hidden="true">
+                <div class="chat chat--idle">
+                  <div class="bubble bubble--user">帮我把转折点那段展开成三段</div>
+                  <div class="agent-block">
+                    <div class="think"><svg><use href="#i-spark"/></svg><span>已思考 2.4 秒</span><span class="think__chev"><svg><use href="#i-chevron"/></svg></span></div>
+                    <div class="tool"><svg><use href="#i-eye"/></svg><span>读取文档</span><span class="tool__target">访谈纪要.md</span><span class="tool__ok">✓</span></div>
+                    <p class="md">转折点只有两句——我先补上第三次采访的细节，改完等你确认。</p>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="canvas">
               <div class="doc">
                 <h3 class="doc__title">访谈纪要</h3>
                 <p class="doc__p">她把三次采访的转折都记在了第三页——Agent 已经把要点摘成大纲。</p>
+                <p class="doc__p doc__p--dim">侧栏的图标栏就是面板开关：文件、大纲、缪斯，一次一个。</p>
               </div>
-            </div>
-            <div class="outline">
-              <div class="side__head">大纲</div>
-              <div class="outline__list mono">
-                <span class="outline__row outline__row--h1">访谈纪要</span>
-                <span class="outline__row outline__row--h2">第一次见面</span>
-                <span class="outline__row outline__row--h2">转折点</span>
-                <span class="outline__row outline__row--h3">第三页的备注</span>
-                <span class="outline__row outline__row--h2">下一步</span>
-              </div>
+              <div class="statusbar mono" aria-hidden="true"><span>2,317 字</span><span>·</span><span>41 行</span></div>
             </div>
           </div>
         </div>
@@ -409,6 +437,6 @@
     </div>
   </footer>
 
-  <script type="module" src="assets/js/main.js?v=20261026"></script>
+  <script type="module" src="assets/js/main.js?v=20261026c"></script>
 </body>
 </html>
