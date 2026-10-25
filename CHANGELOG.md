@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Files panel: dedicated 全部折叠 (collapse-all) button at the top-right of the toolbar, and a double-click on a folder no longer net-collapses (second click within 300ms is ignored). Outline redesigned: level-sized type (H1 semibold → deep levels muted), a 2.5px accent bar marks the active heading instead of a full-row block, hover row highlight, tighter 26px rows. / 文件面板：工具栏右上加「全部折叠」按钮；双击文件夹不再表现为展开又折叠（300ms 内的第二次点击忽略）。大纲重设计：标题按层级定字号（H1 半粗 → 深层弱化为灰字），活动行用 2.5px 强调色竖条替代整行大色块，悬停高亮，26px 紧凑行高。
+
 - Fix theme desync for real: the rail toggle sent the canvas the OLD theme because a.dark is only derived during the view rebuild — the canvas lagged one toggle behind the shell. webThemeName now derives from themeMode (0 light / 1 dark) at call time. / 真正修掉主题不同步：侧栏切换瞬间 a.dark 还没随视图重建刷新，画布收到的是旧主题、永远慢一拍；webThemeName 改为按 themeMode（0 浅 / 1 深）即时推导。
 
 - Fix: theme.set reached the canvas but only flipped a local flag — the prose colors never moved because tokens were applied in the PoC shell, not the Vue app. The canvas now applies theme tokens (CSS vars on :root) on every theme.set/document.set, verified light/dark both ways. / 修复：theme.set 到达画布后只翻了本地标记——token 应用留在 PoC 壳里没进 Vue 应用，正文配色纹丝不动。现在每次 theme.set/document.set 都应用主题 token（:root CSS 变量），明暗双向验证通过。

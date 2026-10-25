@@ -63,12 +63,13 @@ type App struct {
 
 	// WebView canvas (webeditor.go): nil when the canvas is unavailable and
 	// the all-native editor runs instead.
-	webView    *mygo.WebView
-	webReady   bool
-	webPushRev int
-	saveReply  chan string
-	saveMu     sync.Mutex
-	webSel     struct {
+	webView       *mygo.WebView
+	webReady      bool
+	webPushRev    int
+	saveReply     chan string
+	saveMu        sync.Mutex
+	folderToggled map[string]time.Time
+	webSel        struct {
 		from, to int
 		text     string
 	}
@@ -453,9 +454,11 @@ func (a *App) filesView(c *ui.Context) {
 
 	// 新建文件/新建文件夹在列表内容顶部成排展示（Obsidian 的资源管理器
 	// 头部方式），落在选中的文件夹里；未选中任何目录时落在根目录。
-	ui.Row(c).Shrink(0).Padding(6, 10, 4, 6).Gap(2).Children(func() {
+	ui.Row(c).Shrink(0).Padding(6, 10, 4, 6).Gap(2).AlignItems(ui.Center).Children(func() {
 		a.panelToolButton(c, iconFilePlus, "新建文件", func() { a.newFileIn(a.createTarget()) })
 		a.panelToolButton(c, iconFolderPlus, "新建文件夹", func() { a.newFolderIn(a.createTarget()) })
+		ui.Spacer(c)
+		a.panelToolButton(c, iconChevron, "全部折叠", a.collapseAll)
 	})
 
 	rows := a.fileRows()
@@ -498,6 +501,11 @@ func (a *App) filesView(c *ui.Context) {
 		})
 		row.OnClick(func() {
 			if r.dir {
+				// 双击的第二下不算：连点不再表现为"展开又立刻折叠"。
+				if last, ok := a.folderToggled[r.path]; ok && time.Since(last) < 300*time.Millisecond {
+					return
+				}
+				a.folderToggled[r.path] = time.Now()
 				a.expanded[r.path] = !a.expanded[r.path]
 			} else {
 				a.selectedPath = r.path
@@ -549,27 +557,36 @@ func (a *App) outlineView(c *ui.Context) {
 	}
 	ui.List(c, &a.outlineState, len(a.headings), func(i int) {
 		h := a.headings[i]
-		row := ui.Row(c).Height(28).Radius(6).Padding(0, 8, 0, 8+float32(h.level*10)).
-			Cursor(ui.CursorPointer)
+		row := ui.Row(c).Height(26).Radius(6).Padding(0, 8, 0, 6+float32(h.level-1)*14).
+			Gap(7).AlignItems(ui.Center).Cursor(ui.CursorPointer)
 		switch {
 		case i == a.outlineRow:
-			if t.Dark {
-				row.Background(ui.RGBA(255, 255, 255, 0.08))
-			} else {
-				row.Background(t.Background)
-				row.Shadow(0, 0.5, 2, 0, ui.RGBA(0, 0, 0, 0.06))
-			}
+			row.Background(t.SurfaceHover)
 		case row.Hovered():
 			row.Background(t.SurfaceHover)
 		}
 		row.Children(func() {
-			ui.Text(c, h.text).FontSize(12.5).TextColor(t.Text).SingleLine().Ellipsis("…")
+			// 层级条：H1 实心强调点，深层弱化为细条，替代整行大色块
+			if i == a.outlineRow {
+				ui.Box(c).Width(2.5).Height(14).Radius(1.5).Background(t.Accent)
+			} else {
+				ui.Box(c).Width(2.5).Height(14).Radius(1.5).Opacity(0)
+			}
+			label := ui.Text(c, h.text).SingleLine().Ellipsis("…")
+			switch {
+			case h.level == 1:
+				label.FontSize(12.5).FontWeight(600).TextColor(t.Text)
+			case h.level == 2:
+				label.FontSize(12).FontWeight(500).TextColor(t.Text)
+			default:
+				label.FontSize(11.5).TextColor(t.TextMuted)
+			}
 		})
 		row.OnClick(func() {
 			a.outlineRow = i
 			a.scrollTarget = h.block
 		})
-	}).Grow(1).Padding(0, 8).Gap(1)
+	}).Grow(1).Padding(0, 8).Gap(0)
 }
 
 func (a *App) searchView(c *ui.Context) {
@@ -1102,6 +1119,15 @@ func (a *App) saveAs() {
 			a.clearTreeCache()
 		})
 	}()
+}
+
+// collapseAll folds every expanded directory in the tree.
+func (a *App) collapseAll() {
+	for p := range a.expanded {
+		a.expanded[p] = false
+	}
+	a.folderToggled = map[string]time.Time{}
+	a.invalidate()
 }
 
 // createTarget is where panel "new" actions land: the selected folder when
