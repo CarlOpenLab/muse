@@ -50,16 +50,57 @@ body {
   height: 0;
 }
 
-/* 滚动条：恢复官网时代的配置（81d4d30）——2px 底色描边做出
- * 内嵌胶囊感，8px 圆角；描边用 --muse-window 适配深浅色。 */
-::-webkit-scrollbar {
-  width: 10px;
+/* 原生滚动条隐藏：右侧结构导航 rail 取代之（antd message-scroller
+ * 的 rail 模式——每块一条 tick，宽度编码块长，活动块变亮变宽）。 */
+.muse-web-canvas {
+  scrollbar-width: none;
 }
-::-webkit-scrollbar-thumb {
-  background: var(--muse-border, rgba(127, 127, 127, 0.35));
-  border-radius: 8px;
-  border: 2px solid var(--muse-window, transparent);
+.muse-web-canvas::-webkit-scrollbar {
+  display: none;
 }
-::-webkit-scrollbar-track {
+
+.muse-rail {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-height: 62vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 4;
+}
+
+.muse-rail-item {
+  flex: 1 1 0;
+  min-height: 8px;
+  width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0;
+  border: 0;
   background: transparent;
+  cursor: pointer;
+}
+
+.muse-rail-tick {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--muse-text, #ececf0);
+  opacity: 0.22;
+  transition:
+    opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.muse-rail-item:hover .muse-rail-tick {
+  opacity: 0.5;
+}
+
+.muse-rail-item.active .muse-rail-tick {
+  opacity: 0.85;
+  transform: scaleX(1.45);
 }

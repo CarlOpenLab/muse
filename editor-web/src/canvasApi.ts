@@ -1,6 +1,13 @@
 /** Uniform canvas API both PoC editors implement, per RFC-001 §5.2/§5.4. */
 import type { ThemeName } from './bridge/protocol';
 
+/** 顶层块信息，供右侧结构导航 rail 使用。 */
+export interface BlockInfo {
+  from: number;
+  len: number;
+  kind: string;
+}
+
 export interface CanvasEditor {
   name: 'vditor' | 'milkdown';
   version: string;
@@ -9,6 +16,12 @@ export interface CanvasEditor {
   runCommand(name: string, args: Record<string, unknown>): boolean;
   getSelection(): { from: number; to: number; text: string };
   setTheme(theme: ThemeName): void;
+  /** 顶层块列表（结构导航 rail）。 */
+  getBlocks?(): BlockInfo[];
+  /** 当前视口中心所在的块序号。 */
+  getActiveBlock?(): number;
+  /** 每次文档事务（含 document.set）后的本地通知，与桥抑制无关。 */
+  onDocChanged?(cb: () => void): () => void;
   onContentChanged(cb: () => void): void;
   onSelectionChanged(cb: () => void): void;
   onLinkOpen(cb: (href: string) => void): void;

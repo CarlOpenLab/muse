@@ -9,7 +9,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { create } from '../milkdown/main';
 import { applyTokens } from '../theme/tokens';
 import { WebBridge } from '../bridge/webBridge';
-import type { CanvasEditor } from '../canvasApi';
+import type { BlockInfo, CanvasEditor } from '../canvasApi';
 import type { ThemeName } from '../bridge/protocol';
 
 const canvasEl = ref<HTMLDivElement | null>(null);
@@ -18,6 +18,25 @@ const ready = ref(false);
 
 let canvas: CanvasEditor | null = null;
 let bridge: WebBridge | null = null;
+
+// 结构导航 rail（antd message-scroller 的 rail 模式）
+const railBlocks = ref<BlockInfo[]>([]);
+const railActive = ref(0);
+let railRaf = 0;
+
+function tickWidth(len: number): string {
+  return `${Math.min(16, 4 + Math.round(Math.min(len, 240) / 20))}px`;
+}
+
+function refreshRail() {
+  if (!canvas?.getBlocks) return;
+  railBlocks.value = canvas.getBlocks();
+  railActive.value = canvas.getActiveBlock?.() ?? 0;
+}
+
+function jumpTo(b: BlockInfo) {
+  canvas?.runCommand('scrollToBlock', { pos: b.from });
+}
 
 onMounted(async () => {
   try {
@@ -49,12 +68,22 @@ async function mountCanvas() {
     getSelection: () => canvas?.getSelection() ?? { from: -1, to: -1, text: '' },
   });
   canvas.onContentChanged(() => bridge?.contentChanged(canvas?.getMarkdown() ?? ''));
+  canvas.onDocChanged?.(() => refreshRail());
   canvas.onSelectionChanged((sel) => bridge?.selectionChanged(sel));
   canvas.onLinkOpen((href) => bridge?.linkOpen(href));
   canvas.onImagePaste((mime, base64) => bridge?.imagePaste(mime, base64));
   bridge.start();
   ready.value = true;
   (window as unknown as { __museBridge?: WebBridge }).__museBridge = bridge;
+  // 结构导航 rail：块列表 + 滚动跟随高亮（rAF 节流）。
+  refreshRail();
+  canvasEl.value?.addEventListener('scroll', () => {
+    if (railRaf) return;
+    railRaf = requestAnimationFrame(() => {
+      railRaf = 0;
+      railActive.value = canvas?.getActiveBlock?.() ?? 0;
+    });
+  });
   // 调试/E2E 钩子：无宿主时也能从控制台或测试驱动画布。
   (window as unknown as { __museCanvas?: CanvasEditor }).__museCanvas = canvas;
   // Outside the app (browser tab, e2e) no host ever pushes document.set;
@@ -108,6 +137,18 @@ onBeforeUnmount(() => {
 <template>
   <div class="muse-app" :data-theme="theme" :data-ready="ready">
     <div ref="canvasEl" id="canvas" class="shell-canvas muse-web-canvas"></div>
+  <nav v-if="railBlocks.length > 1" class="muse-rail" aria-label="文档结构导航">
+    <button
+      v-for="(b, i) in railBlocks"
+      :key="i"
+      class="muse-rail-item"
+      :class="{ active: i === railActive }"
+      :title="b.kind"
+      @click="jumpTo(b)"
+    >
+      <span class="muse-rail-tick" :style="{ width: tickWidth(b.len) }" />
+    </button>
+  </nav>
   </div>
 </template>
 

@@ -24,7 +24,7 @@ import 'prosemirror-view/style/prosemirror.css';
 import 'katex/dist/katex.min.css';
 import { blankStructurePlugin, createPlaceholderPlugin, isBlankTemplate } from './placeholder';
 import { trailingParagraphPlugin } from './trailing-paragraph';
-import type { CanvasEditor } from '../canvasApi';
+import type { BlockInfo, CanvasEditor } from '../canvasApi';
 import type { ThemeName } from '../bridge/protocol';
 
 export const name = 'milkdown' as const;
@@ -37,6 +37,18 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
   const pasteCbs: Array<(mime: string, base64: string) => void> = [];
   // markdownUpdated 在 replaceAll 之后异步触发，用时间窗抑制（document.set 不回发）
   let suppressUntil = 0;
+
+  // 文档事务通知（含 document.set/模板应用）——rail 刷新等本地 UI 用，
+  // 不走 markdownUpdated（那里有桥抑制窗口）。
+  const docChangedCbs: Array<() => void> = [];
+  const docChangePlugin = new Plugin({
+    view: () => ({
+      // 第二参是前一 EditorState（不是事务）：文档引用变化即内容变了。
+      update: (view, prevState) => {
+        if (view.state.doc !== prevState.doc) docChangedCbs.forEach((cb) => cb());
+      },
+    }),
+  });
 
   // 搜索命中临时高亮：scrollToText 命中的文本段加 1.8s 的 .muse-search-hit。
   const hitKey = new PluginKey<DecorationSet>('muse-hit');
@@ -97,6 +109,7 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     .use(blankStructurePlugin())
     .use($prose(() => trailingParagraphPlugin()))
     .use($prose(() => hitPlugin))
+    .use($prose(() => docChangePlugin))
     .create();
 
   const run = <T>(fn: (view: EditorView) => T): T | false => {
@@ -170,6 +183,15 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     scroller.scrollTo({ top: scroller.scrollTop + (coords.top - cRect.top) - 24, behavior: 'smooth' });
   };
 
+  // 顶层块列表 + 视口中心所在块（结构导航 rail 的数据源）。
+  const topBlocks = (view: EditorView): BlockInfo[] => {
+    const out: BlockInfo[] = [];
+    view.state.doc.forEach((node, offset) => {
+      out.push({ from: offset, len: Math.max(node.textContent.length, 12), kind: node.type.name });
+    });
+    return out;
+  };
+
   const editorApi: CanvasEditor = {
     name,
     version,
@@ -202,7 +224,31 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
       });
       return result === false ? { from: -1, to: -1, text: '' } : result;
     },
-    runCommand: (cmd, args) => {
+    getBlocks: () => run(topBlocks) || [],
+  onDocChanged: (cb) => {
+    docChangedCbs.push(cb);
+    return () => {
+      const i = docChangedCbs.indexOf(cb);
+      if (i >= 0) docChangedCbs.splice(i, 1);
+    };
+  },
+  getActiveBlock: () =>
+    run((view) => {
+      const blocks = topBlocks(view);
+      if (blocks.length === 0) return -1;
+      const domRect = view.dom.getBoundingClientRect();
+      const mid = domRect.top + domRect.height / 2;
+      let active = 0;
+      blocks.forEach((b, i) => {
+        try {
+          if (view.coordsAtPos(b.from).top <= mid) active = i;
+        } catch {
+          /* 位置越界忽略 */
+        }
+      });
+      return active;
+    }) ?? 0,
+  runCommand: (cmd, args) => {
       switch (cmd) {
         case 'focus':
           return run((view) => {
@@ -239,6 +285,17 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
               if (node && idx >= 0) {
                 setHit(view, target + idx, target + idx + needle.length);
               }
+              view.focus();
+              return true;
+            }) === true
+          );
+        }
+        case 'scrollToBlock': {
+          const pos = Number((args as { pos?: number }).pos ?? -1);
+          return (
+            run((view) => {
+              if (pos < 0 || pos > view.state.doc.content.size) return false;
+              smoothScrollToPos(view, pos);
               view.focus();
               return true;
             }) === true
