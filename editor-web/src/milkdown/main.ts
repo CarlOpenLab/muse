@@ -170,6 +170,29 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
             editor.action(callCommand(redoCommand.key));
             return true;
           }) === true;
+        case 'scrollToText': {
+          const needle = String((args as { text?: string }).text ?? '').trim().toLowerCase();
+          return (
+            run((view) => {
+              if (!needle) return false;
+              let target = -1;
+              view.state.doc.descendants((node, pos) => {
+                if (target < 0 && node.isText && node.text && node.text.toLowerCase().includes(needle)) {
+                  target = pos;
+                }
+                return target < 0;
+              });
+              if (target < 0) return false;
+              view.dispatch(
+                view.state.tr
+                  .setSelection(TextSelection.near(view.state.doc.resolve(target)))
+                  .scrollIntoView(),
+              );
+              view.focus();
+              return true;
+            }) === true
+          );
+        }
         case 'scrollToHeading': {
           const text = String((args as { text?: string }).text ?? '').trim();
           return (

@@ -635,6 +635,8 @@ func (a *App) searchView(c *ui.Context) {
 			row.OnClick(func() {
 				a.searchRow = i
 				a.scrollTarget = a.searchHits[i].block
+				// 画布模式：滚动经桥，用匹配行文本定位。
+				a.scrollToText(a.searchHits[i].snippet)
 			})
 		}).Grow(1).Gap(1)
 	})

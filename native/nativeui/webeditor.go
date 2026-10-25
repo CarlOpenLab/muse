@@ -180,6 +180,15 @@ func (a *App) scrollToHeading(text string) {
 	_ = evBridge.EmitPage(a.webView.Page(), bridgeMsg{Type: "command", Name: "scrollToHeading", Text: text})
 }
 
+// scrollToText asks the canvas to scroll the first line containing the
+// snippet into view (search-hit navigation).
+func (a *App) scrollToText(snippet string) {
+	if a.webView == nil || a.webView.IsDestroyed() {
+		return
+	}
+	_ = evBridge.EmitPage(a.webView.Page(), bridgeMsg{Type: "command", Name: "scrollToText", Text: snippet})
+}
+
 func (a *App) pushWebTheme() {
 	if a.webView == nil || a.webView.IsDestroyed() {
 		return
