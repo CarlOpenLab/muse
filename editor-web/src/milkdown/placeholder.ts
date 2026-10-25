@@ -15,7 +15,6 @@ const placeholderKey = new PluginKey('muse-placeholder');
 
 export const PLACEHOLDER_TEXTS = {
   heading: '写下标题…',
-  body: '继续书写…',
   blank: '在此落笔…',
 } as const;
 
@@ -40,12 +39,14 @@ export function isBlankTemplate(doc: ProseNode): boolean {
 
 /** The node is a plain paragraph — typing "# " turns it into an empty
  *  heading via an input rule, and that heading must keep its own hint
- *  instead of the body's. */
-function emptyBlockHint(node: ProseNode, doc: ProseNode, isLast: boolean): string | null {
+ *  instead of the body's. A paragraph hint only guides the initial state:
+ *  a fully blank document. Empty lines in a written document stay clean
+ *  (Typora's restraint) — no 继续书写 noise after every Enter. */
+function emptyBlockHint(node: ProseNode, doc: ProseNode): string | null {
   if (node.type.name === 'heading') return PLACEHOLDER_TEXTS.heading;
   if (node.type.name !== 'paragraph') return null;
   if (isDocBlank(doc)) return PLACEHOLDER_TEXTS.blank;
-  return isLast ? PLACEHOLDER_TEXTS.body : null;
+  return null;
 }
 
 export function createPlaceholderPlugin() {
@@ -59,7 +60,7 @@ export function createPlaceholderPlugin() {
             const decos: Decoration[] = [];
             doc.forEach((node, offset) => {
               if (node.content.size !== 0) return;
-              const hint = emptyBlockHint(node, doc, offset + node.nodeSize === doc.content.size);
+              const hint = emptyBlockHint(node, doc);
               if (!hint) return;
               decos.push(
                 Decoration.node(offset, offset + node.nodeSize, {

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Enter after written content no longer shows a placeholder on the new empty line — hints only guide the initial state (empty heading / blank document); empty lines inside written documents stay clean, Typora-style. / 已有正文后按回车不再出现占位符——占位符只引导初始状态（空标题/空文档），文档内的空行保持干净（Typora 式克制）。
+
 - Files panel: dedicated 全部折叠 (collapse-all) button at the top-right of the toolbar, and a double-click on a folder no longer net-collapses (second click within 300ms is ignored). Outline redesigned: level-sized type (H1 semibold → deep levels muted), a 2.5px accent bar marks the active heading instead of a full-row block, hover row highlight, tighter 26px rows. / 文件面板：工具栏右上加「全部折叠」按钮；双击文件夹不再表现为展开又折叠（300ms 内的第二次点击忽略）。大纲重设计：标题按层级定字号（H1 半粗 → 深层弱化为灰字），活动行用 2.5px 强调色竖条替代整行大色块，悬停高亮，26px 紧凑行高。
 
 - Fix theme desync for real: the rail toggle sent the canvas the OLD theme because a.dark is only derived during the view rebuild — the canvas lagged one toggle behind the shell. webThemeName now derives from themeMode (0 light / 1 dark) at call time. / 真正修掉主题不同步：侧栏切换瞬间 a.dark 还没随视图重建刷新，画布收到的是旧主题、永远慢一拍；webThemeName 改为按 themeMode（0 浅 / 1 深）即时推导。
