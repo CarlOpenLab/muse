@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The files-panel new actions are icon-only squares (tooltip on hover), matching the rail's visual language. A headless regression test walks the full chain: toolbar click → 未命名.md created empty → auto-opened, and 新建文件夹 likewise. / 文件面板新建动作改为纯图标方块（悬停出提示），与侧栏视觉一致。新增无头回归测试走通整条链：点击 → 未命名.md 空文件落盘 → 自动打开，新建文件夹同理。
+
 - The left rail is now module switching only (文件/大纲/搜索/AI + theme/settings): 新建 and 打开文件夹 leave the rail — new-file/folder live in the files panel toolbar, opening lives in the files panel empty state, and ⌘N/⌘O/⇧⌘O stay in the menu. / 最左侧栏只保留模块切换（文件/大纲/搜索/AI + 主题/设置）：移除「新建」「打开文件夹」——新建类动作在文件面板顶部工具栏，打开类在文件面板空态，菜单 ⌘N/⌘O/⇧⌘O 不变。
 
 - New file / new folder move into the files panel as a visible toolbar row at the top of the list content (Obsidian's explorer-header way), instead of hiding in the drag header; they create into the selected folder when one is selected, else the workspace root. / 「新建文件 / 新建文件夹」并入文件面板，在列表内容顶部以工具栏成排展示（Obsidian 资源管理器头部方式），不再藏在拖拽头里；选中文件夹时在其中创建，否则落在根目录。

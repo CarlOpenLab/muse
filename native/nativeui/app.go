@@ -1113,15 +1113,17 @@ func (a *App) createTarget() string {
 	return a.root
 }
 
-// panelToolButton is a compact labeled button for the panel toolbar.
+// panelToolButton is an icon-only square button for the panel toolbar.
 func (a *App) panelToolButton(c *ui.Context, icon *ui.SVG, label string, fn func()) {
 	t := c.Theme()
-	b := ui.ButtonBase(c).Height(24).Radius(6).Padding(0, 7).Gap(5).
-		AlignItems(ui.Center).Label(label).Tooltip(label)
+	b := ui.ButtonBase(c).Size(24, 24).Radius(6).Padding(0).
+		Justify(ui.Center).AlignItems(ui.Center).Label(label).Tooltip(label)
+	if b.Hovered() {
+		b.Background(t.SurfaceHover)
+	}
 	b.OnClick(fn)
 	b.Children(func() {
-		ui.Icon(c, icon).Size(12, 12).TextColor(t.TextMuted)
-		ui.Text(c, label).FontSize(11.5).TextColor(t.Text)
+		ui.Icon(c, icon).Size(14, 14).TextColor(t.TextMuted)
 	})
 }
 
