@@ -255,3 +255,10 @@ body:has(#simPanel:not([hidden])) .shell-main { grid-template-columns: 1fr 380px
   body:has(#simPanel:not([hidden])) .shell-main { grid-template-columns: 1fr; }
   .shell-sim { max-height: 320px; }
 }
+
+/* 搜索命中临时高亮（scrollToText 落点，1.8s 后移除）。 */
+.muse-prose .muse-search-hit {
+  background: var(--muse-selection);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--muse-selection);
+}

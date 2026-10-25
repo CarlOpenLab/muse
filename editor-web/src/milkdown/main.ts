@@ -16,7 +16,8 @@ import { history, undoCommand, redoCommand } from '@milkdown/plugin-history';
 import { math } from '@milkdown/plugin-math';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { $prose, callCommand, getMarkdown, replaceAll } from '@milkdown/utils';
-import { AllSelection, TextSelection } from '@milkdown/prose/state';
+import { AllSelection, Plugin, PluginKey, TextSelection } from '@milkdown/prose/state';
+import { Decoration, DecorationSet } from '@milkdown/prose/view';
 import { Fragment, Slice } from '@milkdown/prose/model';
 import type { EditorView } from '@milkdown/prose/view';
 import 'prosemirror-view/style/prosemirror.css';
@@ -36,6 +37,43 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
   const pasteCbs: Array<(mime: string, base64: string) => void> = [];
   // markdownUpdated 在 replaceAll 之后异步触发，用时间窗抑制（document.set 不回发）
   let suppressUntil = 0;
+
+  // 搜索命中临时高亮：scrollToText 命中的文本段加 1.8s 的 .muse-search-hit。
+  const hitKey = new PluginKey<DecorationSet>('muse-hit');
+  let hitTimer: ReturnType<typeof setTimeout> | null = null;
+  const hitPlugin = new Plugin({
+    key: hitKey,
+    state: {
+      init: () => DecorationSet.empty,
+      apply(tr, old) {
+        const meta = tr.getMeta(hitKey) as DecorationSet | undefined;
+        return meta ?? old;
+      },
+    },
+    props: {
+      decorations(state) {
+        return hitKey.getState(state);
+      },
+    },
+  });
+  const setHit = (view: EditorView, from: number, to: number) => {
+    view.dispatch(
+      view.state.tr.setMeta(hitKey, DecorationSet.create(view.state.doc, [
+        Decoration.inline(from, to, { class: 'muse-search-hit' }),
+      ])),
+    );
+    if (hitTimer) clearTimeout(hitTimer);
+    hitTimer = setTimeout(() => {
+      hitTimer = null;
+      try {
+        view.dispatch(view.state.tr.setMeta(hitKey, DecorationSet.empty));
+      } catch {
+        /* view 已销毁 */
+      }
+    }, 1800);
+  };
+
+  // 平滑滚到指定文档位置：先落选区，再按坐标对画布做 smooth 滚动。
 
   const editor = await Editor.make()
     .config((ctx) => {
@@ -57,6 +95,7 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     .use(listener)
     .use(createPlaceholderPlugin())
     .use($prose(() => trailingParagraphPlugin()))
+    .use($prose(() => hitPlugin))
     .create();
 
   const run = <T>(fn: (view: EditorView) => T): T | false => {
@@ -121,7 +160,6 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     }
   });
 
-  // 平滑滚到指定文档位置：先落选区，再按坐标对画布做 smooth 滚动。
   const smoothScrollToPos = (view: EditorView, pos: number) => {
     view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(pos))));
     const coords = view.coordsAtPos(pos);
@@ -194,6 +232,12 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
               });
               if (target < 0) return false;
               smoothScrollToPos(view, target);
+              // 命中段临时高亮
+              const node = view.state.doc.nodeAt(target);
+              const idx = (node?.text ?? '').toLowerCase().indexOf(needle);
+              if (node && idx >= 0) {
+                setHit(view, target + idx, target + idx + needle.length);
+              }
               view.focus();
               return true;
             }) === true

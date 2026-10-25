@@ -20,6 +20,15 @@ let canvas: CanvasEditor | null = null;
 let bridge: WebBridge | null = null;
 
 onMounted(async () => {
+  try {
+    await mountCanvas();
+  } catch (err) {
+    (window as unknown as { __museMountError?: string }).__museMountError = String(err);
+    throw err;
+  }
+});
+
+async function mountCanvas() {
   if (!canvasEl.value) return;
   canvas = await create(canvasEl.value);
   bridge = new WebBridge({
@@ -85,7 +94,8 @@ onMounted(async () => {
       ].join('\n'),
     );
   }
-});
+}
+
 
 onBeforeUnmount(() => {
   canvas?.destroy?.();
@@ -99,3 +109,5 @@ onBeforeUnmount(() => {
     <div ref="canvasEl" id="canvas" class="shell-canvas muse-web-canvas"></div>
   </div>
 </template>
+
+/* hmr probe 1792913455 */

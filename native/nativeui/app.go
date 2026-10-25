@@ -606,6 +606,22 @@ func (a *App) outlineView(c *ui.Context) {
 	}).Grow(1).Padding(0, 8).Gap(0)
 }
 
+// snippetParts splits a search snippet at the first case-insensitive
+// occurrence of the query: before, match, after. match is "" when the
+// snippet no longer contains the query.
+func snippetParts(snippet, query string) (string, string, string) {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return snippet, "", ""
+	}
+	lower := strings.ToLower(snippet)
+	idx := strings.Index(lower, q)
+	if idx < 0 {
+		return snippet, "", ""
+	}
+	return snippet[:idx], snippet[idx : idx+len(q)], snippet[idx+len(q):]
+}
+
 func (a *App) searchView(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Fill().Padding(10).Gap(8).Children(func() {
@@ -641,8 +657,13 @@ func (a *App) searchView(c *ui.Context) {
 				row.Background(t.SurfaceHover)
 			}
 			row.Children(func() {
-				ui.Text(c, a.searchHits[i].snippet).FontSize(11.5).
-					TextColor(t.Text).SingleLine().Ellipsis("…")
+				// 行内关键词强调色高亮（首个命中，大小写不敏感）。
+				before, hit, after := snippetParts(a.searchHits[i].snippet, a.query)
+				ui.Text(c, before).FontSize(11.5).TextColor(t.Text)
+				if hit != "" {
+					ui.Text(c, hit).FontSize(11.5).FontWeight(620).TextColor(t.Accent)
+				}
+				ui.Text(c, after).FontSize(11.5).TextColor(t.Text)
 			})
 			row.OnClick(func() {
 				a.searchRow = i
