@@ -1,8 +1,8 @@
 /* ============================================================
    Muse 官网 — 「官网即应用」
    设计令牌逐字取自 native/nativeui/app.go 的 applyTheme()：
-   暗色窗口 #1a1a1a · 面板 #232328 · 表面 #2a2a30 · 强调 #6b93ff
-   亮色窗口 #f5f5f5 · 面板 #ffffff · 表面 #f3f3f6 · 强调 #3b6cf6
+   暗色窗口 #1a1a1a · 面板 #232328 · 表面 #2a2a30 · 官网强调（暖琥珀）#d9a05b
+   亮色窗口 #f5f5f5 · 面板 #ffffff · 表面 #f3f3f6 · 官网强调 #b45309
    ============================================================ */
 
 @font-face {
@@ -35,11 +35,11 @@
   --border-strong: rgba(255, 255, 255, 0.12);
   --text: #ececf0;
   --muted: #a9a9b4;
-  --accent: #6b93ff;
-  --accent-hover: #7fa3ff;
-  --accent-pressed: #5580f0;
-  --accent-text: #101014;
-  --selection: rgba(107, 147, 255, 0.28);
+  --accent: #d9a05b;
+  --accent-hover: #e4b274;
+  --accent-pressed: #c48d45;
+  --accent-text: #211705;
+  --selection: rgba(217, 160, 91, 0.26);
 
   /* 官网排版层 */
   --page: #101014;
@@ -71,11 +71,11 @@
   --border-strong: rgba(0, 0, 0, 0.12);
   --text: #1d1d1f;
   --muted: #6e6e78;
-  --accent: #3b6cf6;
-  --accent-hover: #4d7cf7;
-  --accent-pressed: #2f5ce0;
+  --accent: #b45309;
+  --accent-hover: #c96a17;
+  --accent-pressed: #9a4407;
   --accent-text: #ffffff;
-  --selection: rgba(59, 108, 246, 0.25);
+  --selection: rgba(180, 83, 9, 0.22);
 
   --page: #f5f5f5;
   --page-2: #ececf1;
