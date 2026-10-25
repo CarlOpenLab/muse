@@ -481,6 +481,9 @@ func (a *App) filesView(c *ui.Context) {
 				row.Background(t.Background)
 				row.Shadow(0, 0.5, 2, 0, ui.RGBA(0, 0, 0, 0.06))
 			}
+		case !r.dir && r.path == a.path:
+			// 当前打开的文件在树里保持高亮（Obsidian 式）。
+			row.Background(t.SurfaceHover)
 		case row.Hovered():
 			row.Background(t.SurfaceHover)
 		}
@@ -585,6 +588,8 @@ func (a *App) outlineView(c *ui.Context) {
 		row.OnClick(func() {
 			a.outlineRow = i
 			a.scrollTarget = h.block
+			// 画布模式下正文在 WebView 里，滚动要经桥发命令。
+			a.scrollToHeading(h.text)
 		})
 	}).Grow(1).Padding(0, 8).Gap(0)
 }

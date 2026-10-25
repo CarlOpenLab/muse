@@ -16,7 +16,7 @@ import { history, undoCommand, redoCommand } from '@milkdown/plugin-history';
 import { math } from '@milkdown/plugin-math';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { $prose, callCommand, getMarkdown, replaceAll } from '@milkdown/utils';
-import { AllSelection } from '@milkdown/prose/state';
+import { AllSelection, TextSelection } from '@milkdown/prose/state';
 import { Fragment, Slice } from '@milkdown/prose/model';
 import type { EditorView } from '@milkdown/prose/view';
 import 'prosemirror-view/style/prosemirror.css';
@@ -170,6 +170,28 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
             editor.action(callCommand(redoCommand.key));
             return true;
           }) === true;
+        case 'scrollToHeading': {
+          const text = String((args as { text?: string }).text ?? '').trim();
+          return (
+            run((view) => {
+              let target = -1;
+              view.state.doc.descendants((node, pos) => {
+                if (target < 0 && node.type.name === 'heading' && node.textContent.trim() === text) {
+                  target = pos;
+                }
+                return target < 0;
+              });
+              if (target < 0) return false;
+              view.dispatch(
+                view.state.tr
+                  .setSelection(TextSelection.near(view.state.doc.resolve(target + 1)))
+                  .scrollIntoView(),
+              );
+              view.focus();
+              return true;
+            }) === true
+          );
+        }
         case 'selectAll':
           return run((view) => {
             view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));

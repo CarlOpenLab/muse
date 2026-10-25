@@ -23,14 +23,15 @@ import (
 // "muse:bridge" event (native → web). Fields beyond Type map per message;
 // the shapes mirror editor-web/src/bridge/protocol.ts.
 type bridgeMsg struct {
-	Type     string `json:"type"`
-	Path     string `json:"path,omitempty"`
+	Type string `json:"type"`
+	Path string `json:"path,omitempty"`
 	// 不能 omitempty：空字符串是合法载荷（新建空文件），丢了会让
 	// 画布收到 undefined 并抛错，停留在上一个文档。
 	Markdown string `json:"markdown"`
 	Revision int    `json:"revision,omitempty"`
 	Theme    string `json:"theme,omitempty"`
 	Name     string `json:"name,omitempty"`
+	Text     string `json:"text,omitempty"`
 }
 
 var evBridge = mygo.NewEvent[bridgeMsg]("muse:bridge")
@@ -169,6 +170,14 @@ func (a *App) pushWebDoc() {
 		Revision: a.webPushRev,
 		Theme:    a.webThemeName(),
 	})
+}
+
+// scrollToHeading asks the canvas to scroll a heading into view.
+func (a *App) scrollToHeading(text string) {
+	if a.webView == nil || a.webView.IsDestroyed() {
+		return
+	}
+	_ = evBridge.EmitPage(a.webView.Page(), bridgeMsg{Type: "command", Name: "scrollToHeading", Text: text})
 }
 
 func (a *App) pushWebTheme() {

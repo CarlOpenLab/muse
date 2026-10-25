@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix a core interaction broken by the web canvas: clicking outline entries (and search hits next) only fed the native editor scroll target, so the document body never moved. Outline clicks now send a scrollToHeading command over the bridge; the canvas finds the matching heading, places the caret and scrolls it to the top of the pane (verified: from page bottom, 二级标题 lands at viewport top). The open file is now highlighted in the files tree (Obsidian-style). / 修复被 WebView 画布打断的核心交互：点大纲（以及搜索结果）只喂了原生编辑器的滚动目标，正文纹丝不动。大纲点击现在经桥发 scrollToHeading 命令，画布定位匹配标题、落光标并滚到窗格顶部（验证：从页底触发，二级标题停在视口顶端）。文件树中当前打开的文件保持高亮（Obsidian 式）。
+
 - Enter after written content no longer shows a placeholder on the new empty line — hints only guide the initial state (empty heading / blank document); empty lines inside written documents stay clean, Typora-style. / 已有正文后按回车不再出现占位符——占位符只引导初始状态（空标题/空文档），文档内的空行保持干净（Typora 式克制）。
 
 - Files panel: dedicated 全部折叠 (collapse-all) button at the top-right of the toolbar, and a double-click on a folder no longer net-collapses (second click within 300ms is ignored). Outline redesigned: level-sized type (H1 semibold → deep levels muted), a 2.5px accent bar marks the active heading instead of a full-row block, hover row highlight, tighter 26px rows. / 文件面板：工具栏右上加「全部折叠」按钮；双击文件夹不再表现为展开又折叠（300ms 内的第二次点击忽略）。大纲重设计：标题按层级定字号（H1 半粗 → 深层弱化为灰字），活动行用 2.5px 强调色竖条替代整行大色块，悬停高亮，26px 紧凑行高。
