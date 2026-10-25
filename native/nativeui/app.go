@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -102,6 +103,8 @@ type App struct {
 	// The canvas and the caret mapping read it instead of panelOpen so they
 	// move with the slide instead of jumping at the ends.
 	panelW float32
+	// panelPrevTarget 是上一帧的宽度目标，用来识别「开着切换模块」。
+	panelPrevTarget float32
 
 	// workspace
 	root         string
@@ -160,17 +163,22 @@ type App struct {
 	lineHeight   float64
 
 	// AI
-	ai           aiSettings
-	aiClient     *services.AI
-	aiMessages   []chatMessage
-	aiInput      string
-	aiBusy       bool
-	aiRequestID  string
-	aiErr        string
-	aiScroll     ui.ScrollState
-	aiModels     []services.ProviderModel
-	aiModelsBusy bool
-	aiModelsErr  string
+	ai          aiSettings
+	aiClient    *services.AI
+	aiMessages  []chatMessage
+	aiInput     string
+	aiBusy      bool
+	aiPhase     string // 流式进行中的一句话状态，如「深度思考中…」
+	aiRequestID string
+	aiErr       string
+	aiScroll    ui.ScrollState
+	aiStop      atomic.Bool
+	// aiToolsUnsupported 由 Agent 循环置位：端点不支持 function
+	// calling 时整个会话退回纯对话，只在循环 goroutine 上读写。
+	aiToolsUnsupported bool
+	aiModels           []services.ProviderModel
+	aiModelsBusy       bool
+	aiModelsErr        string
 
 	// search: one hit per block, and the row chosen
 	query       string
@@ -404,15 +412,20 @@ func (a *App) contextPanel(c *ui.Context) {
 	if a.panelOpen {
 		target = a.panelWidth
 	}
+	// 打开状态下切换模块（或 AI 面板的加宽）时宽度一帧到位：滑到一半
+	// 的窄面板会把头部按钮裁出可视区，正文也要跟着重排两次。仍要走
+	// AnimateTo，动画通道得保持连续——跳过调用会让下一次开关从 0 起步。
+	anim := ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut}
+	if a.panelOpen && a.panelPrevTarget > 0.5 && a.panelPrevTarget != target {
+		anim.Duration = time.Millisecond
+	}
+	a.panelPrevTarget = target
 	// The panel is always built so its width can slide instead of vanishing
 	// from one frame to the next. The content keeps the full panel width and
 	// the outer box clips it, so text does not reflow on the way; it only
 	// fades as the box closes.
 	panel := ui.Column(c).Shrink(0).FillHeight().Clip()
-	w := panel.AnimateTo("width", target, ui.Animation{
-		Duration: 180 * time.Millisecond,
-		Ease:     ui.EaseOut,
-	})
+	w := panel.AnimateTo("width", target, anim)
 	a.panelW = w
 	panel.Width(w)
 	if w < 0.5 {
@@ -3121,10 +3134,20 @@ func (a *App) openSettings() {
 	a.settingsOpen = true
 }
 
+// panelTargetWidth 是面板收起前的目标宽度。AI 助手面板承载对话，
+// 比文件、大纲这些列表宽一档。
+func (a *App) panelTargetWidth() float32 {
+	if a.panel == panelAI {
+		return 348
+	}
+	return 268
+}
+
 // showPanel selects a module without ever collapsing: the rail is a view
 // switch, and clicking the active icon twice used to hide the panel.
 func (a *App) showPanel(v panelView) {
 	a.panel = v
+	a.panelWidth = a.panelTargetWidth()
 	a.panelOpen = true
 	a.invalidate()
 }
@@ -3140,6 +3163,7 @@ func (a *App) togglePanel(v panelView) {
 		a.panelOpen = false
 	} else {
 		a.panel = v
+		a.panelWidth = a.panelTargetWidth()
 		a.panelOpen = true
 	}
 	a.invalidate()

@@ -48,4 +48,6 @@ var (
 	iconChevronDown    = lucide(`<path d="m6 9 6 6 6-6"/>`)
 	iconPanelLeftClose = lucide(`<rect width="18" height="18" x="3" y="3" rx="2"/>` +
 		`<path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>`)
+	iconArrowUp = lucide(`<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>`)
+	iconStop    = lucide(`<rect width="10" height="10" x="7" y="7" rx="1.5" fill="currentColor" stroke="none"/>`)
 )
