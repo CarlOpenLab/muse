@@ -27,7 +27,9 @@ onMounted(async () => {
     editorVersion: canvas.version,
     getMarkdown: () => canvas?.getMarkdown() ?? '',
     runCommand: (name, args) => canvas?.runCommand(name, args) ?? false,
-    setDocument: (md) => canvas?.setMarkdown(md),
+    // 空文件时 markdown 可能为 undefined（历史上 Go omitempty 丢过空串），
+    // 防御性兜底为空串，绝不让画布停留在上一个文档。
+    setDocument: (md) => canvas?.setMarkdown(md ?? ''),
     setTheme: (t) => {
       // tokens 写在 :root（applyTokens）——milkdown 的 setTheme 是空操作，
       // 正文配色全靠这些 CSS 变量，切换主题必须在这里应用。

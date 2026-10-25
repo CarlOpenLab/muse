@@ -25,7 +25,9 @@ import (
 type bridgeMsg struct {
 	Type     string `json:"type"`
 	Path     string `json:"path,omitempty"`
-	Markdown string `json:"markdown,omitempty"`
+	// 不能 omitempty：空字符串是合法载荷（新建空文件），丢了会让
+	// 画布收到 undefined 并抛错，停留在上一个文档。
+	Markdown string `json:"markdown"`
 	Revision int    `json:"revision,omitempty"`
 	Theme    string `json:"theme,omitempty"`
 	Name     string `json:"name,omitempty"`
