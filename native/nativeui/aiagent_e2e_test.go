@@ -345,3 +345,59 @@ func TestAgentApprovalAccept(t *testing.T) {
 		t.Fatalf("approved tool part = %+v", a.aiMessages[1].Parts[0])
 	}
 }
+
+// TestAgentApprovalAlways 点一次「总是允许」后，本轮会话的后续修改
+// 不再询问，连着的两次编辑都直接执行。
+func TestAgentApprovalAlways(t *testing.T) {
+	var rounds []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []map[string]any `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		n := len(body.Messages)
+		switch {
+		case n < 5: // 第一轮：发起第一处修改
+			rounds = append(rounds, "edit1")
+			fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"edit_document","arguments":"{\"old_text\":\"旧标题\",\"new_text\":\"新标题\"}"}}]}}]}`))
+			fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`))
+			fmt.Fprint(w, "data: [DONE]\n\n")
+		case n < 7: // 第二轮：再发起一处修改，这时应该已免确认
+			rounds = append(rounds, "edit2")
+			fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_2","type":"function","function":{"name":"edit_document","arguments":"{\"old_text\":\"正文\",\"new_text\":\"正文改\"}"}}]}}]}`))
+			fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`))
+			fmt.Fprint(w, "data: [DONE]\n\n")
+		default:
+			rounds = append(rounds, "final")
+			fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{"content":"两处都改好了。"}}]}`))
+			fmt.Fprint(w, "data: [DONE]\n\n")
+		}
+	}))
+	defer srv.Close()
+	a, tt := approvalApp(t, srv)
+
+	waitApproval(t, a, tt)
+	if err := tt.Click("总是允许"); err != nil {
+		t.Fatalf("click always: %v", err)
+	}
+	waitIdle(t, a)
+
+	if !a.aiAlwaysAllow.Load() {
+		t.Fatal("总是允许没有生效")
+	}
+	if !strings.Contains(a.source, "# 新标题") || !strings.Contains(a.source, "正文改") {
+		t.Fatalf("两处修改都应该执行: %q", a.source)
+	}
+	if len(rounds) != 3 {
+		t.Fatalf("应走满两轮工具加一轮正文: %v", rounds)
+	}
+	for i := range a.aiMessages {
+		for j := range a.aiMessages[i].Parts {
+			p := &a.aiMessages[i].Parts[j]
+			if p.Kind == partTool && p.Tool != nil && p.Tool.State == toolApproval {
+				t.Fatalf("第二处修改不应再询问: %+v", p.Tool)
+			}
+		}
+	}
+}

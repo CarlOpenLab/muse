@@ -465,13 +465,13 @@ func (a *App) agentTurn() bool {
 		if a.aiStop.Load() {
 			return false
 		}
-		if toolNeedsApproval(t.Name) {
-			ok, aborted := a.requestApproval(idx, t)
+		if toolNeedsApproval(t.Name) && !a.aiAlwaysAllow.Load() {
+			dec, aborted := a.requestApproval(idx, t)
 			if aborted {
 				a.setToolOutcome(idx, t.Index, t.ID, toolFail("已中止"))
 				return false
 			}
-			if !ok {
+			if dec == approvalDeny {
 				// 拒绝也回传给模型，让它改道而不是硬试。
 				a.setToolOutcome(idx, t.Index, t.ID,
 					toolFail("用户拒绝了这次修改；不要原样重试，先问用户想怎么改"))
@@ -494,13 +494,22 @@ func toolNeedsApproval(name string) bool {
 	return false
 }
 
+// approvalDecision 是审批卡上用户能给的三种决定。
+type approvalDecision int
+
+const (
+	approvalDeny   approvalDecision = iota // 这次不行
+	approvalAllow                          // 这次可以
+	approvalAlways                         // 这次可以，之后本会话都免确认
+)
+
 // requestApproval 把一次工具调用挂成「待确认」，阻塞等用户决定。
-// 返回 (同意, 是否中止)。
-func (a *App) requestApproval(msgIdx int, t *streamTool) (ok, aborted bool) {
-	decided := make(chan bool, 1)
+// 返回 (决定, 是否中止)。
+func (a *App) requestApproval(msgIdx int, t *streamTool) (dec approvalDecision, aborted bool) {
+	decided := make(chan approvalDecision, 1)
 	a.onMain(func() {
 		if a.aiApprovals == nil {
-			a.aiApprovals = map[string]chan bool{}
+			a.aiApprovals = map[string]chan approvalDecision{}
 		}
 		a.aiApprovals[t.ID] = decided
 		if p := a.toolPart(msgIdx, t.Index, t.ID); p != nil && p.Tool != nil {
@@ -512,13 +521,16 @@ func (a *App) requestApproval(msgIdx int, t *streamTool) (ok, aborted bool) {
 	})
 	for {
 		select {
-		case ok := <-decided:
+		case dec := <-decided:
 			a.onMain(func() {
 				delete(a.aiApprovals, t.ID)
+				if dec == approvalAlways {
+					a.aiAlwaysAllow.Store(true)
+				}
 				a.aiPhase = ""
 				a.invalidate()
 			})
-			return ok, false
+			return dec, false
 		case <-time.After(120 * time.Millisecond):
 			if a.aiStop.Load() {
 				a.onMain(func() {
@@ -526,18 +538,18 @@ func (a *App) requestApproval(msgIdx int, t *streamTool) (ok, aborted bool) {
 					a.aiPhase = ""
 					a.invalidate()
 				})
-				return false, true
+				return approvalDeny, true
 			}
 		}
 	}
 }
 
 // decideApproval 是审批按钮的落点：把用户的决定递给等待中的循环。
-func (a *App) decideApproval(id string, ok bool) {
+func (a *App) decideApproval(id string, dec approvalDecision) {
 	a.onMain(func() {
 		if ch := a.aiApprovals[id]; ch != nil {
 			select {
-			case ch <- ok:
+			case ch <- dec:
 			default:
 			}
 		}

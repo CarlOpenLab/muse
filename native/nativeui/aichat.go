@@ -303,23 +303,33 @@ func (a *App) aiApprovalCard(c *ui.Context, p *chatPart) {
 			ui.Text(c, desc).FontSize(10).TextColor(t.TextMuted).Wrap().LineHeight(1.5)
 		}
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			allow := ui.ButtonBase(c).Height(24).Padding(0, 12).Radius(7).
+			allow := ui.ButtonBase(c).Height(24).Padding(0, 11).Radius(7).
 				Label("同意修改").Description("同意修改")
 			allow.Background(t.Accent)
 			if allow.Hovered() {
 				allow.Background(t.AccentHover)
 			}
-			allow.OnClick(func() { a.decideApproval(tool.ID, true) })
+			allow.OnClick(func() { a.decideApproval(tool.ID, approvalAllow) })
 			allow.Children(func() {
 				ui.Text(c, "同意修改").FontSize(10.5).FontWeight(600).TextColor(t.AccentText)
 			})
-			deny := ui.ButtonBase(c).Height(24).Padding(0, 12).Radius(7).
+			always := ui.ButtonBase(c).Height(24).Padding(0, 11).Radius(7).
+				Label("总是允许").Description("总是允许：本会话内修改免确认")
+			always.Background(t.Background).Border(1, t.Border)
+			if always.Hovered() {
+				always.Background(t.SurfaceHover)
+			}
+			always.OnClick(func() { a.decideApproval(tool.ID, approvalAlways) })
+			always.Children(func() {
+				ui.Text(c, "总是允许").FontSize(10.5).TextColor(t.Text)
+			})
+			deny := ui.ButtonBase(c).Height(24).Padding(0, 11).Radius(7).
 				Label("拒绝").Description("拒绝")
 			deny.Background(t.Background).Border(1, t.Border)
 			if deny.Hovered() {
 				deny.Background(t.SurfaceHover)
 			}
-			deny.OnClick(func() { a.decideApproval(tool.ID, false) })
+			deny.OnClick(func() { a.decideApproval(tool.ID, approvalDeny) })
 			deny.Children(func() {
 				ui.Text(c, "拒绝").FontSize(10.5).TextColor(t.TextMuted)
 			})
@@ -427,6 +437,13 @@ func (a *App) aiComposer(c *ui.Context) {
 				// 模型名可能很长：占满剩余宽度并省略，别把清空挤走。
 				ui.Text(c, a.ai.Model).FontSize(10).TextColor(t.TextMuted).
 					Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+				if a.aiAlwaysAllow.Load() {
+					// 「总是允许」生效中的标记，点一下恢复确认。
+					a.aiMiniButton(c, "修改免确认", func() {
+						a.aiAlwaysAllow.Store(false)
+						a.invalidate()
+					})
+				}
 				if !a.aiBusy {
 					a.aiMiniButton(c, "清空", a.clearAIChat)
 				}

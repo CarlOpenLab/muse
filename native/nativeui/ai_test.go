@@ -533,7 +533,7 @@ func TestAIViewShowsApprovalCard(t *testing.T) {
 	}
 	tt := ui.NewTester(a.View, 348, 800)
 	tt.Frame()
-	for _, want := range []string{"请求修改文档", "把「第一段」改成「第一段（改）」。", "同意修改", "拒绝"} {
+	for _, want := range []string{"请求修改文档", "把「第一段」改成「第一段（改）」。", "同意修改", "总是允许", "拒绝"} {
 		if !tt.HasText(want) {
 			t.Fatalf("审批卡缺 %q; texts=%q", want, tt.Texts())
 		}

@@ -178,10 +178,13 @@ type App struct {
 	aiToolsUnsupported bool
 	// aiApprovals 是等待用户确认的工具调用（主线程读写）：调用 ID →
 	// 决定通道，审批卡按钮经 decideApproval 递结果。
-	aiApprovals  map[string]chan bool
-	aiModels     []services.ProviderModel
-	aiModelsBusy bool
-	aiModelsErr  string
+	aiApprovals map[string]chan approvalDecision
+	// aiAlwaysAllow 是「总是允许」：本会话内修改类工具免确认，
+	// 审批卡与输入区的标记都能开关它。
+	aiAlwaysAllow atomic.Bool
+	aiModels      []services.ProviderModel
+	aiModelsBusy  bool
+	aiModelsErr   string
 
 	// search: one hit per block, and the row chosen
 	query       string
