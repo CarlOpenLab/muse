@@ -201,7 +201,7 @@ export class WebBridge {
       case 'document.set': {
         this.baseRevision = msg.revision;
         this.localRevision = msg.revision;
-        if (msg.theme) this.opts.setTheme(msg.theme);
+        if (msg.theme) this.opts.setTheme(msg.theme, msg.tokens);
         // markdown 缺失（Go omitempty 曾丢空串）按空文档处理，
         // 绝不把 undefined 递给画布、让它停留在上一个文件。
         this.opts.setDocument(msg.markdown ?? '');

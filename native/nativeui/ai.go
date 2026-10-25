@@ -394,6 +394,11 @@ func (a *App) insertAIContent(text string) {
 	a.refreshDoc()
 	a.dirty = true
 	a.updateTitle()
+	// 画布模式：推送新文档并滚到插入的开头。
+	a.pushWebDoc()
+	if first := strings.SplitN(strings.TrimSpace(text), "\n", 2)[0]; first != "" {
+		a.scrollToText(first)
+	}
 	a.notice("已插入文档")
 	a.invalidate()
 }

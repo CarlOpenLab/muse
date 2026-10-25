@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Settings typography and AI insertion now reach the web canvas: the font-size slider pushes theme.set tokens (--muse-body-size) so the prose re-sizes live alongside the native shell (verified 15.5→20→15.5px), and AI 插入文档 pushes the new document and scrolls to the inserted first line. The panel toolbar icons, empty-state copy and search/outline rows were re-checked against the tokens (no hardcoded colors found outside canvas.css/shell.css). / 字号设置与 AI 插入现在作用于 WebView 画布：字号滑杆经 theme.set tokens（--muse-body-size）实时改正文字号（验证 15.5→20→15.5px）；AI「插入文档」推送新文档并滚到插入首行。面板图标/空态文案/搜索与大纲行核对过 token（画布样式外无硬编码色）。
+
 - Polish: outline/search jumps glide (smooth scroll to 24px above the target, verified mid-animation) instead of an instant jump, and the canvas scrollbar is a slim themed overlay that follows the muse tokens in both color schemes. / 打磨：大纲/搜索跳改为平滑滚动（停在目标上方 24px，已验证滚动中间态），画布滚动条换成跟随主题 token 的细滚动条，深浅色都不突兀。
 
 - Search-hit navigation over the bridge too: clicking a result scrolls the canvas to the first text node containing the snippet and places the caret there. / 搜索结果同样经桥导航：点击结果滚动画布到首个包含该行文本的节点并落光标。

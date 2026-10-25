@@ -14,6 +14,7 @@ export interface DocumentSetMsg {
   markdown: string;
   revision: number;
   theme: ThemeName;
+  tokens?: Record<string, string>;
 }
 export interface ThemeSetMsg {
   type: 'theme.set';

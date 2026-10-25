@@ -1,5 +1,5 @@
 const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/main-zGWR2mwU.js","assets/rolldown-runtime-XKyaHtl9.js","assets/main-IkVgQZOC.css","assets/main-CLR0wZkY.js","assets/main-ClLTcuEP.css"])))=>i.map(i=>d[i]);
-import{n as e,t}from"./shell-Pn0O5wqn.js";var n=(e,t,n,r=[])=>({id:e,name:t,markdown:n,checks:r.map(([e,t])=>({desc:e,re:t}))}),r=[n(`headings`,`标题层级`,`# 一级标题
+import{n as e,t}from"./shell-mypOX3Uy.js";var n=(e,t,n,r=[])=>({id:e,name:t,markdown:n,checks:r.map(([e,t])=>({desc:e,re:t}))}),r=[n(`headings`,`标题层级`,`# 一级标题
 
 ## 二级标题
 

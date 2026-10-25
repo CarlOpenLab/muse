@@ -81,7 +81,7 @@ describe('WebBridge over the MyGo runtime', () => {
       theme: 'light',
     });
     expect(setDocument).toHaveBeenCalledWith('# 你好\n');
-    expect(setTheme).toHaveBeenCalledWith('light');
+    expect(setTheme).toHaveBeenCalledWith('light', undefined);
     expect(bridge.currentRevision).toBe(4);
   });
 

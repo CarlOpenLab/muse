@@ -1,6 +1,7 @@
 package nativeui
 
 import (
+	"fmt"
 	"io/fs"
 	"log"
 	"os"
@@ -27,11 +28,12 @@ type bridgeMsg struct {
 	Path string `json:"path,omitempty"`
 	// 不能 omitempty：空字符串是合法载荷（新建空文件），丢了会让
 	// 画布收到 undefined 并抛错，停留在上一个文档。
-	Markdown string `json:"markdown"`
-	Revision int    `json:"revision,omitempty"`
-	Theme    string `json:"theme,omitempty"`
-	Name     string `json:"name,omitempty"`
-	Text     string `json:"text,omitempty"`
+	Markdown string            `json:"markdown"`
+	Revision int               `json:"revision,omitempty"`
+	Theme    string            `json:"theme,omitempty"`
+	Name     string            `json:"name,omitempty"`
+	Text     string            `json:"text,omitempty"`
+	Tokens   map[string]string `json:"tokens,omitempty"`
 }
 
 var evBridge = mygo.NewEvent[bridgeMsg]("muse:bridge")
@@ -173,6 +175,12 @@ func (a *App) pushWebDoc() {
 }
 
 // scrollToHeading asks the canvas to scroll a heading into view.
+// webTokens carries canvas-appearance settings beyond light/dark; the
+// body font size mirrors the native typography setting.
+func (a *App) webTokens() map[string]string {
+	return map[string]string{"--muse-body-size": fmt.Sprintf("%.0fpx", a.fontSize)}
+}
+
 func (a *App) scrollToHeading(text string) {
 	if a.webView == nil || a.webView.IsDestroyed() {
 		return
@@ -193,7 +201,7 @@ func (a *App) pushWebTheme() {
 	if a.webView == nil || a.webView.IsDestroyed() {
 		return
 	}
-	_ = evBridge.EmitPage(a.webView.Page(), bridgeMsg{Type: "theme.set", Theme: a.webThemeName()})
+	_ = evBridge.EmitPage(a.webView.Page(), bridgeMsg{Type: "theme.set", Theme: a.webThemeName(), Tokens: a.webTokens()})
 }
 
 // applyWebChanged takes a debounced document.changed from the canvas.

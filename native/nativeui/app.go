@@ -1490,7 +1490,8 @@ func (a *App) typographySettings(c *ui.Context) {
 		a.settingsDivider(c, false)
 		settingsRow(c, "字号", "编辑器正文的基准字号。", func() {
 			ui.Textf(c, "%.0fpx", a.fontSize).FontSize(12).TextColor(c.Theme().TextMuted).Width(38)
-			ui.Slider(c, &a.fontSize, 12, 22).Width(190).Label("字号")
+			ui.Slider(c, &a.fontSize, 12, 22).Width(190).Label("字号").
+				OnChange(func() { a.pushWebTheme() })
 		})
 		a.settingsDivider(c, true)
 		settingsRow(c, "行高", "正文的行距倍数。", func() {

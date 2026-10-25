@@ -135,7 +135,7 @@ describe('native requests', () => {
     bridge.start();
     inbox(bridge, { type: 'document.set', path: 'a.md', markdown: 'md', revision: 5, theme: 'light' });
     expect(setDocument).toHaveBeenCalledWith('md');
-    expect(setTheme).toHaveBeenCalledWith('light');
+    expect(setTheme).toHaveBeenCalledWith('light', undefined);
   });
 
   it('ignores unparseable traffic instead of throwing', () => {

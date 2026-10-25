@@ -163,7 +163,7 @@ body:has(#simPanel:not([hidden])) .shell-main { grid-template-columns: 1fr 380px
 .shell-canvas .vditor-reset {
   color: var(--muse-text);
   caret-color: var(--muse-accent);
-  font-size: 15.5px;
+  font-size: var(--muse-body-size, 15.5px);
   line-height: 1.75;
   padding: 28px clamp(20px, 6vw, 64px) 60px;
 }
@@ -198,7 +198,7 @@ body:has(#simPanel:not([hidden])) .shell-main { grid-template-columns: 1fr 380px
 /* ============ milkdown canvas restyle (Muse tokens) ============ */
 .shell-canvas .muse-prose {
   caret-color: var(--muse-accent);
-  font-size: 15.5px;
+  font-size: var(--muse-body-size, 15.5px);
   line-height: 1.75;
   padding: 28px clamp(20px, 6vw, 64px) 60px;
   min-height: 100%;
