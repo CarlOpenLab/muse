@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -387,10 +388,11 @@ func (a *App) agentLoop() {
 	})
 }
 
-// turnPlan 是一轮请求在主线程取好的全部参数：消息、模型与端点。
-// 循环 goroutine 之后只读这份拷贝，不和设置页竞争。
+// turnPlan 是一轮请求在主线程取好的全部参数：消息、按能力组过滤后
+// 的工具定义、模型与端点。循环 goroutine 之后只读这份拷贝。
 type turnPlan struct {
 	msgs    []map[string]any
+	schemas []map[string]any
 	model   string
 	baseURL string
 	apiKey  string
@@ -400,11 +402,32 @@ func (a *App) planTurn() turnPlan {
 	var p turnPlan
 	a.onMain(func() {
 		p.msgs = a.wireMessages()
+		p.schemas = agentToolSchemas(a.toolGroupEnabled)
 		p.model = a.ai.Model
 		p.baseURL = a.ai.BaseURL
 		p.apiKey = a.ai.APIKey
 	})
 	return p
+}
+
+// toolGroupEnabled 报告一个能力组是否开启（主线程调用）。
+func (a *App) toolGroupEnabled(group string) bool {
+	switch group {
+	case toolGroupBrowse:
+		return a.ai.Tools.Browse
+	case toolGroupEdit:
+		return a.ai.Tools.Edit
+	case toolGroupManage:
+		return a.ai.Tools.Manage
+	}
+	return true
+}
+
+// toolGroupEnabledOffMain 是循环 goroutine 用的版本。
+func (a *App) toolGroupEnabledOffMain(group string) bool {
+	var on bool
+	a.onMain(func() { on = a.toolGroupEnabled(group) })
+	return on
 }
 
 // agentTurn 跑一轮流式请求：思考与正文增量实时进 UI；流结束时若有
@@ -428,7 +451,7 @@ func (a *App) agentTurn() bool {
 		"messages": plan.msgs,
 	}
 	if useTools {
-		body["tools"] = agentToolSchemas()
+		body["tools"] = plan.schemas
 	}
 	res := a.chatStream(reqID, plan, body, idx, acc)
 
@@ -465,6 +488,12 @@ func (a *App) agentTurn() bool {
 		if a.aiStop.Load() {
 			return false
 		}
+		// 能力组没开：直接拒绝，别让模型硬试。
+		if group := toolGroup(t.Name); group != "" && !a.toolGroupEnabledOffMain(group) {
+			a.setToolOutcome(idx, t.Index, t.ID,
+				toolFail("当前设置没有开启「%s」能力；请告诉用户可以在 设置 → 模型 → Agent 能力 里开启", toolGroupLabel(group)))
+			continue
+		}
 		if toolNeedsApproval(t.Name) {
 			// 权限预设决定怎么走：只读直接拒绝，完全访问直接执行，
 			// 每次询问弹审批卡。
@@ -494,10 +523,11 @@ func (a *App) agentTurn() bool {
 }
 
 // toolNeedsApproval 报告一个工具是否要用户确认后才能执行：
-// 凡是会改文档内容的都要确认，只读的直接放行。
+// 凡是会改工作区的都要确认，只读的直接放行。
 func toolNeedsApproval(name string) bool {
 	switch name {
-	case "edit_document", "write_document", "insert_into_document":
+	case "edit_document", "write_document", "insert_into_document",
+		"rename_document", "delete_document", "create_folder":
 		return true
 	}
 	return false
@@ -727,7 +757,21 @@ func (a *App) agentDocContext() string {
 			fmt.Fprintf(&b, "%s- %s\n", strings.Repeat("  ", max(h.level-1, 0)), h.text)
 		}
 	}
+	if off := a.disabledGroupLabels(); len(off) > 0 {
+		fmt.Fprintf(&b, "以下能力未开启，对应工具不可用，不要尝试调用：%s。\n", strings.Join(off, "、"))
+	}
 	return b.String()
+}
+
+// disabledGroupLabels 是设置里没开启的能力组名（主线程调用）。
+func (a *App) disabledGroupLabels() []string {
+	var off []string
+	for _, g := range []string{toolGroupBrowse, toolGroupEdit, toolGroupManage} {
+		if !a.toolGroupEnabled(g) {
+			off = append(off, toolGroupLabel(g))
+		}
+	}
+	return off
 }
 
 // beginAssistantTurn 在主线程追加一条空的助手消息，返回它的下标。
@@ -893,6 +937,9 @@ func (a *App) toolPart(msgIdx, deltaIndex int, id string) *chatPart {
 // ---------------------------------------------------------------------------
 // 工具
 
+// lineFeed 换行符，几个工具拼多行输出用。
+const lineFeed = "\n"
+
 // toolOutcome 是一次工具执行的结果：Content 是回传给模型的 JSON。
 type toolOutcome struct {
 	OK      bool
@@ -924,8 +971,48 @@ func (a *App) execTool(name, argsJSON string) toolOutcome {
 	return out
 }
 
-// agentToolSchemas 是 OpenAI function calling 的工具定义。
-func agentToolSchemas() []map[string]any {
+// 工具按能力组划分，设置里可以按组开关；"" 表示始终可用。
+const (
+	toolGroupBrowse = "browse"
+	toolGroupEdit   = "edit"
+	toolGroupManage = "manage"
+)
+
+// toolGroup 是一个工具所属的能力组。
+func toolGroup(name string) string {
+	switch name {
+	case "list_documents", "read_document", "search_document", "read_outline",
+		"workspace_tree", "document_stats", "open_document":
+		return toolGroupBrowse
+	case "edit_document", "insert_into_document":
+		return toolGroupEdit
+	case "write_document", "rename_document", "delete_document", "create_folder":
+		return toolGroupManage
+	}
+	return ""
+}
+
+// toolGroupLabel 是能力组的界面名。
+func toolGroupLabel(group string) string {
+	switch group {
+	case toolGroupBrowse:
+		return "浏览与搜索"
+	case toolGroupEdit:
+		return "编辑文档内容"
+	case toolGroupManage:
+		return "管理文件"
+	}
+	return group
+}
+
+// agentToolDef 是一条工具定义：定义本体 + 所属能力组。
+type agentToolDef struct {
+	group  string
+	schema map[string]any
+}
+
+// agentToolDefs 是全部工具的定义表。
+func agentToolDefs() []agentToolDef {
 	str := func(desc string) map[string]any {
 		return map[string]any{"type": "string", "description": desc}
 	}
@@ -942,37 +1029,68 @@ func agentToolSchemas() []map[string]any {
 			},
 		}
 	}
-	return []map[string]any{
-		fn("list_documents", "列出工作区里的文件与子目录，用来找文档。", map[string]any{
+	return []agentToolDef{
+		{toolGroupBrowse, fn("list_documents", "列出工作区里的文件与子目录，用来找文档。", map[string]any{
 			"path": str("相对工作区根目录的子目录；缺省列出根目录"),
-		}),
-		fn("read_document", "读一个文档的内容（带行号）。不传 path 读当前文档；文件较大时会被截断，可用 offset 续读。", map[string]any{
+		})},
+		{toolGroupBrowse, fn("read_document", "读一个文档的内容（带行号）。不传 path 读当前文档；文件较大时会被截断，可用 offset 续读。", map[string]any{
 			"path":   str("相对工作区根目录的路径；缺省读当前文档"),
 			"offset": map[string]any{"type": "integer", "description": "起始行号，从 1 开始"},
 			"limit":  map[string]any{"type": "integer", "description": "最多读多少行，缺省 300"},
-		}),
-		fn("search_document", "在一个文档里按行搜索文本，返回行号与该行内容。", map[string]any{
+		})},
+		{toolGroupBrowse, fn("search_document", "在一个文档里按行搜索文本，返回行号与该行内容。", map[string]any{
 			"query":    str("要找的文本"),
 			"path":     str("相对工作区根目录的路径；缺省搜当前文档"),
 			"is_regex": map[string]any{"type": "boolean", "description": "把 query 当正则；缺省按普通文本、忽略大小写"},
-		}),
-		fn("read_outline", "读一个文档的标题大纲（各级 Heading）。", map[string]any{
+		})},
+		{toolGroupBrowse, fn("read_outline", "读一个文档的标题大纲（各级 Heading）。", map[string]any{
 			"path": str("相对工作区根目录的路径；缺省读当前文档"),
-		}),
-		fn("edit_document", "编辑文档：把 old_text 精确替换为 new_text。old_text 必须与原文逐字一致且只出现一次；可以先 read_document 核对。", map[string]any{
+		})},
+		{toolGroupBrowse, fn("workspace_tree", "递归列出工作区的目录结构，用来了解全貌。", map[string]any{
+			"path":  str("起点目录；缺省为工作区根目录"),
+			"depth": map[string]any{"type": "integer", "description": "递归层数，缺省 2，最大 4"},
+		})},
+		{toolGroupBrowse, fn("document_stats", "统计一个文档的字符数、行数与标题数。", map[string]any{
+			"path": str("相对工作区根目录的路径；缺省统计当前文档"),
+		})},
+		{toolGroupBrowse, fn("open_document", "把一个文档打开到编辑器里，方便用户查看。", map[string]any{
+			"path": str("相对工作区根目录的路径"),
+		})},
+		{toolGroupEdit, fn("edit_document", "编辑文档：把 old_text 精确替换为 new_text。old_text 必须与原文逐字一致且只出现一次；可以先 read_document 核对。", map[string]any{
 			"path":     str("相对工作区根目录的路径；缺省编辑当前文档"),
 			"old_text": str("要被替换的原文片段，逐字一致且唯一"),
 			"new_text": str("替换成的内容，可以为空表示删除"),
-		}),
-		fn("write_document", "在工作区新建或整体改写一个 Markdown 文档。", map[string]any{
-			"path":    str("相对工作区根目录的路径"),
-			"content": str("完整的文档内容"),
-		}),
-		fn("insert_into_document", "把一段 Markdown 插入当前文档的开头或结尾。", map[string]any{
+		})},
+		{toolGroupEdit, fn("insert_into_document", "把一段 Markdown 插入当前文档的开头或结尾。", map[string]any{
 			"text":     str("要插入的 Markdown"),
 			"position": map[string]any{"type": "string", "enum": []string{"start", "end"}, "description": "缺省插到结尾"},
-		}),
+		})},
+		{toolGroupManage, fn("write_document", "在工作区新建或整体改写一个 Markdown 文档。", map[string]any{
+			"path":    str("相对工作区根目录的路径"),
+			"content": str("完整的文档内容"),
+		})},
+		{toolGroupManage, fn("rename_document", "重命名或移动一个文件（可以移到别的子目录）。", map[string]any{
+			"path":     str("现在的相对路径"),
+			"new_path": str("新的相对路径"),
+		})},
+		{toolGroupManage, fn("delete_document", "把一个文件移到系统回收站（不是永久删除）。", map[string]any{
+			"path": str("相对工作区根目录的路径"),
+		})},
+		{toolGroupManage, fn("create_folder", "在工作区新建一个文件夹（可含子目录）。", map[string]any{
+			"path": str("相对工作区根目录的文件夹路径"),
+		})},
 	}
+}
+
+// agentToolSchemas 按开启的能力组过滤出这轮要发给模型的工具定义。
+func agentToolSchemas(enabled func(group string) bool) []map[string]any {
+	out := []map[string]any{}
+	for _, d := range agentToolDefs() {
+		if d.group == "" || enabled(d.group) {
+			out = append(out, d.schema)
+		}
+	}
+	return out
 }
 
 // toolLabel 是工具在界面上的中文名。
@@ -986,12 +1104,24 @@ func toolLabel(name string) string {
 		return "搜索文档"
 	case "read_outline":
 		return "读取大纲"
+	case "workspace_tree":
+		return "目录结构"
+	case "document_stats":
+		return "文档统计"
+	case "open_document":
+		return "打开文档"
 	case "edit_document":
 		return "编辑文档"
 	case "write_document":
 		return "写入文档"
 	case "insert_into_document":
 		return "插入内容"
+	case "rename_document":
+		return "重命名文档"
+	case "delete_document":
+		return "删除文档"
+	case "create_folder":
+		return "新建文件夹"
 	default:
 		return name
 	}
@@ -1058,9 +1188,207 @@ func (a *App) execToolOnMain(name, argsJSON string) toolOutcome {
 	case "insert_into_document":
 		pos := strings.TrimSpace(argStr("position"))
 		return a.toolInsertIntoDocument(argStr("text"), pos)
+	case "rename_document":
+		return a.toolRenameDocument(argStr("path"), argStr("new_path"))
+	case "delete_document":
+		return a.toolDeleteDocument(argStr("path"))
+	case "create_folder":
+		return a.toolCreateFolder(argStr("path"))
+	case "workspace_tree":
+		return a.toolWorkspaceTree(argStr("path"), argInt("depth", 2))
+	case "open_document":
+		return a.toolOpenDocument(argStr("path"))
+	case "document_stats":
+		return a.toolDocumentStats(argStr("path"))
 	default:
 		return toolFail("未知工具 %q", name)
 	}
+}
+
+// dropTreeCache 让某个目录的列表缓存失效（并发安全）。
+func (a *App) dropTreeCache(dir string) {
+	a.dirMu.Lock()
+	delete(a.dirs, dir)
+	a.dirMu.Unlock()
+}
+
+// toolRenameDocument 重命名或移动一个文件；若它是当前文档，
+// 编辑器跟着切到新路径。
+func (a *App) toolRenameDocument(rel, relNew string) toolOutcome {
+	if strings.TrimSpace(relNew) == "" {
+		return toolFail("new_path 不能为空")
+	}
+	path, err := a.resolveToolPath(rel)
+	if err != nil {
+		return toolFail("%v", err)
+	}
+	newPath, err := a.resolveToolPath(relNew)
+	if err != nil {
+		return toolFail("%v", err)
+	}
+	if newPath == path {
+		return toolOK(map[string]any{"path": newPath, "moved": false})
+	}
+	if !isEditableFile(newPath) {
+		return toolFail("新路径必须是可编辑的文本文件（md / markdown / txt 等）")
+	}
+	if _, err := os.Stat(newPath); err == nil {
+		return toolFail("目标路径已存在：%s", relNew)
+	}
+	if _, err := os.Stat(path); err != nil {
+		return toolFail("%v", err)
+	}
+	if err := os.Rename(path, newPath); err != nil {
+		return toolFail("重命名失败：%v", err)
+	}
+	a.dropTreeCache(filepath.Dir(path))
+	a.dropTreeCache(filepath.Dir(newPath))
+	if path == a.path {
+		a.path = newPath
+		a.selectedPath = newPath
+		a.updateTitle()
+		a.pushWebDoc()
+	}
+	a.addRecent(newPath, false)
+	return toolOK(map[string]any{"path": newPath, "moved": true})
+}
+
+// toolDeleteDocument 把文件移进系统回收站；删当前文档时先落空文档。
+func (a *App) toolDeleteDocument(rel string) toolOutcome {
+	path, err := a.resolveToolPath(rel)
+	if err != nil {
+		return toolFail("%v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		return toolFail("路径不存在：%v", err)
+	}
+	if path == a.path && a.dirty {
+		return toolFail("当前文档有未保存的修改；请先保存或放弃，再删除它")
+	}
+	if err := trashItem(path); err != nil {
+		return toolFail("删除失败：%v", err)
+	}
+	a.dropTreeCache(filepath.Dir(path))
+	if path == a.path {
+		a.resetDoc()
+	}
+	return toolOK(map[string]any{"path": path, "trashed": true})
+}
+
+// toolCreateFolder 新建一个文件夹（可含子目录）。
+func (a *App) toolCreateFolder(rel string) toolOutcome {
+	if strings.TrimSpace(rel) == "" {
+		return toolFail("path 不能为空")
+	}
+	path, err := a.resolveToolPath(rel)
+	if err != nil {
+		return toolFail("%v", err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		return toolFail("目录已存在：%s", rel)
+	}
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return toolFail("创建失败：%v", err)
+	}
+	a.dropTreeCache(filepath.Dir(path))
+	return toolOK(map[string]any{"path": path, "created": true})
+}
+
+// toolWorkspaceTree 递归列出目录结构。
+func (a *App) toolWorkspaceTree(rel string, depth int) toolOutcome {
+	root := a.root
+	if strings.TrimSpace(rel) != "" {
+		resolved, err := a.resolveToolPath(rel)
+		if err != nil {
+			return toolFail("%v", err)
+		}
+		root = resolved
+	}
+	if root == "" {
+		return toolFail("没有打开的工作区")
+	}
+	if depth <= 0 || depth > 4 {
+		depth = 2
+	}
+	var b strings.Builder
+	count := 0
+	truncated := false
+	var walk func(dir, prefix string, d int)
+	walk = func(dir, prefix string, d int) {
+		des, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		sort.SliceStable(des, func(i, j int) bool {
+			di, dj := des[i].IsDir(), des[j].IsDir()
+			if di != dj {
+				return di
+			}
+			return strings.ToLower(des[i].Name()) < strings.ToLower(des[j].Name())
+		})
+		for _, de := range des {
+			name := de.Name()
+			if strings.HasPrefix(name, ".") || name == "node_modules" {
+				continue
+			}
+			if count >= 200 {
+				truncated = true
+				return
+			}
+			count++
+			if de.IsDir() {
+				fmt.Fprintf(&b, "%s%s/"+lineFeed, prefix, name)
+				if d < depth {
+					walk(filepath.Join(dir, name), prefix+"  ", d+1)
+				}
+			} else {
+				fmt.Fprintf(&b, "%s%s"+lineFeed, prefix, name)
+			}
+		}
+	}
+	walk(root, "", 1)
+	return toolOK(map[string]any{
+		"root":      root,
+		"tree":      strings.TrimRight(b.String(), lineFeed),
+		"entries":   count,
+		"truncated": truncated,
+	})
+}
+
+// toolOpenDocument 把一个文档打开到编辑器里。
+func (a *App) toolOpenDocument(rel string) toolOutcome {
+	path, err := a.resolveToolPath(rel)
+	if err != nil {
+		return toolFail("%v", err)
+	}
+	if !isEditableFile(path) {
+		return toolFail("不是可编辑的文本文件")
+	}
+	if path == a.path {
+		return toolOK(map[string]any{"path": path, "opened": true, "note": "已经是当前文档"})
+	}
+	a.requestOpen(path)
+	return toolOK(map[string]any{"path": path, "opened": true})
+}
+
+// toolDocumentStats 统计字符数、行数与标题数。
+func (a *App) toolDocumentStats(rel string) toolOutcome {
+	path, content, err := a.toolTargetDoc(rel)
+	if err != nil {
+		return toolFail("%v", err)
+	}
+	headings := 0
+	for _, block := range mdoc.Parse(content).Blocks {
+		if block.Kind == mdoc.Heading {
+			headings++
+		}
+	}
+	return toolOK(map[string]any{
+		"path":     path,
+		"chars":    utf8.RuneCountInString(content),
+		"lines":    strings.Count(content, lineFeed) + 1,
+		"headings": headings,
+	})
 }
 
 // resolveToolPath 把工具参数里的路径解析成绝对路径：空值指当前文档，

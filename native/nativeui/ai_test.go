@@ -580,3 +580,140 @@ func TestAIComposerPermMenu(t *testing.T) {
 		t.Fatalf("按钮应显示完全访问; texts=%q", tt.Texts())
 	}
 }
+
+// TestAgentToolsMoreOnWorkspace 覆盖新增的六类工具。
+func TestAgentToolsMoreOnWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	doc := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(doc, []byte("# 笔记\n\n正文内容\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := New()
+	a.root = dir
+	a.path = doc
+	a.source = "# 笔记\n\n正文内容\n"
+	a.refreshDoc()
+
+	// create_folder
+	out := a.execToolOnMain("create_folder", `{"path":"archive/2024"}`)
+	if !out.OK {
+		t.Fatalf("create_folder = %+v", out)
+	}
+	if fi, err := os.Stat(filepath.Join(dir, "archive", "2024")); err != nil || !fi.IsDir() {
+		t.Fatalf("文件夹不存在: %v", err)
+	}
+
+	// workspace_tree：能看到子目录（斜杠结尾）与文件
+	out = a.execToolOnMain("workspace_tree", "{}")
+	if !out.OK || !strings.Contains(out.Content, "archive/") || !strings.Contains(out.Content, "notes.md") {
+		t.Fatalf("tree = %+v", out)
+	}
+
+	// document_stats
+	out = a.execToolOnMain("document_stats", "{}")
+	if !out.OK || !strings.Contains(out.Content, `"headings":1`) {
+		t.Fatalf("stats = %+v", out)
+	}
+
+	// rename_document：改的不是当前文档
+	if err := os.WriteFile(filepath.Join(dir, "old.md"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out = a.execToolOnMain("rename_document", `{"path":"old.md","new_path":"archive/renamed.md"}`)
+	if !out.OK {
+		t.Fatalf("rename = %+v", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "old.md")); !os.IsNotExist(err) {
+		t.Fatal("旧文件应该已经不在了")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "archive", "renamed.md")); err != nil {
+		t.Fatalf("新文件不存在: %v", err)
+	}
+
+	// rename 当前文档：编辑器跟着换路径
+	out = a.execToolOnMain("rename_document", `{"path":"notes.md","new_path":"notes-renamed.md"}`)
+	if !out.OK {
+		t.Fatalf("rename current = %+v", out)
+	}
+	if a.path != filepath.Join(dir, "notes-renamed.md") {
+		t.Fatalf("当前文档路径没有跟随: %q", a.path)
+	}
+
+	// open_document：切到另一个已保存文档
+	other := filepath.Join(dir, "other.md")
+	if err := os.WriteFile(other, []byte("# Other\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out = a.execToolOnMain("open_document", `{"path":"other.md"}`)
+	if !out.OK {
+		t.Fatalf("open_document = %+v", out)
+	}
+	if a.path != other || a.source != "# Other\n" {
+		t.Fatalf("open_document 没有切过去: %q %q", a.path, a.source)
+	}
+
+	// delete_document：走回收站桩，不真删
+	trashed := ""
+	old := trashItem
+	trashItem = func(p string) error { trashed = p; return nil }
+	defer func() { trashItem = old }()
+	out = a.execToolOnMain("delete_document", `{"path":"other.md"}`)
+	if !out.OK || trashed != other {
+		t.Fatalf("delete = %+v trashed=%q", out, trashed)
+	}
+
+	// 删除当前文档且有未保存修改：拒绝（上一步 resetDoc 清了当前文档，
+	// 重新指回一个再标记脏）
+	a.path = filepath.Join(dir, "notes-renamed.md")
+	a.source = "# 笔记\n\n未保存\n"
+	a.dirty = true
+	out = a.execToolOnMain("delete_document", "{}")
+	if out.OK || !strings.Contains(out.Content, "未保存") {
+		t.Fatalf("脏文档应拒绝删除: %+v", out)
+	}
+}
+
+// TestAgentToolSchemasFilter 没开启的能力组不进工具定义表。
+func TestAgentToolSchemasFilter(t *testing.T) {
+	all := agentToolSchemas(func(string) bool { return true })
+	if len(all) != len(agentToolDefs()) {
+		t.Fatalf("全开时应有全部工具: %d", len(all))
+	}
+	browseOnly := agentToolSchemas(func(g string) bool { return g == toolGroupBrowse })
+	for _, s := range browseOnly {
+		fn := s["function"].(map[string]any)
+		if toolGroup(fn["name"].(string)) != toolGroupBrowse {
+			t.Fatalf("过滤漏了 %v", fn["name"])
+		}
+	}
+}
+
+// TestAgentToolsSettingsToggles 设置页的能力开关：点击即翻转并落盘。
+func TestAgentToolsSettingsToggles(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("MUSE_CONFIG_DIR", dir)
+	a := New()
+	a.openSettings()
+	a.settingsTab = 2
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	// 能力组在模型页末尾，先滚动到它
+	tt.Scroll(600, 400, 0, 600)
+	tt.Frame()
+	if err := tt.Click("允许管理文件"); err != nil {
+		t.Fatalf("click switch: %v", err)
+	}
+	if a.ai.Tools.Manage {
+		t.Fatal("开关应翻为关闭")
+	}
+	got := loadAISettings()
+	if got.Tools.Manage {
+		t.Fatal("翻转应立即落盘")
+	}
+	if err := tt.Click("允许管理文件"); err != nil {
+		t.Fatalf("click switch again: %v", err)
+	}
+	if !loadAISettings().Tools.Manage {
+		t.Fatal("再次翻转应恢复开启")
+	}
+}

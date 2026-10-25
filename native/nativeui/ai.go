@@ -16,14 +16,27 @@ import (
 	"muse/services"
 )
 
+// aiTools 是 Agent 的能力开关：一组工具的可用性，按组开关。
+type aiTools struct {
+	Browse bool `json:"browse"` // 浏览与搜索文档
+	Edit   bool `json:"edit"`   // 编辑文档内容
+	Manage bool `json:"manage"` // 管理文件（新建/写入/重命名/删除/文件夹）
+}
+
+// defaultAITools 是没有配置时的缺省能力：全开。
+func defaultAITools() aiTools {
+	return aiTools{Browse: true, Edit: true, Manage: true}
+}
+
 type aiSettings struct {
 	// Provider is "" (any OpenAI-compatible endpoint) or "magpie" (the local
 	// gateway the magpie menu-bar app serves).
-	Provider string `json:"provider,omitempty"`
-	BaseURL  string `json:"baseUrl"`
-	APIKey   string `json:"apiKey"`
-	Model    string `json:"model"`
-	System   string `json:"system,omitempty"`
+	Provider string  `json:"provider,omitempty"`
+	BaseURL  string  `json:"baseUrl"`
+	APIKey   string  `json:"apiKey"`
+	Model    string  `json:"model"`
+	System   string  `json:"system,omitempty"`
+	Tools    aiTools `json:"tools"`
 }
 
 const (
@@ -50,8 +63,20 @@ func aiConfigPath() string {
 func loadAISettings() aiSettings {
 	var s aiSettings
 	data, err := os.ReadFile(aiConfigPath())
-	if err == nil {
-		_ = json.Unmarshal(data, &s)
+	if err != nil {
+		// 还没有配置文件：能力全开。
+		s.Tools = defaultAITools()
+		return s
+	}
+	_ = json.Unmarshal(data, &s)
+	// 旧配置文件没有 tools 字段：视为全开，别把老用户的能力关掉。
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(data, &raw) != nil {
+		s.Tools = defaultAITools()
+		return s
+	}
+	if _, ok := raw["tools"]; !ok {
+		s.Tools = defaultAITools()
 	}
 	return s
 }
@@ -66,6 +91,14 @@ func saveAISettings(s aiSettings) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o600)
+}
+
+// saveAITools 把能力开关立即落盘（开关切换即生效）。
+func (a *App) saveAITools() {
+	if err := saveAISettings(a.ai); err != nil {
+		a.notice(fmt.Sprintf("保存失败：%v", err))
+	}
+	a.invalidate()
 }
 
 func (a *App) aiConfigured() bool {
@@ -146,6 +179,7 @@ func (a *App) modelSettings(c *ui.Context) {
 			ui.TextInput(c, &a.ai.System).Width(250).Placeholder("You are Muse…")
 		})
 	})
+	// 保存行保持在原位；Agent 能力组放页面末尾，切换即存，不用点保存。
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, "密钥保存在 "+aiConfigPath()).FontSize(10.5).TextColor(t.TextMuted).Grow(1).SingleLine().Ellipsis("…")
 		if modelSaveButton(c, "保存模型设置").Clicked() {
@@ -156,6 +190,28 @@ func (a *App) modelSettings(c *ui.Context) {
 			}
 		}
 	})
+	a.settingsDivider(c, true)
+	settingsGroup(c, "Agent 能力", func() {
+		settingsRow(c, "浏览与搜索", "列出、读取、搜索文档，读大纲、目录结构与统计。", func() {
+			if ui.Switch(c, &a.ai.Tools.Browse).Label("允许浏览与搜索").Changed() {
+				a.saveAITools()
+			}
+		})
+		a.settingsDivider(c, true)
+		settingsRow(c, "编辑文档内容", "精确替换与插入内容；执行前仍按权限预设确认。", func() {
+			if ui.Switch(c, &a.ai.Tools.Edit).Label("允许编辑").Changed() {
+				a.saveAITools()
+			}
+		})
+		a.settingsDivider(c, true)
+		settingsRow(c, "管理文件", "新建/写入文件、重命名、删除（进回收站）、新建文件夹。", func() {
+			if ui.Switch(c, &a.ai.Tools.Manage).Label("允许管理文件").Changed() {
+				a.saveAITools()
+			}
+		})
+	})
+	ui.Text(c, "能力决定 Agent 有哪些工具；输入区底栏的权限预设决定执行前是否询问。切换立即保存。").
+		FontSize(11.5).TextColor(t.TextMuted).Padding(0, 4).Wrap()
 }
 
 // aiServiceButton is one half of the model page's 服务 switch. The chosen

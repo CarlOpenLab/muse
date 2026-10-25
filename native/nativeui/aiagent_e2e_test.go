@@ -83,7 +83,7 @@ func TestAgentLoopEndToEnd(t *testing.T) {
 	a.path = docPath
 	a.source = doc
 	a.refreshDoc()
-	a.ai = aiSettings{BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	a.ai = aiSettings{BaseURL: srv.URL, APIKey: "k", Model: "m", Tools: defaultAITools()}
 	a.aiInput = "总结一下这篇文档"
 	a.sendAI()
 
@@ -184,7 +184,7 @@ func TestAgentLoopDegradesWithoutTools(t *testing.T) {
 	defer srv.Close()
 
 	a := New()
-	a.ai = aiSettings{BaseURL: srv.URL, Model: "m"}
+	a.ai = aiSettings{BaseURL: srv.URL, Model: "m", Tools: defaultAITools()}
 	a.aiInput = "在吗"
 	a.sendAI()
 
@@ -258,7 +258,7 @@ func approvalApp(t *testing.T, srv *httptest.Server, perm aiPerm) (*App, *ui.Tes
 	a.panel = panelAI
 	a.panelWidth = a.panelTargetWidth()
 	a.aiPerm = perm // 必须在 sendAI 前设好，循环会立刻读到
-	a.ai = aiSettings{BaseURL: srv.URL, Model: "m"}
+	a.ai = aiSettings{BaseURL: srv.URL, Model: "m", Tools: defaultAITools()}
 	a.aiInput = "把标题改掉"
 	a.sendAI()
 	tt := ui.NewTester(a.View, 348, 800)
@@ -428,5 +428,50 @@ func TestAgentReadonlyRejectsEdits(t *testing.T) {
 	}
 	if !strings.Contains(tool.Err, "只读") {
 		t.Fatalf("tool err = %q", tool.Err)
+	}
+}
+
+// TestAgentManageDisabled 设置里没开「管理文件」时，删除调用被
+// 能力门禁拒绝，文件完好，拒绝原因回传给模型。
+func TestAgentManageDisabled(t *testing.T) {
+	var answer string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []map[string]any `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		if len(body.Messages) < 5 {
+			fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"delete_document","arguments":"{\"path\":\"notes.md\"}"}}]}}]}`))
+			fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`))
+			fmt.Fprint(w, "data: [DONE]\n\n")
+			return
+		}
+		for _, m := range body.Messages {
+			if m["role"] == "tool" {
+				answer, _ = m["content"].(string)
+			}
+		}
+		fmt.Fprint(w, sseChunk(`{"choices":[{"delta":{"content":"好的，不动文件。"}}]}`))
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	a, _ := approvalApp(t, srv, permAsk)
+	a.ai.Tools = aiTools{Browse: true, Edit: true, Manage: false}
+	if err := os.WriteFile(a.path, []byte("# 旧标题\n\n正文\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	waitIdle(t, a)
+
+	if _, err := os.Stat(a.path); err != nil {
+		t.Fatalf("文件应该还在: %v", err)
+	}
+	if !strings.Contains(answer, "管理文件") {
+		t.Fatalf("模型没收到能力关闭说明: %q", answer)
+	}
+	tool := a.aiMessages[1].Parts[0].Tool
+	if tool == nil || tool.State != toolFailed {
+		t.Fatalf("gated tool part = %+v", a.aiMessages[1].Parts[0])
 	}
 }
