@@ -15,13 +15,14 @@ import { gfm } from '@milkdown/preset-gfm';
 import { history, undoCommand, redoCommand } from '@milkdown/plugin-history';
 import { math } from '@milkdown/plugin-math';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
-import { callCommand, getMarkdown, replaceAll } from '@milkdown/utils';
+import { $prose, callCommand, getMarkdown, replaceAll } from '@milkdown/utils';
 import { AllSelection } from '@milkdown/prose/state';
 import { Fragment, Slice } from '@milkdown/prose/model';
 import type { EditorView } from '@milkdown/prose/view';
 import 'prosemirror-view/style/prosemirror.css';
 import 'katex/dist/katex.min.css';
 import { createPlaceholderPlugin, isBlankTemplate } from './placeholder';
+import { trailingParagraphPlugin } from './trailing-paragraph';
 import type { CanvasEditor } from '../canvasApi';
 import type { ThemeName } from '../bridge/protocol';
 
@@ -55,6 +56,7 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     .use(math)
     .use(listener)
     .use(createPlaceholderPlugin())
+    .use($prose(() => trailingParagraphPlugin()))
     .create();
 
   const run = <T>(fn: (view: EditorView) => T): T | false => {

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix: a file whose last block is not a paragraph (e.g. a title-only document — Markdown parsing drops the trailing blank line) had no body slot at all, so clicking below the title did nothing. The canvas now keeps a trailing editable paragraph (Typora-style), so the body placeholder shows and clicking below the title just works. / 修复：末块不是段落的文档（如只有标题的文件——Markdown 解析会吞掉尾部空行）没有正文位，标题下方点不出光标。画布现在始终保留末尾可编辑段落（Typora 式），正文占位照常显示，标题下直接点击即可输入。
+
 - The files-panel new actions are icon-only squares (tooltip on hover), matching the rail's visual language. A headless regression test walks the full chain: toolbar click → 未命名.md created empty → auto-opened, and 新建文件夹 likewise. / 文件面板新建动作改为纯图标方块（悬停出提示），与侧栏视觉一致。新增无头回归测试走通整条链：点击 → 未命名.md 空文件落盘 → 自动打开，新建文件夹同理。
 
 - The left rail is now module switching only (文件/大纲/搜索/AI + theme/settings): 新建 and 打开文件夹 leave the rail — new-file/folder live in the files panel toolbar, opening lives in the files panel empty state, and ⌘N/⌘O/⇧⌘O stay in the menu. / 最左侧栏只保留模块切换（文件/大纲/搜索/AI + 主题/设置）：移除「新建」「打开文件夹」——新建类动作在文件面板顶部工具栏，打开类在文件面板空态，菜单 ⌘N/⌘O/⇧⌘O 不变。
