@@ -49,3 +49,21 @@ body {
   float: left;
   height: 0;
 }
+
+/* 细滚动条：跟随主题变量，深浅色都不突兀。 */
+.muse-web-canvas::-webkit-scrollbar {
+  width: 10px;
+}
+.muse-web-canvas::-webkit-scrollbar-track {
+  background: transparent;
+}
+.muse-web-canvas::-webkit-scrollbar-thumb {
+  background: var(--muse-border, rgba(127, 127, 127, 0.35));
+  border-radius: 5px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.muse-web-canvas::-webkit-scrollbar-thumb:hover {
+  background: var(--muse-muted, rgba(127, 127, 127, 0.55));
+  background-clip: content-box;
+}

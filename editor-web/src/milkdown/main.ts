@@ -121,6 +121,16 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     }
   });
 
+  // 平滑滚到指定文档位置：先落选区，再按坐标对画布做 smooth 滚动。
+  const smoothScrollToPos = (view: EditorView, pos: number) => {
+    view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(pos))));
+    const coords = view.coordsAtPos(pos);
+    const scroller = view.dom.closest('.muse-web-canvas') as HTMLElement | null;
+    if (!scroller) return;
+    const cRect = scroller.getBoundingClientRect();
+    scroller.scrollTo({ top: scroller.scrollTop + (coords.top - cRect.top) - 24, behavior: 'smooth' });
+  };
+
   const editorApi: CanvasEditor = {
     name,
     version,
@@ -183,11 +193,7 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
                 return target < 0;
               });
               if (target < 0) return false;
-              view.dispatch(
-                view.state.tr
-                  .setSelection(TextSelection.near(view.state.doc.resolve(target)))
-                  .scrollIntoView(),
-              );
+              smoothScrollToPos(view, target);
               view.focus();
               return true;
             }) === true
@@ -205,11 +211,7 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
                 return target < 0;
               });
               if (target < 0) return false;
-              view.dispatch(
-                view.state.tr
-                  .setSelection(TextSelection.near(view.state.doc.resolve(target + 1)))
-                  .scrollIntoView(),
-              );
+              smoothScrollToPos(view, target + 1);
               view.focus();
               return true;
             }) === true

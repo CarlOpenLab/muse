@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Polish: outline/search jumps glide (smooth scroll to 24px above the target, verified mid-animation) instead of an instant jump, and the canvas scrollbar is a slim themed overlay that follows the muse tokens in both color schemes. / 打磨：大纲/搜索跳改为平滑滚动（停在目标上方 24px，已验证滚动中间态），画布滚动条换成跟随主题 token 的细滚动条，深浅色都不突兀。
+
 - Search-hit navigation over the bridge too: clicking a result scrolls the canvas to the first text node containing the snippet and places the caret there. / 搜索结果同样经桥导航：点击结果滚动画布到首个包含该行文本的节点并落光标。
 
 - Fix a core interaction broken by the web canvas: clicking outline entries (and search hits next) only fed the native editor scroll target, so the document body never moved. Outline clicks now send a scrollToHeading command over the bridge; the canvas finds the matching heading, places the caret and scrolls it to the top of the pane (verified: from page bottom, 二级标题 lands at viewport top). The open file is now highlighted in the files tree (Obsidian-style). / 修复被 WebView 画布打断的核心交互：点大纲（以及搜索结果）只喂了原生编辑器的滚动目标，正文纹丝不动。大纲点击现在经桥发 scrollToHeading 命令，画布定位匹配标题、落光标并滚到窗格顶部（验证：从页底触发，二级标题停在视口顶端）。文件树中当前打开的文件保持高亮（Obsidian 式）。
