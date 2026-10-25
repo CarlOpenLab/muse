@@ -232,7 +232,7 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const allow = el('button', 'approval__btn', '同意修改');
       const alwaysBtn = el('button', 'approval__btn approval__btn--ghost', '总是允许');
       const deny = el('button', 'approval__btn approval__btn--ghost', '拒绝');
-      actions.append(allow, alwaysBtn, deny, el('span', 'approval__toolname', 'edit_document'));
+      actions.append(allow, alwaysBtn, deny);
       card.appendChild(actions);
       cardHost.appendChild(card);
       scrollDown();
