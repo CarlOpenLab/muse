@@ -1378,7 +1378,9 @@ func (a *App) toolWriteDocument(rel, content string) toolOutcome {
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			return toolFail("写入失败：%v", err)
 		}
+		a.dirMu.Lock()
 		delete(a.dirs, filepath.Dir(path))
+		a.dirMu.Unlock()
 		a.invalidate()
 	}
 	return toolOK(map[string]any{
@@ -1438,7 +1440,9 @@ func (a *App) applyToolFileEdit(path, content string) error {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return err
 	}
+	a.dirMu.Lock()
 	delete(a.dirs, filepath.Dir(path))
+	a.dirMu.Unlock()
 	a.invalidate()
 	return nil
 }

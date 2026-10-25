@@ -107,6 +107,10 @@ type App struct {
 	panelPrevTarget float32
 
 	// workspace
+	recents []recentEntry
+	// dirMu 守住 dirs/isDir 两个树缓存：children 在渲染帧里跑，而
+	// 打开文件夹的 goroutine 也写它们，headless 下这两者真的并发。
+	dirMu        sync.Mutex
 	root         string
 	dirs         map[string][]string
 	isDir        map[string]bool
@@ -233,6 +237,7 @@ func New() *App {
 		editing:      -1,
 		fontSize:     16,
 		lineHeight:   1.75,
+		recents:      loadRecents(),
 		ai:           loadAISettings(),
 		aiClient:     services.NewAI(),
 		aiMessages:   loadAIChat(),
@@ -505,16 +510,25 @@ func (a *App) filesView(c *ui.Context) {
 	if a.root == "" {
 		ui.Column(c).Fill().Center().Gap(10).Padding(20).Children(func() {
 			ui.Icon(c, iconFolderOpen).Size(30, 30).TextColor(t.TextMuted)
-			ui.Text(c, "打开文件或文件夹").FontSize(12.5).TextColor(t.TextMuted)
-			// 一个入口、一个按钮：文件与文件夹都会结束空态，分两行会把
-			// 同一个动作拆成「按钮 + 链接」两种视觉重量。
-			open := ui.Button(c, "打开…")
+			// 一个入口、一个按钮：文件与文件夹都会结束空态；下拉里还有
+			// 最近打开过的记录，点一下直接回到那里。
+			open := ui.Button(c, "打开文件或文件夹")
 			open.Menu(func(m *ui.Menu) {
 				if m.Item("打开文件…").Chosen() {
 					a.openFileDialog()
 				}
 				if m.Item("打开文件夹…").Chosen() {
 					a.openFolderDialog()
+				}
+				live, labels := a.liveRecents()
+				if len(live) > 0 {
+					m.Separator()
+					for i, r := range live {
+						entry := r
+						if m.Item(labels[i]).Chosen() {
+							a.openRecent(entry)
+						}
+					}
 				}
 			})
 		})
@@ -608,7 +622,9 @@ func (a *App) fileRows() []fileRow {
 	var walk func(dir string, depth int)
 	walk = func(dir string, depth int) {
 		for _, p := range a.children(dir) {
+			a.dirMu.Lock()
 			dir := a.isDir[p]
+			a.dirMu.Unlock()
 			out = append(out, fileRow{path: p, depth: depth, dir: dir})
 			if dir && a.expanded[p] {
 				walk(p, depth+1)
@@ -836,17 +852,22 @@ func (a *App) editorHeader(c *ui.Context) {
 
 func (a *App) setWorkspace(root string) {
 	a.root = root
+	a.dirMu.Lock()
 	a.dirs = map[string][]string{}
 	a.isDir = map[string]bool{}
+	a.dirMu.Unlock()
 	a.expanded = map[string]bool{}
 	a.fileList = ui.ListState{}
 	a.selectedPath = ""
 	a.children(root)
+	a.addRecent(root, true)
 	a.panel = panelFiles
 	a.panelOpen = true
 }
 
 func (a *App) children(dir string) []string {
+	a.dirMu.Lock()
+	defer a.dirMu.Unlock()
 	if entries, ok := a.dirs[dir]; ok {
 		return entries
 	}
@@ -1045,6 +1066,7 @@ func (a *App) applyOpen(path, data string) {
 	a.dirty = false
 	a.updateTitle()
 	a.pushWebDoc()
+	a.addRecent(path, false)
 }
 
 func (a *App) newDoc() {
@@ -1230,7 +1252,10 @@ func (a *App) collapseAll() {
 // createTarget is where panel "new" actions land: the selected folder when
 // one is selected, otherwise the workspace root.
 func (a *App) createTarget() string {
-	if a.selectedPath != "" && a.isDir[a.selectedPath] {
+	a.dirMu.Lock()
+	isDir := a.isDir[a.selectedPath]
+	a.dirMu.Unlock()
+	if a.selectedPath != "" && isDir {
 		return a.selectedPath
 	}
 	return a.root
@@ -1286,15 +1311,20 @@ func (a *App) newFolderIn(dir string) {
 }
 
 func (a *App) clearTreeCache() {
+	a.dirMu.Lock()
 	a.dirs = map[string][]string{}
 	a.isDir = map[string]bool{}
+	a.dirMu.Unlock()
 }
 
 // fileMenu is the file tree's context menu: directory actions, path copying
 // (relative or absolute), rename, trash and reveal.
 func (a *App) fileMenu(c *ui.Context, row ui.Element, path string) {
 	row.ContextMenu(func(m *ui.Menu) {
-		if a.isDir[path] {
+		a.dirMu.Lock()
+		isDir := a.isDir[path]
+		a.dirMu.Unlock()
+		if isDir {
 			if m.Item("新建文件").Chosen() {
 				a.newFileIn(path)
 			}

@@ -107,7 +107,7 @@ func TestFilesEmptyStateOpensFileOrFolderFromOneButton(t *testing.T) {
 	if tt.HasText("或打开单个文件") {
 		t.Fatal("the separate open-a-file line is still rendered")
 	}
-	if err := tt.Click("打开…"); err != nil {
+	if err := tt.Click("打开文件或文件夹"); err != nil {
 		t.Fatalf("open menu: %v", err)
 	}
 	items := strings.Join(tt.Menu(), ",")
