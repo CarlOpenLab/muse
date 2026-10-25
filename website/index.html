@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/spacegrotesk-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/jetbrainsmono-var.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/main.css?v=20261026n">
+  <link rel="stylesheet" href="assets/css/main.css?v=20261026o">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Muse","operatingSystem":"Windows, macOS, Linux","applicationCategory":"TextEditor","description":"完全原生的桌面 Markdown 编辑器，由 Go 与 MyGo 直接绘制，内置会用工具的写作 Agent。","offers":{"@type":"Offer","price":"0"},"author":{"@type":"Organization","name":"CarlOpenLab"}}
   </script>
@@ -181,6 +181,16 @@
 
         <div class="section__stage reveal">
           <div class="win win--agent">
+            <span class="win__lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="win__body">
+            <div class="rail" aria-hidden="true">
+              <span class="rail__btn"><svg><use href="#i-files"/></svg></span>
+              <span class="rail__btn"><svg><use href="#i-outline"/></svg></span>
+              <span class="rail__btn"><svg><use href="#i-search"/></svg></span>
+              <span class="rail__btn is-active"><svg><use href="#i-spark"/></svg></span>
+              <span class="rail__btn rail__btn--end"><svg><use href="#i-moon"/></svg></span>
+              <span class="rail__btn"><svg><use href="#i-gear"/></svg></span>
+            </div>
             <div class="panel panel--demo">
               <div class="panel__head">
                 <span class="panel__title">AI 助手</span>
@@ -207,6 +217,7 @@
                   <span class="composer__clear">清空</span>
                 </div>
               </div>
+            </div>
             </div>
           </div>
 
