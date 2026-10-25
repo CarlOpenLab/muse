@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Restore the scrollbar styling from the website era (81d4d30) for the canvas: 10px track, 8px-radius thumb with a 2px window-colored border that reads as an inset pill; border token follows light/dark. / 恢复官网时代的滚动条配置到画布（81d4d30）：10px 轨道、8px 圆角滑块加 2px 窗口底色描边的内嵌胶囊感，描边色随深浅色 token。
+
 - Fix: the blank-state placeholders were destructible — select-all+delete (or Backspace merging the body into the title) collapsed the doc to a single empty paragraph and the title slot vanished until reload. A structure self-heal plugin now restores the two-slot template (title + body) whenever the document is completely textless and no longer starts with an empty heading, remapping the caret into the body. Also fixed a double-$prose wrap that crashed mounting (surfaced by the mount-error hook). / 修复：空状态占位符可被破坏——全选删除（或 Backspace 把正文并进标题）会把文档塌成单个空段，标题位消失直到重开。新增结构自愈插件：整篇无文字且首块不是空标题时，恢复双槽模板并把光标映射进正文段。顺带修复双层 $prose 包装导致的挂载崩溃（挂载错误钩子定位）。
 
 - Fix: a blank document showed a duplicated 在此落笔… hint — every empty paragraph in a textless doc earned one (Enter in the blank template made two). The blank hint now lands on the first empty paragraph only; extra empty lines stay clean, the title hint is unaffected. / 修复：空文档出现两个「在此落笔…」——无文字文档里每个空段落都各得一条（在模板正文位回车即触发）。空文档提示只落在第一个空段落，多余空行保持干净；标题提示不受影响。

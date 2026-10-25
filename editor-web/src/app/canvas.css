@@ -50,20 +50,16 @@ body {
   height: 0;
 }
 
-/* 细滚动条：跟随主题变量，深浅色都不突兀。 */
-.muse-web-canvas::-webkit-scrollbar {
+/* 滚动条：恢复官网时代的配置（81d4d30）——2px 底色描边做出
+ * 内嵌胶囊感，8px 圆角；描边用 --muse-window 适配深浅色。 */
+::-webkit-scrollbar {
   width: 10px;
 }
-.muse-web-canvas::-webkit-scrollbar-track {
-  background: transparent;
-}
-.muse-web-canvas::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: var(--muse-border, rgba(127, 127, 127, 0.35));
-  border-radius: 5px;
-  border: 3px solid transparent;
-  background-clip: content-box;
+  border-radius: 8px;
+  border: 2px solid var(--muse-window, transparent);
 }
-.muse-web-canvas::-webkit-scrollbar-thumb:hover {
-  background: var(--muse-muted, rgba(127, 127, 127, 0.55));
-  background-clip: content-box;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
