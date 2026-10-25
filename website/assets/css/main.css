@@ -1,8 +1,8 @@
 /* ============================================================
    Muse 官网 — 「官网即应用」
    设计令牌逐字取自 native/nativeui/app.go 的 applyTheme()：
-   暗色窗口 #1a1a1a · 面板 #232328 · 表面 #2a2a30 · 官网强调（暖琥珀）#d9a05b
-   亮色窗口 #f5f5f5 · 面板 #ffffff · 表面 #f3f3f6 · 官网强调 #b45309
+   暗色窗口 #1a1a1a · 面板 #232328 · 表面 #2a2a30 · 官网强调为单色（Linear 风）：暗色近白 #f5f5f7
+   亮色窗口 #f5f5f5 · 面板 #ffffff · 表面 #f3f3f6 · 官网强调近黑 #17171a
    ============================================================ */
 
 @font-face {
@@ -35,11 +35,11 @@
   --border-strong: rgba(255, 255, 255, 0.12);
   --text: #ececf0;
   --muted: #a9a9b4;
-  --accent: #d9a05b;
-  --accent-hover: #e4b274;
-  --accent-pressed: #c48d45;
-  --accent-text: #211705;
-  --selection: rgba(217, 160, 91, 0.26);
+  --accent: #f5f5f7;
+  --accent-hover: #ffffff;
+  --accent-pressed: #d9d9de;
+  --accent-text: #111113;
+  --selection: rgba(255, 255, 255, 0.18);
 
   /* 官网排版层 */
   --page: #101014;
@@ -71,11 +71,11 @@
   --border-strong: rgba(0, 0, 0, 0.12);
   --text: #1d1d1f;
   --muted: #6e6e78;
-  --accent: #b45309;
-  --accent-hover: #c96a17;
-  --accent-pressed: #9a4407;
+  --accent: #17171a;
+  --accent-hover: #2c2c31;
+  --accent-pressed: #000000;
   --accent-text: #ffffff;
-  --selection: rgba(180, 83, 9, 0.22);
+  --selection: rgba(0, 0, 0, 0.14);
 
   --page: #f5f5f5;
   --page-2: #ececf1;
@@ -89,6 +89,8 @@
 /* ---------- base ---------- */
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
+section[id] { scroll-margin-top: 76px; }
+
 body {
   margin: 0;
   background: var(--page);
@@ -423,7 +425,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 .section__hint { font-size: 12.5px; color: var(--ink-faint); margin: 18px 0 0; }
 
 /* Agent 注解 */
-.agent-notes { display: flex; flex-direction: column; gap: 14px; }
+.agent-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-content: start; }
 .agent-note {
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
   padding: 16px 18px;
@@ -523,6 +525,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 /* ---------- responsive ---------- */
 @media (max-width: 1000px) {
   .section__stage { grid-template-columns: 1fr; }
+  .agent-notes { grid-template-columns: 1fr 1fr; }
   .native__grid { grid-template-columns: 1fr; }
   .canvas-grid { grid-template-columns: 1fr; }
 }
@@ -533,6 +536,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
   .hero { padding-top: 120px; }
 }
 @media (max-width: 720px) {
+  .agent-notes { grid-template-columns: 1fr; }
   .win--hero .canvas, .win--workspace .canvas { display: none; }
   .panel { width: auto; flex: 1; }
   .dl-grid { grid-template-columns: 1fr; }
