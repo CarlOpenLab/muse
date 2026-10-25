@@ -50,6 +50,149 @@ body {
   height: 0;
 }
 
+/* 结构导航 rail（antd message-scroller 源码对齐）：内容溢出时隐藏原生
+ * 滚动条，右侧浮现刻度导轨。刻度固定 16px 宽，scaleX 按离高亮项的
+ * 距离衰减（1 / 0.68 / 0.44 / 0.25 鱼眼），右锚点缩放。 */
+.muse-web-canvas {
+  scrollbar-width: none;
+}
+.muse-web-canvas::-webkit-scrollbar {
+  display: none;
+}
+
+.muse-rail {
+  position: absolute;
+  inset-block: 12px;
+  inset-inline-end: 4px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  width: 28px;
+}
+
+.muse-rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  min-height: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--rail-tick-base);
+  cursor: pointer;
+  transition: color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.muse-rail-item:hover,
+.muse-rail-item[data-highlighted] {
+  color: var(--rail-tick-highlight);
+}
+
+.muse-rail-item[data-active] {
+  color: var(--rail-tick-active);
+}
+
+.muse-rail-item:focus-visible {
+  outline: 1px solid var(--muse-accent);
+  outline-offset: -1px;
+  border-radius: 4px;
+}
+
+.muse-rail-tick {
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  transform-origin: right center;
+  transform: scaleX(var(--rail-scale, 1));
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 单例预览卡：整层随导轨垂直居中，卡片由 track 的 translateY 在刻度间
+ * 连续滑动；内容随悬停项即时替换（切换即换文，无新旧同帧重影）。 */
+.muse-rail-preview-layer {
+  position: absolute;
+  inset-block: 12px;
+  inset-inline-end: calc(28px + 4px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 256px;
+  pointer-events: none;
+}
+
+.muse-rail-preview-track {
+  display: grid;
+  width: 100%;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.muse-rail-preview {
+  width: 100%;
+  padding: 5px 10px;
+  border: 1px solid var(--muse-border, rgba(127, 127, 127, 0.2));
+  border-radius: 8px;
+  background: var(--muse-surface, #2a2a30);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.muse-rail-preview-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muse-text, #ececf0);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.muse-rail-preview-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-align: start;
+  margin-top: 2px;
+  color: var(--muse-muted, #a9a9b4);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* 刻度颜色阶梯（antd: colorTextQuaternary → Secondary → Text） */
+.muse-app[data-theme='dark'] {
+  --rail-tick-base: rgba(236, 236, 240, 0.3);
+  --rail-tick-highlight: rgba(236, 236, 240, 0.65);
+  --rail-tick-active: #ececf0;
+}
+
+.muse-app[data-theme='light'] {
+  --rail-tick-base: rgba(29, 29, 31, 0.3);
+  --rail-tick-highlight: rgba(29, 29, 31, 0.65);
+  --rail-tick-active: #1d1d1f;
+}
+
+.muse-app[data-ready='false'] {
+  visibility: hidden;
+}
+
+/* 空内容占位符：decoration 打上 .empty-node[data-placeholder]，
+ * ::before 画出灰字；float + height:0 让光标停在占位符上。 */
+.muse-web-canvas .empty-node::before {
+  content: attr(data-placeholder);
+  color: var(--muse-muted, #a9a9b4);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
 /* 原生滚动条隐藏：右侧结构导航 rail 取代之（antd message-scroller
  * 的 rail 模式——每块一条 tick，宽度编码块长，活动块变亮变宽）。 */
 .muse-web-canvas {

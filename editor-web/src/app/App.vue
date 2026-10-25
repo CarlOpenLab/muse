@@ -5,7 +5,7 @@
  * 所以不存在原生路线的点击跳变/闪烁问题。宿主（Go/MyGo）通过 mygo 桥
  * 推送 document.set / theme.set，画布以 document.changed 回报。
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { create } from '../milkdown/main';
 import { applyTokens } from '../theme/tokens';
 import { WebBridge } from '../bridge/webBridge';
@@ -19,19 +19,49 @@ const ready = ref(false);
 let canvas: CanvasEditor | null = null;
 let bridge: WebBridge | null = null;
 
-// 结构导航 rail（antd message-scroller 的 rail 模式）
+// 结构导航 rail（antd message-scroller 源码对齐：距离衰减刻度 + 单例滑动预览卡）
 const railBlocks = ref<BlockInfo[]>([]);
 const railActive = ref(0);
+const railHover = ref(-1); // 悬停/聚焦的刻度（卡片激活优先级 hover > 滚动）
+const railOverflow = ref(false); // 内容溢出才显示导轨
+const railItemH = ref(14); // 单刻度高：视口装不下时 14→6 压缩
 let railRaf = 0;
 
-function tickWidth(len: number): string {
-  return `${Math.min(16, 4 + Math.round(Math.min(len, 240) / 20))}px`;
+const RAIL_SCALE_STEPS = [1, 0.68, 0.44];
+const RAIL_SCALE_FLOOR = 0.25;
+/** 离高亮项的距离衰减（源码 resolveRailScale 的鱼眼效应）。 */
+function railScale(distance: number): number {
+  return RAIL_SCALE_STEPS[distance] ?? RAIL_SCALE_FLOOR;
+}
+
+/** 高亮优先级：悬停项 > 滚动定位的当前项（滚动只亮刻度，不弹卡）。 */
+const railHighlight = computed(() => (railHover.value >= 0 ? railHover.value : railActive.value));
+
+function railPreviewTransform(cardIdx: number): string {
+  const count = railBlocks.value.length;
+  if (cardIdx < 0 || !count) return 'translateY(0)';
+  const h = railItemH.value;
+  return `translateY(${(cardIdx + 0.5) * h - (count * h) / 2}px)`;
+}
+
+function computeRailMetrics() {
+  const el = canvasEl.value;
+  if (!el) return;
+  railOverflow.value = el.scrollHeight > el.clientHeight + 16;
+  const count = railBlocks.value.length;
+  if (!count) {
+    railItemH.value = 14;
+    return;
+  }
+  const available = el.clientHeight - 24; // 导轨 insetBlock 12×2
+  railItemH.value = Math.min(14, Math.max(6, Math.floor(available / count)));
 }
 
 function refreshRail() {
   if (!canvas?.getBlocks) return;
   railBlocks.value = canvas.getBlocks();
   railActive.value = canvas.getActiveBlock?.() ?? 0;
+  computeRailMetrics();
 }
 
 function jumpTo(b: BlockInfo) {
@@ -52,9 +82,8 @@ const KIND_LABELS: Record<string, string> = {
   html_block: 'HTML',
 };
 
-function blockPreview(b: BlockInfo): string {
-  const label = KIND_LABELS[b.kind] ?? b.kind;
-  return b.text ? `${label} · ${b.text}` : label;
+function kindLabel(kind: string): string {
+  return KIND_LABELS[kind] ?? kind;
 }
 
 onMounted(async () => {
@@ -101,8 +130,10 @@ async function mountCanvas() {
     railRaf = requestAnimationFrame(() => {
       railRaf = 0;
       railActive.value = canvas?.getActiveBlock?.() ?? 0;
+      computeRailMetrics();
     });
   });
+  window.addEventListener('resize', computeRailMetrics);
   // 调试/E2E 钩子：无宿主时也能从控制台或测试驱动画布。
   (window as unknown as { __museCanvas?: CanvasEditor }).__museCanvas = canvas;
   // Outside the app (browser tab, e2e) no host ever pushes document.set;
@@ -156,19 +187,44 @@ onBeforeUnmount(() => {
 <template>
   <div class="muse-app" :data-theme="theme" :data-ready="ready">
     <div ref="canvasEl" id="canvas" class="shell-canvas muse-web-canvas"></div>
-  <nav v-if="railBlocks.length > 1" class="muse-rail" aria-label="文档结构导航">
+  <nav
+    v-if="railOverflow && railBlocks.length > 1"
+    class="muse-rail"
+    aria-label="文档结构导航"
+    @mouseleave="railHover = -1"
+  >
     <button
       v-for="(b, i) in railBlocks"
       :key="i"
+      type="button"
       class="muse-rail-item"
-      :class="{ active: i === railActive }"
-      :title="b.kind"
+      :data-active="i === railActive ? '' : undefined"
+      :data-highlighted="i === railHighlight ? '' : undefined"
+      :style="{
+        height: `${railItemH}px`,
+        '--rail-scale': railScale(Math.abs(i - railHighlight)),
+      }"
+      :aria-label="`${kindLabel(b.kind)} ${b.text}`"
       @click="jumpTo(b)"
+      @mouseenter="railHover = i"
+      @focus="railHover = i"
+      @blur="railHover = -1"
     >
-      <span class="muse-rail-tick" :style="{ width: tickWidth(b.len) }" />
-      <span class="muse-rail-preview">{{ blockPreview(b) }}</span>
+      <span class="muse-rail-tick" />
     </button>
   </nav>
+  <div
+    v-if="railOverflow && railBlocks.length > 1 && railHover >= 0"
+    class="muse-rail-preview-layer"
+    aria-hidden="true"
+  >
+    <div class="muse-rail-preview-track" :style="{ transform: railPreviewTransform(railHover) }">
+      <div class="muse-rail-preview">
+        <div class="muse-rail-preview-title">{{ railBlocks[railHover].text || kindLabel(railBlocks[railHover].kind) }}</div>
+        <div class="muse-rail-preview-desc">{{ kindLabel(railBlocks[railHover].kind) }}</div>
+      </div>
+    </div>
+  </div>
   </div>
 </template>
 
