@@ -24,7 +24,13 @@ import (
 	"muse/services"
 )
 
-const railWidth float32 = 56
+const (
+	railWidth      float32 = 56
+	railButtonSize float32 = 34
+	// railInset centres the 34px buttons in the 56px rail instead of letting
+	// them hug the window edge: (56-34)/2 = 11px on each side.
+	railInset = (railWidth - railButtonSize) / 2
+)
 
 // panelView is the page the context panel shows.
 type panelView int
@@ -92,6 +98,10 @@ type App struct {
 	panel      panelView
 	panelOpen  bool
 	panelWidth float32
+	// panelW is the animated width the last frame drew, 0 when collapsed.
+	// The canvas and the caret mapping read it instead of panelOpen so they
+	// move with the slide instead of jumping at the ends.
+	panelW float32
 
 	// workspace
 	root         string
@@ -200,6 +210,7 @@ func New() *App {
 		panel:        panelFiles,
 		panelOpen:    true,
 		panelWidth:   268,
+		panelW:       268,
 		dirs:         map[string][]string{},
 		isDir:        map[string]bool{},
 		expanded:     map[string]bool{},
@@ -225,9 +236,7 @@ func (a *App) View(c *ui.Context) {
 	a.applyTheme(c)
 	ui.Row(c).Fill().Background(a.windowBG()).Children(func() {
 		a.rail(c)
-		if a.panelOpen {
-			a.contextPanel(c)
-		}
+		a.contextPanel(c)
 		a.canvas(c)
 	})
 
@@ -291,14 +300,7 @@ func (a *App) applyTheme(c *ui.Context) {
 // nothing, so the window color shows behind them.
 func (a *App) canvas(c *ui.Context) {
 	t := c.Theme()
-	bar := c.TitleBar()
-	left := float32(8)
-	if !a.panelOpen {
-		if extra := bar.Left - railWidth + 8; extra > left {
-			left = extra
-		}
-	}
-	ui.Row(c).Grow(1).FillHeight().MinWidth(0).Padding(8, 8, 8, left).Children(func() {
+	ui.Row(c).Grow(1).FillHeight().MinWidth(0).Padding(8, 8, 8, a.canvasLeft(c)).Children(func() {
 		card := ui.Column(c).Fill().Radius(14).Clip().Background(t.Background)
 		if t.Dark {
 			card.Border(1, ui.RGBA(236, 236, 240, 0.12)).
@@ -319,20 +321,20 @@ func (a *App) canvas(c *ui.Context) {
 // view is a raised card, as the demo's chosen sidebar row is.
 func (a *App) rail(c *ui.Context) {
 	bar := c.TitleBar()
-	ui.Column(c).Width(railWidth).FillHeight().Children(func() {
+	ui.Column(c).Width(railWidth).FillHeight().Padding(0, railInset).GapY(4).Children(func() {
 		ui.Box(c).Height(bar.Height).DragWindow()
 		// 最左侧只放模块切换；新建/打开都是文件模块的内容（面板顶部与菜单）。
 		a.railButton(c, iconFiles, "文件", a.panelOpen && a.panel == panelFiles, func() {
-			a.togglePanel(panelFiles)
+			a.showPanel(panelFiles)
 		})
 		a.railButton(c, iconOutline, "大纲", a.panelOpen && a.panel == panelOutline, func() {
-			a.togglePanel(panelOutline)
+			a.showPanel(panelOutline)
 		})
 		a.railButton(c, iconSearch, "搜索", a.panelOpen && a.panel == panelSearch, func() {
-			a.togglePanel(panelSearch)
+			a.showPanel(panelSearch)
 		})
 		a.railButton(c, iconAI, "AI 助手", a.panelOpen && a.panel == panelAI, func() {
-			a.togglePanel(panelAI)
+			a.showPanel(panelAI)
 		})
 		ui.Spacer(c)
 		themeIcon := iconMoon
@@ -349,8 +351,8 @@ func (a *App) rail(c *ui.Context) {
 
 func (a *App) railButton(c *ui.Context, icon *ui.SVG, label string, active bool, fn func()) {
 	t := c.Theme()
-	b := ui.ButtonBase(c).Width(34).Height(34).Radius(8).Padding(0).
-		Justify(ui.Center).AlignItems(ui.Center).Label(label).Tooltip(label)
+	b := ui.ButtonBase(c).Width(railButtonSize).Height(railButtonSize).Radius(8).Padding(0).
+		Justify(ui.Center).AlignItems(ui.Center).Label(label).Description(label)
 	switch {
 	case active:
 		if t.Dark {
@@ -371,24 +373,69 @@ func (a *App) railButton(c *ui.Context, icon *ui.SVG, label string, active bool,
 			el.TextColor(t.TextMuted)
 		}
 	})
+	a.railTooltip(c, b, label)
+}
+
+// railTooltip shows the label to the right of the rail, where it does not
+// cover the context panel's header or the rail's own icons.
+func (a *App) railTooltip(c *ui.Context, anchor ui.Element, label string) {
+	t := c.Theme()
+	fill, text := t.Inverse, t.InverseText
+	if fill == ui.Transparent {
+		fill = t.Text
+	}
+	if text == ui.Transparent {
+		text = t.Background
+	}
+	ui.TooltipBase(c, anchor, func(tip ui.Element) {
+		tip.MaxWidth(220).Padding(5, 8).Radius(6).Background(fill).TextColor(text).
+			FontSize(t.FontSize - 1)
+		tip.Shadow(0, 2, 8, 0, ui.RGBA(0, 0, 0, 0.2))
+		tip.Children(func() { ui.Text(c, label) })
+		tip.AttachTo(anchor, ui.AnchorRight, ui.AnchorLeft).Margin(0, 0, 0, 6)
+	})
 }
 
 // ---------------------------------------------------------------------------
 // Context panel
 
 func (a *App) contextPanel(c *ui.Context) {
-	ui.Column(c).Width(a.panelWidth).FillHeight().Children(func() {
-		a.panelHeader(c)
-		switch a.panel {
-		case panelFiles:
-			a.filesView(c)
-		case panelOutline:
-			a.outlineView(c)
-		case panelAI:
-			a.aiView(c)
-		case panelSearch:
-			a.searchView(c)
-		}
+	target := float32(0)
+	if a.panelOpen {
+		target = a.panelWidth
+	}
+	// The panel is always built so its width can slide instead of vanishing
+	// from one frame to the next. The content keeps the full panel width and
+	// the outer box clips it, so text does not reflow on the way; it only
+	// fades as the box closes.
+	panel := ui.Column(c).Shrink(0).FillHeight().Clip()
+	w := panel.AnimateTo("width", target, ui.Animation{
+		Duration: 180 * time.Millisecond,
+		Ease:     ui.EaseOut,
+	})
+	a.panelW = w
+	panel.Width(w)
+	if w < 0.5 {
+		return
+	}
+	openness := w / a.panelWidth
+	if openness > 1 {
+		openness = 1
+	}
+	panel.Children(func() {
+		ui.Column(c).Width(a.panelWidth).FillHeight().Opacity(openness).Children(func() {
+			a.panelHeader(c)
+			switch a.panel {
+			case panelFiles:
+				a.filesView(c)
+			case panelOutline:
+				a.outlineView(c)
+			case panelAI:
+				a.aiView(c)
+			case panelSearch:
+				a.searchView(c)
+			}
+		})
 	})
 }
 
@@ -399,9 +446,10 @@ func (a *App) panelHeader(c *ui.Context) {
 		left = extra
 	}
 	ui.Row(c).Height(44).Shrink(0).Padding(0, 8, 0, left).Gap(4).DragWindow().
-		Children(func() {
-			ui.Text(c, a.panelTitle()).FontSize(12.5).FontWeight(600).Grow(1).SingleLine().Ellipsis("…")
-		})
+		AlignItems(ui.Center).Children(func() {
+		ui.Text(c, a.panelTitle()).FontSize(12.5).FontWeight(600).Grow(1).SingleLine().Ellipsis("…")
+		a.smallIcon(c, iconPanelLeftClose, "收起侧栏", a.collapsePanel)
+	})
 }
 
 func (a *App) panelTitle() string {
@@ -438,11 +486,18 @@ func (a *App) filesView(c *ui.Context) {
 	if a.root == "" {
 		ui.Column(c).Fill().Center().Gap(10).Padding(20).Children(func() {
 			ui.Icon(c, iconFolderOpen).Size(30, 30).TextColor(t.TextMuted)
-			ui.Text(c, "打开一个文件夹").FontSize(12.5).TextColor(t.TextMuted)
-			ui.Button(c, "打开文件夹…").OnClick(func() { a.openFolderDialog() })
-			// 侧栏精简后的落点：单个文件也可以从这里打开（⌘O 同效）。
-			ui.Text(c, "或打开单个文件").FontSize(11).TextColor(t.Accent).
-				Cursor(ui.CursorPointer).OnClick(func() { a.openFileDialog() })
+			ui.Text(c, "打开文件或文件夹").FontSize(12.5).TextColor(t.TextMuted)
+			// 一个入口、一个按钮：文件与文件夹都会结束空态，分两行会把
+			// 同一个动作拆成「按钮 + 链接」两种视觉重量。
+			open := ui.Button(c, "打开…")
+			open.Menu(func(m *ui.Menu) {
+				if m.Item("打开文件…").Chosen() {
+					a.openFileDialog()
+				}
+				if m.Item("打开文件夹…").Chosen() {
+					a.openFolderDialog()
+				}
+			})
 		})
 		return
 	}
@@ -1982,14 +2037,7 @@ func (a *App) beginBlockEditAt(i int, x, y float32) {
 // markers make the mapping approximate, as in any source-based inline editor.
 func (a *App) blockTextWidth(c *ui.Context) float32 {
 	w, _ := c.Size()
-	left := float32(8)
-	if !a.panelOpen {
-		left = 24
-	}
-	card := w - railWidth - left - 8
-	if a.panelOpen {
-		card -= a.panelWidth
-	}
+	card := w - railWidth - a.canvasLeft(c) - 8 - a.panelW
 	content := card
 	if content > 800 {
 		content = 800
@@ -3073,6 +3121,20 @@ func (a *App) openSettings() {
 	a.settingsOpen = true
 }
 
+// showPanel selects a module without ever collapsing: the rail is a view
+// switch, and clicking the active icon twice used to hide the panel.
+func (a *App) showPanel(v panelView) {
+	a.panel = v
+	a.panelOpen = true
+	a.invalidate()
+}
+
+// collapsePanel is the panel header's dedicated close control.
+func (a *App) collapsePanel() {
+	a.panelOpen = false
+	a.invalidate()
+}
+
 func (a *App) togglePanel(v panelView) {
 	if a.panelOpen && a.panel == v {
 		a.panelOpen = false
@@ -3081,6 +3143,28 @@ func (a *App) togglePanel(v panelView) {
 		a.panelOpen = true
 	}
 	a.invalidate()
+}
+
+// canvasLeft is how far the editor card sits from the rail: 8px, plus the
+// traffic lights' inset once the panel is gone (the panel normally gives
+// them room). It follows the animated panel width so the card slides with
+// the panel instead of jumping when panelOpen flips.
+func (a *App) canvasLeft(c *ui.Context) float32 {
+	left := float32(8)
+	if a.panelWidth <= 0 {
+		return left
+	}
+	openness := a.panelW / a.panelWidth
+	if openness > 1 {
+		openness = 1
+	}
+	if openness < 0 {
+		openness = 0
+	}
+	if extra := c.TitleBar().Left - railWidth; extra > 0 {
+		left += extra * (1 - openness)
+	}
+	return left
 }
 
 func (a *App) notice(s string) {

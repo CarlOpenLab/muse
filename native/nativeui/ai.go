@@ -17,11 +17,24 @@ import (
 )
 
 type aiSettings struct {
-	BaseURL string `json:"baseUrl"`
-	APIKey  string `json:"apiKey"`
-	Model   string `json:"model"`
-	System  string `json:"system,omitempty"`
+	// Provider is "" (any OpenAI-compatible endpoint) or "magpie" (the local
+	// gateway the magpie menu-bar app serves).
+	Provider string `json:"provider,omitempty"`
+	BaseURL  string `json:"baseUrl"`
+	APIKey   string `json:"apiKey"`
+	Model    string `json:"model"`
+	System   string `json:"system,omitempty"`
 }
+
+const (
+	aiProviderCustom = ""
+	aiProviderMagpie = "magpie"
+	// magpieGatewayBaseURL is magpie's default gateway address: the desktop
+	// app serves an OpenAI-compatible API on 127.0.0.1:3425.
+	magpieGatewayBaseURL = "http://127.0.0.1:3425/v1"
+)
+
+func (s aiSettings) usesMagpie() bool { return s.Provider == aiProviderMagpie }
 
 type chatMessage struct {
 	Role    string
@@ -283,16 +296,44 @@ func sseText(raw string) string {
 
 func (a *App) modelSettings(c *ui.Context) {
 	t := c.Theme()
+	magpie := a.ai.usesMagpie()
 	settingsGroup(c, "", func() {
-		settingsRow(c, "接口地址", "OpenAI 兼容的 Base URL，通常以 /v1 结尾。", func() {
-			ui.TextInput(c, &a.ai.BaseURL).Width(250).Placeholder("https://api.openai.com/v1")
+		serviceDetail := "任意 OpenAI 兼容端点：OpenAI、DeepSeek 或自建网关。"
+		if magpie {
+			serviceDetail = "连本机 magpie（菜单栏应用的网关），无需自己的 Key。"
+		}
+		settingsRow(c, "服务", serviceDetail, func() {
+			a.aiServiceButton(c, "Magpie 本地网关", true)
+			a.aiServiceButton(c, "自定义", false)
 		})
 		a.settingsDivider(c, true)
-		settingsRow(c, "API Key", "只写入本机配置文件，不会进入文档。", func() {
-			ui.TextInput(c, &a.ai.APIKey).Password().Width(250).Placeholder("sk-…")
+		urlDetail := "OpenAI 兼容的 Base URL，通常以 /v1 结尾。"
+		urlPlaceholder := "https://api.openai.com/v1"
+		if magpie {
+			urlDetail = "magpie 网关默认在 http://127.0.0.1:3425/v1。"
+			urlPlaceholder = magpieGatewayBaseURL
+		}
+		settingsRow(c, "接口地址", urlDetail, func() {
+			ui.TextInput(c, &a.ai.BaseURL).Width(250).Placeholder(urlPlaceholder)
 		})
 		a.settingsDivider(c, true)
-		settingsRow(c, "模型", "例如 gpt-4.1、deepseek-chat 或你的网关模型名。", func() {
+		keyDetail := "只写入本机配置文件，不会进入文档。"
+		keyPlaceholder := "sk-…"
+		if magpie {
+			keyDetail = "magpie 未开启调用方密钥时可留空。"
+			keyPlaceholder = "可留空"
+		}
+		settingsRow(c, "API Key", keyDetail, func() {
+			ui.TextInput(c, &a.ai.APIKey).Password().Width(250).Placeholder(keyPlaceholder)
+		})
+		a.settingsDivider(c, true)
+		modelDetail := "例如 gpt-4.1、deepseek-chat 或你的网关模型名。"
+		modelPlaceholder := "gpt-4.1"
+		if magpie {
+			modelDetail = "magpie 的模型名，例如 opencode-go/deepseek-v4.1-flash。"
+			modelPlaceholder = "opencode-go/deepseek-v4.1-flash"
+		}
+		settingsRow(c, "模型", modelDetail, func() {
 			if len(a.aiModels) > 0 {
 				opts := make([]string, 0, len(a.aiModels))
 				for _, m := range a.aiModels {
@@ -300,21 +341,28 @@ func (a *App) modelSettings(c *ui.Context) {
 				}
 				ui.Combobox(c, &a.ai.Model, opts).Width(250)
 			} else {
-				ui.TextInput(c, &a.ai.Model).Width(250).Placeholder("gpt-4.1")
+				ui.TextInput(c, &a.ai.Model).Width(250).Placeholder(modelPlaceholder)
 			}
 		})
-		if len(a.aiModels) == 0 || a.aiModelsErr != "" {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(0, 2).Children(func() {
-				if a.aiModelsBusy {
-					ui.Text(c, "获取模型中…").FontSize(11).TextColor(t.TextMuted)
-				} else if ui.Button(c, "获取模型").Clicked() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(0, 2).Children(func() {
+			if a.aiModelsBusy {
+				ui.Text(c, "获取模型中…").FontSize(11).TextColor(t.TextMuted)
+			} else {
+				label := "获取模型"
+				if len(a.aiModels) > 0 {
+					label = "刷新模型"
+				}
+				if ui.Button(c, label).Clicked() {
 					a.fetchAIModels()
 				}
-				if a.aiModelsErr != "" {
-					ui.Text(c, a.aiModelsErr).FontSize(10.5).TextColor(t.Danger).Wrap()
-				}
-			})
-		}
+			}
+			if len(a.aiModels) > 0 {
+				ui.Textf(c, "%d 个可用模型", len(a.aiModels)).FontSize(11).TextColor(t.TextMuted)
+			}
+			if a.aiModelsErr != "" {
+				ui.Text(c, a.aiModelsErr).FontSize(10.5).TextColor(t.Danger).Wrap()
+			}
+		})
 		a.settingsDivider(c, true)
 		settingsRow(c, "系统提示", "可选；每次对话都会放在最前面。", func() {
 			ui.TextInput(c, &a.ai.System).Width(250).Placeholder("You are Muse…")
@@ -322,7 +370,7 @@ func (a *App) modelSettings(c *ui.Context) {
 	})
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, "密钥保存在 "+aiConfigPath()).FontSize(10.5).TextColor(t.TextMuted).Grow(1).SingleLine().Ellipsis("…")
-		if ui.PrimaryButton(c, "保存模型设置").Clicked() {
+		if modelSaveButton(c, "保存模型设置").Clicked() {
 			if err := saveAISettings(a.ai); err != nil {
 				a.notice(fmt.Sprintf("保存失败：%v", err))
 			} else {
@@ -330,6 +378,71 @@ func (a *App) modelSettings(c *ui.Context) {
 			}
 		}
 	})
+}
+
+// aiServiceButton is one half of the model page's 服务 switch. The chosen
+// half is a raised card in the theme's own colors, as the settings nav and
+// the rail are; the accent stays for links and focus only.
+func (a *App) aiServiceButton(c *ui.Context, label string, magpie bool) {
+	t := c.Theme()
+	selected := a.ai.usesMagpie() == magpie
+	b := ui.ButtonBase(c).Height(28).Padding(0, 11).Radius(7).Label(label)
+	switch {
+	case selected && t.Dark:
+		b.Background(ui.RGBA(255, 255, 255, 0.10))
+	case selected:
+		b.Background(t.Background)
+		b.Border(1, t.Border)
+		b.Shadow(0, 0.5, 2, 0, ui.RGBA(0, 0, 0, 0.08))
+	case b.Hovered():
+		b.Background(t.SurfaceHover)
+	}
+	b.OnClick(func() { a.setAIService(magpie) })
+	b.Children(func() {
+		color, fontWeight := t.TextMuted, 400
+		if selected {
+			color, fontWeight = t.Text, 600
+		}
+		ui.Text(c, label).FontSize(12).FontWeight(fontWeight).TextColor(color)
+	})
+}
+
+// modelSaveButton is the page's primary action in neutral colors: the
+// theme's text color fills it and the background labels it, so the model
+// page never borrows the accent for a button.
+func modelSaveButton(c *ui.Context, label string) ui.Element {
+	t := c.Theme()
+	b := ui.ButtonBase(c).Height(30).Padding(0, 14).Radius(7).Label(label)
+	b.Background(t.Text)
+	if b.Hovered() {
+		b.Background(t.TextMuted)
+	}
+	b.Children(func() {
+		ui.Text(c, label).FontSize(12).FontWeight(600).TextColor(t.Background)
+	})
+	return b
+}
+
+// setAIService switches between the local magpie gateway and a custom
+// endpoint. The model name belongs to the endpoint it came from, so it is
+// dropped and re-fetched rather than sent to the other one.
+func (a *App) setAIService(magpie bool) {
+	if a.ai.usesMagpie() == magpie {
+		return
+	}
+	if magpie {
+		a.ai.Provider = aiProviderMagpie
+		a.ai.BaseURL = magpieGatewayBaseURL
+	} else {
+		a.ai.Provider = aiProviderCustom
+		if a.ai.BaseURL == magpieGatewayBaseURL {
+			a.ai.BaseURL = ""
+		}
+	}
+	a.ai.Model = ""
+	a.aiModels = nil
+	a.aiModelsErr = ""
+	a.invalidate()
 }
 
 func aiChatPath() string {

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -69,7 +70,33 @@ func TestOpenWorkspaceAndFile(t *testing.T) {
 	}
 }
 
-func TestRailTogglesPanel(t *testing.T) {
+func TestRailButtonsInsetFromWindowEdge(t *testing.T) {
+	a := New()
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	modules := []string{"文件", "大纲", "搜索", "AI 助手"}
+	prevBottom := float32(-1)
+	for i, label := range append(modules, "设置") {
+		r, ok := tt.Find(label)
+		if !ok {
+			t.Fatalf("rail button %q missing", label)
+		}
+		if r.X < railInset-0.5 {
+			t.Fatalf("%q starts at x=%.1f, want at least %.1f", label, r.X, railInset)
+		}
+		if right := r.X + r.W; right > railWidth-railInset+0.5 {
+			t.Fatalf("%q ends at x=%.1f, want at most %.1f", label, right, railWidth-railInset)
+		}
+		if i < len(modules) {
+			if prevBottom >= 0 && r.Y-prevBottom < 3.5 {
+				t.Fatalf("%q sits %.1fpx below the icon above, want a 4px gap", label, r.Y-prevBottom)
+			}
+			prevBottom = r.Y + r.H
+		}
+	}
+}
+
+func TestRailSelectsModulesAndHeaderCollapses(t *testing.T) {
 	a := New()
 	tt := ui.NewTester(a.View, 1200, 800)
 	tt.Frame()
@@ -79,14 +106,33 @@ func TestRailTogglesPanel(t *testing.T) {
 	if err := tt.Click("AI 助手"); err != nil {
 		t.Fatalf("click AI: %v", err)
 	}
+	tt.Frame()
 	if a.panel != panelAI || !a.panelOpen {
 		t.Fatalf("panel = %v, open = %v", a.panel, a.panelOpen)
 	}
+	// The active module is a view switch now: a second click (or a
+	// double-click) must not hide the panel.
 	if err := tt.Click("AI 助手"); err != nil {
 		t.Fatalf("click AI again: %v", err)
 	}
+	tt.Frame()
+	if !a.panelOpen {
+		t.Fatal("clicking the active rail icon collapsed the panel")
+	}
+	// The header icon is the only rail-side collapse.
+	if err := tt.Click("收起侧栏"); err != nil {
+		t.Fatalf("collapse: %v", err)
+	}
+	tt.Frame()
 	if a.panelOpen {
-		t.Fatal("panel should collapse when the active icon is clicked")
+		t.Fatal("the header icon did not collapse the panel")
+	}
+	if err := tt.Click("文件"); err != nil {
+		t.Fatalf("reopen files: %v", err)
+	}
+	tt.Frame()
+	if !a.panelOpen || a.panel != panelFiles {
+		t.Fatalf("reopen: panel = %v, open = %v", a.panel, a.panelOpen)
 	}
 }
 
@@ -502,5 +548,33 @@ func TestEditingPreservesSoftNewlines(t *testing.T) {
 	normalized := strings.ReplaceAll(a.source, "  \n", "\n")
 	if !strings.Contains(normalized, "first line\nsecond line") {
 		t.Fatalf("newline lost while editing: %q", a.source)
+	}
+}
+
+func TestPanelCollapseAnimatesInsteadOfSnapping(t *testing.T) {
+	a := New()
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	if a.panelW != a.panelWidth {
+		t.Fatalf("panel starts at %.1f, want %.1f", a.panelW, a.panelWidth)
+	}
+	a.collapsePanel()
+	tt.Frame()
+	if a.panelW <= 0 {
+		t.Fatal("the panel snapped shut instead of sliding")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for a.panelW > 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+		tt.Frame()
+	}
+	if a.panelW != 0 {
+		t.Fatalf("panel width = %.1f after 2s, want 0", a.panelW)
+	}
+	a.showPanel(panelOutline)
+	time.Sleep(10 * time.Millisecond)
+	tt.Frame()
+	if a.panelW <= 0 {
+		t.Fatal("reopening did not start the slide")
 	}
 }

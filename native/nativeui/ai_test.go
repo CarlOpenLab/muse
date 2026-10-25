@@ -37,6 +37,44 @@ func TestAISettingsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAIServiceMagpiePreset(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("MUSE_CONFIG_DIR", dir)
+	a := New()
+	a.openSettings()
+	a.settingsTab = 2
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	if !tt.HasText("Magpie 本地网关") {
+		t.Fatalf("provider switch missing; texts=%q", tt.Texts())
+	}
+	if err := tt.Click("Magpie 本地网关"); err != nil {
+		t.Fatalf("choose magpie: %v", err)
+	}
+	tt.Frame()
+	if !a.ai.usesMagpie() || a.ai.BaseURL != magpieGatewayBaseURL {
+		t.Fatalf("magpie preset = %+v", a.ai)
+	}
+	if !tt.HasText(magpieGatewayBaseURL) {
+		t.Fatalf("gateway address not shown; texts=%q", tt.Texts())
+	}
+	if err := tt.Click("保存模型设置"); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got := loadAISettings()
+	if got.Provider != aiProviderMagpie || got.BaseURL != magpieGatewayBaseURL {
+		t.Fatalf("saved = %+v", got)
+	}
+
+	if err := tt.Click("自定义"); err != nil {
+		t.Fatalf("choose custom: %v", err)
+	}
+	tt.Frame()
+	if a.ai.usesMagpie() || a.ai.BaseURL != "" {
+		t.Fatalf("custom switch left %+v", a.ai)
+	}
+}
+
 func TestAIViewShowsSetupWhenUnconfigured(t *testing.T) {
 	a := New()
 	a.panel = panelAI

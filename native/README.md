@@ -38,6 +38,12 @@ native/
 
 未配置时 AI 面板会显示「设置模型」入口。支持 OpenAI 兼容的流式 `/chat/completions` 接口。
 
+「服务」有两种形式：
+
+- **Magpie 本地网关**：接口地址自动填 `http://127.0.0.1:3425/v1`（magpie 桌面应用的网关默认地址），
+  API Key 可留空；点「获取模型」会拉取 magpie 的模型名（如 `opencode-go/deepseek-v4.1-flash`）。
+- **自定义**：任意 OpenAI 兼容端点（OpenAI、DeepSeek 或自建网关），按需填写 Key。
+
 ## 已知限制
 
 - 段落、标题、列表、引用、表格内的行内公式，以及块级公式与矩阵都由 go-latex 排版；

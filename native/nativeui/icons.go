@@ -43,7 +43,9 @@ var (
 	iconEye  = lucide(`<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>`)
 	iconSave = lucide(`<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>` +
 		`<path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>`)
-	iconClose       = lucide(`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`)
-	iconChevron     = lucide(`<path d="m9 18 6-6-6-6"/>`)
-	iconChevronDown = lucide(`<path d="m6 9 6 6 6-6"/>`)
+	iconClose          = lucide(`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`)
+	iconChevron        = lucide(`<path d="m9 18 6-6-6-6"/>`)
+	iconChevronDown    = lucide(`<path d="m6 9 6 6 6-6"/>`)
+	iconPanelLeftClose = lucide(`<rect width="18" height="18" x="3" y="3" rx="2"/>` +
+		`<path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>`)
 )
