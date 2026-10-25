@@ -17,11 +17,11 @@ import { math } from '@milkdown/plugin-math';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { callCommand, getMarkdown, replaceAll } from '@milkdown/utils';
 import { AllSelection } from '@milkdown/prose/state';
-import { Slice } from '@milkdown/prose/model';
+import { Fragment, Slice } from '@milkdown/prose/model';
 import type { EditorView } from '@milkdown/prose/view';
 import 'prosemirror-view/style/prosemirror.css';
 import 'katex/dist/katex.min.css';
-import { createPlaceholderPlugin } from './placeholder';
+import { createPlaceholderPlugin, isBlankTemplate } from './placeholder';
 import type { CanvasEditor } from '../canvasApi';
 import type { ThemeName } from '../bridge/protocol';
 
@@ -65,6 +65,29 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     }
   };
 
+  // 空文档模板：空标题 + 空段落——标题位与正文位各有独立占位（Typora 式）。
+  // 序列化时整篇仍为 ""，存盘不产生 "# " 垃圾。
+  const applyBlankTemplate = () => {
+    suppressUntil = Date.now() + 400;
+    run((view) => {
+      const { schema } = view.state;
+      const heading = schema.nodes.heading.create({ level: 1 });
+      const paragraph = schema.nodes.paragraph.create();
+      view.dispatch(
+        view.state.tr.replaceWith(0, view.state.doc.content.size, Fragment.fromArray([heading, paragraph])),
+      );
+      return true;
+    });
+  };
+
+  // 编辑器以单个空段落创建；没有宿主文档前先呈现双占位模板（标题位+正文位）。
+  if (run((view) => isBlankTemplate(view.state.doc)) === true) {
+    applyBlankTemplate();
+  }
+
+
+
+
   el.addEventListener('paste', (e: ClipboardEvent) => {
     const dt = e.clipboardData;
     if (!dt) return;
@@ -99,10 +122,19 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
   const editorApi: CanvasEditor = {
     name,
     version,
-    getMarkdown: () => editor.action(getMarkdown()) ?? '',
+    getMarkdown: () => {
+      const md = editor.action(getMarkdown()) ?? '';
+      // 纯空标题/空段落组成的文档按空文件存取，空文件打开也回到双占位模板。
+      if (editor.action((ctx) => isBlankTemplate(ctx.get(editorViewCtx).state.doc))) return '';
+      return md;
+    },
     setMarkdown: (md) => {
       // RFC §5.3: document.set 不产生 document.changed（防回写循环）
       suppressUntil = Date.now() + 400;
+      if (md.trim() === '') {
+        applyBlankTemplate();
+        return;
+      }
       editor.action(replaceAll(md));
     },
     setTheme: (_theme: ThemeName) => {

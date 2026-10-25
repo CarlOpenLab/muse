@@ -323,12 +323,15 @@ func (a *App) canvas(c *ui.Context) {
 // view is a raised card, as the demo's chosen sidebar row is.
 func (a *App) rail(c *ui.Context) {
 	bar := c.TitleBar()
+	t := c.Theme()
 	ui.Column(c).Width(railWidth).FillHeight().Children(func() {
 		ui.Box(c).Height(bar.Height).DragWindow()
 		a.railButton(c, iconNew, "新建", false, func() { a.newDoc() })
-		a.railButton(c, iconOpenFile, "打开文件", false, func() { a.openFileDialog() })
 		a.railButton(c, iconFolderOpen, "打开文件夹", false, func() { a.openFolderDialog() })
-		ui.Box(c).Height(10)
+		// 动作组与视图组之间一条细线；打开文件在菜单 ⌘O 与文件面板里。
+		ui.Box(c).Height(6)
+		ui.Box(c).Width(22).Height(1).Background(t.Border)
+		ui.Box(c).Height(6)
 		a.railButton(c, iconFiles, "文件", a.panelOpen && a.panel == panelFiles, func() {
 			a.togglePanel(panelFiles)
 		})
@@ -451,6 +454,9 @@ func (a *App) filesView(c *ui.Context) {
 			ui.Icon(c, iconFolderOpen).Size(30, 30).TextColor(t.TextMuted)
 			ui.Text(c, "打开一个文件夹").FontSize(12.5).TextColor(t.TextMuted)
 			ui.Button(c, "打开文件夹…").OnClick(func() { a.openFolderDialog() })
+			// 侧栏精简后的落点：单个文件也可以从这里打开（⌘O 同效）。
+			ui.Text(c, "或打开单个文件").FontSize(11).TextColor(t.Accent).
+				Cursor(ui.CursorPointer).OnClick(func() { a.openFileDialog() })
 		})
 		return
 	}
@@ -957,7 +963,7 @@ func (a *App) newDoc() {
 func (a *App) resetDoc() {
 	a.path = ""
 	a.selectedPath = ""
-	a.source = "# 无标题\n\n"
+	a.source = ""
 	a.refreshDoc()
 	a.pushWebDoc()
 	a.dirty = false
@@ -1117,7 +1123,7 @@ func (a *App) newFolderInRoot() {
 
 func (a *App) newFileIn(dir string) {
 	path := uniquePath(dir, "未命名", ".md")
-	if err := os.WriteFile(path, []byte("# 无标题\n\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
 		a.notice(fmt.Sprintf("新建失败：%v", err))
 		a.invalidate()
 		return

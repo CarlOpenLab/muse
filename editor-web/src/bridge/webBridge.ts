@@ -123,10 +123,10 @@ export class WebBridge {
         void r.call('Muse.SaveRequested', msg.markdown);
         break;
       case 'selection.changed':
-        if (msg.id === undefined) {
-          void r.call('Muse.SelectionChanged', msg.from, msg.to, msg.text);
-        } else {
+        if ('id' in msg && msg.id !== undefined) {
           void r.call('Muse.SelectionReply', msg.id, msg.from, msg.to, msg.text);
+        } else {
+          void r.call('Muse.SelectionChanged', msg.from, msg.to, msg.text);
         }
         break;
       case 'link.open':

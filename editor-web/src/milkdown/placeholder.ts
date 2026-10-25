@@ -24,6 +24,20 @@ function isDocBlank(doc: ProseNode): boolean {
   return doc.textContent.trim() === '';
 }
 
+/** A pristine blank document: nothing but empty headings/paragraphs. Such a
+ *  doc serializes to "" so a never-typed file is saved empty, and an empty
+ *  file reopens as the same two-line template (title slot + body slot). */
+export function isBlankTemplate(doc: ProseNode): boolean {
+  if (doc.textContent.trim() !== '') return false;
+  let ok = true;
+  doc.forEach((node) => {
+    const t = node.type.name;
+    if (t !== 'paragraph' && t !== 'heading') ok = false;
+    else if (node.content.size !== 0) ok = false;
+  });
+  return ok;
+}
+
 /** The node is a plain paragraph — typing "# " turns it into an empty
  *  heading via an input rule, and that heading must keep its own hint
  *  instead of the body's. */
