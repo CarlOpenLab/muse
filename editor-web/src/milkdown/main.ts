@@ -187,7 +187,12 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
   const topBlocks = (view: EditorView): BlockInfo[] => {
     const out: BlockInfo[] = [];
     view.state.doc.forEach((node, offset) => {
-      out.push({ from: offset, len: Math.max(node.textContent.length, 12), kind: node.type.name });
+      out.push({
+        from: offset,
+        len: Math.max(node.textContent.length, 12),
+        kind: node.type.name,
+        text: node.textContent.trim().replace(/\s+/g, ' ').slice(0, 48),
+      });
     });
     return out;
   };

@@ -6,6 +6,8 @@ export interface BlockInfo {
   from: number;
   len: number;
   kind: string;
+  /** 首行文本预览（hover 提示用）。 */
+  text: string;
 }
 
 export interface CanvasEditor {

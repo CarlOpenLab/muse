@@ -38,6 +38,25 @@ function jumpTo(b: BlockInfo) {
   canvas?.runCommand('scrollToBlock', { pos: b.from });
 }
 
+const KIND_LABELS: Record<string, string> = {
+  heading: '标题',
+  paragraph: '段落',
+  bullet_list: '列表',
+  ordered_list: '有序列表',
+  list_item: '列表项',
+  blockquote: '引用',
+  code_block: '代码',
+  math_block: '公式',
+  table: '表格',
+  hr: '分割线',
+  html_block: 'HTML',
+};
+
+function blockPreview(b: BlockInfo): string {
+  const label = KIND_LABELS[b.kind] ?? b.kind;
+  return b.text ? `${label} · ${b.text}` : label;
+}
+
 onMounted(async () => {
   try {
     await mountCanvas();
@@ -147,6 +166,7 @@ onBeforeUnmount(() => {
       @click="jumpTo(b)"
     >
       <span class="muse-rail-tick" :style="{ width: tickWidth(b.len) }" />
+      <span class="muse-rail-preview">{{ blockPreview(b) }}</span>
     </button>
   </nav>
   </div>
