@@ -22,7 +22,7 @@ import { Fragment, Slice } from '@milkdown/prose/model';
 import type { EditorView } from '@milkdown/prose/view';
 import 'prosemirror-view/style/prosemirror.css';
 import 'katex/dist/katex.min.css';
-import { createPlaceholderPlugin, isBlankTemplate } from './placeholder';
+import { blankStructurePlugin, createPlaceholderPlugin, isBlankTemplate } from './placeholder';
 import { trailingParagraphPlugin } from './trailing-paragraph';
 import type { CanvasEditor } from '../canvasApi';
 import type { ThemeName } from '../bridge/protocol';
@@ -94,6 +94,7 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     .use(math)
     .use(listener)
     .use(createPlaceholderPlugin())
+    .use(blankStructurePlugin())
     .use($prose(() => trailingParagraphPlugin()))
     .use($prose(() => hitPlugin))
     .create();

@@ -23,7 +23,8 @@ onMounted(async () => {
   try {
     await mountCanvas();
   } catch (err) {
-    (window as unknown as { __museMountError?: string }).__museMountError = String(err);
+    const stack = err instanceof Error ? err.stack : '';
+    (window as unknown as { __museMountError?: string }).__museMountError = String(err) + (stack ? ' :: ' + stack.split('\n').slice(1, 4).join(' | ') : '');
     throw err;
   }
 });

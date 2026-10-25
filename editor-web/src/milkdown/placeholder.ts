@@ -7,7 +7,7 @@
  * 光标与占位符重叠不受影响（float + height:0）。
  */
 import type { Node as ProseNode } from '@milkdown/prose/model';
-import { Plugin, PluginKey } from '@milkdown/prose/state';
+import { Plugin, PluginKey, TextSelection } from '@milkdown/prose/state';
 import { Decoration, DecorationSet } from '@milkdown/prose/view';
 import { $prose } from '@milkdown/utils';
 
@@ -46,6 +46,31 @@ function emptyBlockHint(node: ProseNode, doc: ProseNode, blankHinted: boolean): 
   if (node.type.name !== 'paragraph') return null;
   if (isDocBlank(doc)) return blankHinted ? null : PLACEHOLDER_TEXTS.blank;
   return null;
+}
+
+/**
+ * 纯空文档的结构自愈：⌘A 全选删除（或 Backspace 合并）会把文档打回
+ * 单个空段落，标题位从此消失。只要整篇无文字且首块不是空标题，就补回
+ * 标题位并把光标映射进正文段——空文档永远是双槽模板。
+ */
+export function blankStructurePlugin() {
+  return $prose(
+    () =>
+      new Plugin({
+        appendTransaction(_trs, _old, newState) {
+          if (newState.doc.textContent.trim() !== '') return null;
+          const first = newState.doc.firstChild;
+          if (!first) return null;
+          if (first.type.name === 'heading' && first.content.size === 0) return null;
+          if (first.type.name !== 'paragraph' || first.content.size !== 0) return null;
+          const heading = newState.schema.nodes.heading.create({ level: 1 });
+          const tr = newState.tr.insert(0, heading);
+          const caret = Math.min(newState.selection.from + 1, tr.doc.content.size - 1);
+          tr.setSelection(TextSelection.near(tr.doc.resolve(caret)));
+          return tr;
+        },
+      }),
+  );
 }
 
 export function createPlaceholderPlugin() {
