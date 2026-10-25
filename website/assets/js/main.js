@@ -224,7 +224,7 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   // 审批卡：返回 Promise<boolean>（是否允许）
   function approval(cardHost, file, desc) {
     return new Promise((resolve) => {
-      const card = el('div', 'approval');
+      const card = el('div', 'approval approval--pending');
       card.appendChild(el('div', 'approval__head',
         `${svgUse('i-shield')}<span>请求修改文档？</span><span class="approval__file">${file}</span>`));
       card.appendChild(el('p', 'approval__desc', desc));
@@ -291,7 +291,7 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     }
 
     if (needsApproval) {
-      ok = await approvalWithCard(block);
+      ok = await approvalWithCard();
       if (id !== runId) return;
       if (!ok) {
         toolDone(block, 'i-edit', '编辑文档', '灵感手记.md', '✕', true);
@@ -323,8 +323,10 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     }
   }
 
-  function approvalWithCard(block) {
-    return approval(block, '灵感手记.md', '把「原型手记」改成「灵感手记」，并同步正文里的两处指代。');
+  function approvalWithCard() {
+    // 直接挂到 chat（不进 agent-block）：margin-top:auto 才能把它
+    // 钉在对话底部、紧贴输入区。
+    return approval(chat, '灵感手记.md', '把「原型手记」改成「灵感手记」，并同步正文里的两处指代。');
   }
 
   const wait = (id, ms) => new Promise((r) => later(r, ms));

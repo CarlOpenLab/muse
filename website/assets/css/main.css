@@ -369,6 +369,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1
 .approval__btn--ghost { background: transparent; border: 1px solid var(--border-strong); color: var(--ink-dim); font-weight: 400; }
 .approval__btn--ghost:hover { background: var(--surface-hover); color: var(--ink); }
 .approval__toolname { font-size: 10px; color: var(--ink-faint); margin-left: auto; }
+.approval--pending { margin-top: auto; }
 .approval--done { opacity: 0.75; }
 .approval--done .approval__head svg { color: var(--muted); }
 .approval__done-label { font-size: 10px; color: var(--muted); letter-spacing: 0.04em; }
