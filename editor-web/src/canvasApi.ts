@@ -6,7 +6,7 @@ export interface BlockInfo {
   from: number;
   len: number;
   kind: string;
-  /** 首行文本预览（hover 提示用）。 */
+  /** 块内纯文本（空白折叠），rail 预览卡截 56/88 字用。 */
   text: string;
 }
 

@@ -22,20 +22,33 @@ let bridge: WebBridge | null = null;
 // 结构导航 rail（antd message-scroller 源码对齐：距离衰减刻度 + 单例滑动预览卡）
 const railBlocks = ref<BlockInfo[]>([]);
 const railActive = ref(0);
-const railHover = ref(-1); // 悬停/聚焦的刻度（卡片激活优先级 hover > 滚动）
+const railHovered = ref(-1); // 指针悬停的刻度（触屏不参与）
+const railFocused = ref(-1); // 键盘 focus-visible 的刻度
 const railOverflow = ref(false); // 内容溢出才显示导轨
 const railItemH = ref(14); // 单刻度高：视口装不下时 14→6 压缩
-let railRaf = 0;
+let railObserver: ResizeObserver | null = null;
+// 点击刻度后的选中锁：平滑滚动会连续发 scroll 事件，位置判定会把激活项算到相邻块
+// （首尾块无法居中时必然错位）。源码用 PROGRAMMATIC_SCROLL_WINDOW 遮挡这段；这里锁到
+// 读者真的滚动/键入为止，保证被点的那条刻度一直是 active。
+let railPinned = -1;
 
+const RAIL_INSET = 12;
+const DEFAULT_RAIL_ITEM_H = 14;
+const MIN_RAIL_ITEM_H = 6;
 const RAIL_SCALE_STEPS = [1, 0.68, 0.44];
 const RAIL_SCALE_FLOOR = 0.25;
+const PREVIEW_TITLE_LENGTH = 56;
+const PREVIEW_DESCRIPTION_LENGTH = 88;
+
 /** 离高亮项的距离衰减（源码 resolveRailScale 的鱼眼效应）。 */
 function railScale(distance: number): number {
   return RAIL_SCALE_STEPS[distance] ?? RAIL_SCALE_FLOOR;
 }
 
-/** 高亮优先级：悬停项 > 滚动定位的当前项（滚动只亮刻度，不弹卡）。 */
-const railHighlight = computed(() => (railHover.value >= 0 ? railHover.value : railActive.value));
+/** 卡片激活优先级：悬停 > 聚焦（源码 hovered ?? pinned ?? focused）；滚动只亮刻度不弹卡。 */
+const railCard = computed(() => (railHovered.value >= 0 ? railHovered.value : railFocused.value));
+/** 高亮优先级：显式激活的刻度 > 滚动定位出的当前项。 */
+const railHighlight = computed(() => (railCard.value >= 0 ? railCard.value : railActive.value));
 
 function railPreviewTransform(cardIdx: number): string {
   const count = railBlocks.value.length;
@@ -44,27 +57,96 @@ function railPreviewTransform(cardIdx: number): string {
   return `translateY(${(cardIdx + 0.5) * h - (count * h) / 2}px)`;
 }
 
+/** 源码 resolveElementPreview：首 56 字作标题，余下 88 字作描述。 */
+function truncateText(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  const excerpt = text.slice(0, limit);
+  const boundary = excerpt.lastIndexOf(' ');
+  return `${excerpt.slice(0, boundary > limit * 0.65 ? boundary : limit).trim()}…`;
+}
+
+function previewOfBlock(b: BlockInfo): { title: string; description: string } {
+  const text = b.text.replace(/\s+/g, ' ').trim();
+  if (!text) return { title: kindLabel(b.kind), description: '' };
+  if (text.length <= PREVIEW_TITLE_LENGTH) return { title: text, description: '' };
+  const excerpt = text.slice(0, PREVIEW_TITLE_LENGTH);
+  const boundary = excerpt.lastIndexOf(' ');
+  const titleEnd = boundary > PREVIEW_TITLE_LENGTH * 0.65 ? boundary : PREVIEW_TITLE_LENGTH;
+  return {
+    title: `${text.slice(0, titleEnd).trim()}…`,
+    description: truncateText(text.slice(titleEnd).trim(), PREVIEW_DESCRIPTION_LENGTH),
+  };
+}
+
+const railPreviewCard = computed(() => {
+  const block = railBlocks.value[railCard.value];
+  return block ? previewOfBlock(block) : null;
+});
+
 function computeRailMetrics() {
   const el = canvasEl.value;
   if (!el) return;
-  railOverflow.value = el.scrollHeight > el.clientHeight + 16;
   const count = railBlocks.value.length;
+  railOverflow.value = count > 1 && el.scrollHeight > el.clientHeight + 1;
+  if (!railOverflow.value) {
+    // 导轨收起时清掉悬停/聚焦，避免下次浮现时残留上一次的预览卡。
+    railHovered.value = -1;
+    railFocused.value = -1;
+    railPinned = -1;
+  }
   if (!count) {
-    railItemH.value = 14;
+    railItemH.value = DEFAULT_RAIL_ITEM_H;
     return;
   }
-  const available = el.clientHeight - 24; // 导轨 insetBlock 12×2
-  railItemH.value = Math.min(14, Math.max(6, Math.floor(available / count)));
+  const available = el.clientHeight - RAIL_INSET * 2;
+  railItemH.value =
+    available > 0
+      ? Math.min(DEFAULT_RAIL_ITEM_H, Math.max(MIN_RAIL_ITEM_H, Math.floor(available / count)))
+      : DEFAULT_RAIL_ITEM_H;
 }
 
 function refreshRail() {
   if (!canvas?.getBlocks) return;
+  railPinned = -1;
   railBlocks.value = canvas.getBlocks();
   railActive.value = canvas.getActiveBlock?.() ?? 0;
   computeRailMetrics();
 }
 
-function jumpTo(b: BlockInfo) {
+/** 触屏没有悬停：pointerenter 只在鼠标/笔上激活卡片（源码同样忽略 touch）。 */
+function onRailPointerEnter(event: PointerEvent, index: number) {
+  if (event.pointerType !== 'touch') railHovered.value = index;
+}
+
+/** 触屏按下即点亮并锁定卡片，直到点导轨外（桌面端的点击不弹卡）。 */
+function onRailPointerDown(event: PointerEvent, index: number) {
+  railFocused.value = -1;
+  if (event.pointerType !== 'mouse') railHovered.value = index;
+}
+
+/** 只有 focus-visible（键盘）才弹卡，鼠标点击后的 focus 不算。 */
+function onRailFocus(event: FocusEvent, index: number) {
+  if ((event.currentTarget as HTMLElement | null)?.matches(':focus-visible')) railFocused.value = index;
+}
+
+/**
+ * 滚动只更新高亮刻度，不弹预览卡（源码 handleScroll → rail.updateActive）。
+ *
+ * 与 antd 一样逐次同步判定：节流会让高亮落后一次滚动，位置判定本身只读布局。
+ */
+function handleCanvasScroll() {
+  if (railPinned >= 0) return;
+  railActive.value = canvas?.getActiveBlock?.() ?? 0;
+}
+
+/** 读者自己滚动/键入/点回正文时解锁，之后的位置判定重新接管高亮。 */
+function releaseRailPin() {
+  railPinned = -1;
+}
+
+function jumpTo(b: BlockInfo, index: number) {
+  railPinned = index;
+  railActive.value = index;
   canvas?.runCommand('scrollToBlock', { pos: b.from });
 }
 
@@ -123,16 +205,16 @@ async function mountCanvas() {
   bridge.start();
   ready.value = true;
   (window as unknown as { __museBridge?: WebBridge }).__museBridge = bridge;
-  // 结构导航 rail：块列表 + 滚动跟随高亮（rAF 节流）。
+  // 结构导航 rail：块列表 + 滚动跟随高亮（scroll 事件内同步判定）。
   refreshRail();
-  canvasEl.value?.addEventListener('scroll', () => {
-    if (railRaf) return;
-    railRaf = requestAnimationFrame(() => {
-      railRaf = 0;
-      railActive.value = canvas?.getActiveBlock?.() ?? 0;
-      computeRailMetrics();
-    });
-  });
+  canvasEl.value?.addEventListener('scroll', handleCanvasScroll);
+  canvasEl.value?.addEventListener('wheel', releaseRailPin, { passive: true });
+  canvasEl.value?.addEventListener('touchstart', releaseRailPin, { passive: true });
+  canvasEl.value?.addEventListener('keydown', releaseRailPin);
+  canvasEl.value?.addEventListener('pointerdown', releaseRailPin);
+  // 尺寸变化同时影响溢出判定与单刻度高度（antd 用 ResizeObserver 观察视口）。
+  railObserver = new ResizeObserver(() => computeRailMetrics());
+  if (canvasEl.value) railObserver.observe(canvasEl.value);
   window.addEventListener('resize', computeRailMetrics);
   // 调试/E2E 钩子：无宿主时也能从控制台或测试驱动画布。
   (window as unknown as { __museCanvas?: CanvasEditor }).__museCanvas = canvas;
@@ -178,6 +260,14 @@ async function mountCanvas() {
 
 
 onBeforeUnmount(() => {
+  railObserver?.disconnect();
+  railObserver = null;
+  canvasEl.value?.removeEventListener('scroll', handleCanvasScroll);
+  canvasEl.value?.removeEventListener('wheel', releaseRailPin);
+  canvasEl.value?.removeEventListener('touchstart', releaseRailPin);
+  canvasEl.value?.removeEventListener('keydown', releaseRailPin);
+  canvasEl.value?.removeEventListener('pointerdown', releaseRailPin);
+  window.removeEventListener('resize', computeRailMetrics);
   canvas?.destroy?.();
   canvas = null;
   bridge = null;
@@ -187,45 +277,47 @@ onBeforeUnmount(() => {
 <template>
   <div class="muse-app" :data-theme="theme" :data-ready="ready">
     <div ref="canvasEl" id="canvas" class="shell-canvas muse-web-canvas"></div>
-  <nav
-    v-if="railOverflow && railBlocks.length > 1"
-    class="muse-rail"
-    aria-label="文档结构导航"
-    @mouseleave="railHover = -1"
-  >
-    <button
-      v-for="(b, i) in railBlocks"
-      :key="i"
-      type="button"
-      class="muse-rail-item"
-      :data-active="i === railActive ? '' : undefined"
-      :data-highlighted="i === railHighlight ? '' : undefined"
-      :style="{
-        height: `${railItemH}px`,
-        '--rail-scale': railScale(Math.abs(i - railHighlight)),
-      }"
-      :aria-label="`${kindLabel(b.kind)} ${b.text}`"
-      @click="jumpTo(b)"
-      @mouseenter="railHover = i"
-      @focus="railHover = i"
-      @blur="railHover = -1"
+    <nav
+      v-if="railOverflow && railBlocks.length > 1"
+      class="muse-rail"
+      aria-label="文档结构导航"
+      @pointerleave="railHovered = -1"
     >
-      <span class="muse-rail-tick" />
-    </button>
-  </nav>
-  <div
-    v-if="railOverflow && railBlocks.length > 1 && railHover >= 0"
-    class="muse-rail-preview-layer"
-    aria-hidden="true"
-  >
-    <div class="muse-rail-preview-track" :style="{ transform: railPreviewTransform(railHover) }">
-      <div class="muse-rail-preview">
-        <div class="muse-rail-preview-title">{{ railBlocks[railHover].text || kindLabel(railBlocks[railHover].kind) }}</div>
-        <div class="muse-rail-preview-desc">{{ kindLabel(railBlocks[railHover].kind) }}</div>
+      <button
+        v-for="(b, i) in railBlocks"
+        :key="i"
+        type="button"
+        class="muse-rail-item"
+        :data-active="i === railActive ? '' : undefined"
+        :data-highlighted="i === railHighlight ? '' : undefined"
+        :aria-current="i === railActive ? 'location' : undefined"
+        :aria-label="`${kindLabel(b.kind)} ${previewOfBlock(b).title}`"
+        :style="{
+          height: `${railItemH}px`,
+          '--rail-scale': railScale(Math.abs(i - railHighlight)),
+        }"
+        @pointerenter="onRailPointerEnter($event, i)"
+        @pointerdown="onRailPointerDown($event, i)"
+        @focus="onRailFocus($event, i)"
+        @blur="railFocused = -1"
+        @click="jumpTo(b, i)"
+      >
+        <span class="muse-rail-tick" />
+      </button>
+    </nav>
+    <div
+      v-if="railOverflow && railBlocks.length > 1"
+      class="muse-rail-preview-layer"
+      aria-hidden="true"
+    >
+      <div class="muse-rail-preview-track" :style="{ transform: railPreviewTransform(railCard) }">
+        <div v-if="railPreviewCard" class="muse-rail-preview">
+          <div class="muse-rail-preview-title">{{ railPreviewCard.title }}</div>
+          <div v-if="railPreviewCard.description" class="muse-rail-preview-desc">
+            {{ railPreviewCard.description }}
+          </div>
+        </div>
       </div>
     </div>
   </div>
-  </div>
 </template>
-
-/* hmr probe 1792913455 */

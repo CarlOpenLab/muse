@@ -174,13 +174,24 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     }
   });
 
-  const smoothScrollToPos = (view: EditorView, pos: number) => {
+  const smoothScrollToPos = (view: EditorView, pos: number, center = false) => {
     view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(pos))));
     const coords = view.coordsAtPos(pos);
     const scroller = view.dom.closest('.muse-web-canvas') as HTMLElement | null;
     if (!scroller) return;
     const cRect = scroller.getBoundingClientRect();
-    scroller.scrollTo({ top: scroller.scrollTop + (coords.top - cRect.top) - 24, behavior: 'smooth' });
+    // rail 点击与 antd scrollToElement 同款：把目标块居中，位置判定落位后仍指向它。
+    const blockEl = center ? (view.nodeDOM(pos) as HTMLElement | null) : null;
+    let top = scroller.scrollTop + (coords.top - cRect.top) - 24;
+    if (blockEl) {
+      const blockRect = blockEl.getBoundingClientRect();
+      top =
+        scroller.scrollTop +
+        blockRect.top -
+        cRect.top -
+        (scroller.clientHeight - blockRect.height) / 2;
+    }
+    scroller.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   };
 
   // 顶层块列表 + 视口中心所在块（结构导航 rail 的数据源）。
@@ -191,7 +202,8 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
         from: offset,
         len: Math.max(node.textContent.length, 12),
         kind: node.type.name,
-        text: node.textContent.trim().replace(/\s+/g, ' ').slice(0, 48),
+        // 全文供 rail 预览卡按 56/88 字拆分（antd resolveElementPreview 同款）。
+        text: node.textContent.trim().replace(/\s+/g, ' '),
       });
     });
     return out;
@@ -241,8 +253,16 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
     run((view) => {
       const blocks = topBlocks(view);
       if (blocks.length === 0) return -1;
-      const domRect = view.dom.getBoundingClientRect();
-      const mid = domRect.top + domRect.height / 2;
+      // 视口中心 = 滚动容器的中心，不是整篇文档的中心（文档高 > 视口高）。
+      const scroller = view.dom.closest('.muse-web-canvas') as HTMLElement | null;
+      const rect = (scroller ?? view.dom).getBoundingClientRect();
+      const height = scroller ? scroller.clientHeight : rect.height;
+      const scrollTop = scroller ? scroller.scrollTop : 0;
+      const scrollHeight = scroller ? scroller.scrollHeight : rect.height;
+      // 贴首/贴底阈值内直接取首尾块（antd followThreshold 同款）。
+      if (scrollTop <= 56) return 0;
+      if (scrollHeight - scrollTop - height <= 56) return blocks.length - 1;
+      const mid = rect.top + height / 2;
       let active = 0;
       blocks.forEach((b, i) => {
         try {
@@ -300,7 +320,7 @@ export async function create(el: HTMLElement): Promise<CanvasEditor> {
           return (
             run((view) => {
               if (pos < 0 || pos > view.state.doc.content.size) return false;
-              smoothScrollToPos(view, pos);
+              smoothScrollToPos(view, pos, true);
               view.focus();
               return true;
             }) === true

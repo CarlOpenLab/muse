@@ -194,7 +194,7 @@ type App struct {
 	linkPopRun   int // index into a.rich.runs
 }
 
-// New returns the app on a welcome document, with the panel on files.
+// New returns the app on an empty untitled document, with the panel on files.
 func New() *App {
 	a := &App{
 		panel:        panelFiles,
@@ -212,28 +212,11 @@ func New() *App {
 		aiClient:     services.NewAI(),
 		aiMessages:   loadAIChat(),
 	}
-	a.source = welcome
+	// 新窗口就是一张空白未命名文档（WebView 里显示双槽占位，原生回退显示空态按钮）。
+	a.source = ""
 	a.refreshDoc()
 	return a
 }
-
-const welcome = `# Muse · 原生工作台
-
-窗口、图标栏、上下文栏与 Markdown 编辑器全部由 MyGo 原生绘制，不再加载 WebView。
-
-## 现在的布局
-
-- 最左是 56px 图标栏，红绿灯独占顶部 44px。
-- 文件、大纲、搜索与 AI 共用中间一列，不带背景，直接浮在纯色背景上。
-- 右侧 Markdown 编辑器是一张 14px 圆角浮卡，四周 8px 缝隙。
-
-## 实时编辑
-
-点任意段落直接改写它；输入会实时更新文档、大纲与字数。
-整篇文档始终以就地编辑的方式呈现，不需要切换源码模式。
-
-> 原生渲染由 mdoc 完成：标题、列表、引用、代码块、表格与行内样式都在这里重画。
-`
 
 // ---------------------------------------------------------------------------
 // View

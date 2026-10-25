@@ -12,15 +12,10 @@ body {
   height: 100%;
 }
 
+/* 导轨 / 预览层都以根元素为定位祖先（antd 的 componentCls 同样是 position: relative）。 */
 .muse-app {
+  position: relative;
   background: var(--muse-window, transparent);
-}
-
-.muse-web-canvas {
-  height: 100%;
-  overflow-y: auto;
-  box-sizing: border-box;
-  padding: 36px 48px 40vh;
 }
 
 .muse-app[data-theme='dark'] {
@@ -40,6 +35,35 @@ body {
   visibility: hidden;
 }
 
+.muse-web-canvas {
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  /* 正文自带宽边距，画布只留顶部呼吸位（原来 36 + 正文 28 + 首块 1.2em
+   * 三层叠加，标题被推得太低）；底部留 40vh 让末段也能滚到视口上方。 */
+  padding: 20px 0 40vh;
+  /* 导轨出现时原生滚动条让位（antd: rail-visible 收起 scrollbar）。 */
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+  overflow-anchor: none;
+}
+
+/* 阅读栏：定宽居中（约 730px 行宽），宽窗口不再把段落拉满整条；
+ * 首块去掉上外边距，标题贴着顶部呼吸位。 */
+.muse-web-canvas .muse-prose {
+  max-width: 860px;
+  margin-inline: auto;
+  padding: 16px clamp(32px, 6vw, 72px) 60px;
+}
+
+.muse-web-canvas .muse-prose > :first-child {
+  margin-top: 0;
+}
+
+.muse-web-canvas::-webkit-scrollbar {
+  display: none;
+}
+
 /* 空内容占位符：decoration 打上 .empty-node[data-placeholder]，
  * ::before 画出灰字；float + height:0 让光标停在占位符上。 */
 .muse-web-canvas .empty-node::before {
@@ -50,21 +74,19 @@ body {
   height: 0;
 }
 
-/* 结构导航 rail（antd message-scroller 源码对齐）：内容溢出时隐藏原生
- * 滚动条，右侧浮现刻度导轨。刻度固定 16px 宽，scaleX 按离高亮项的
- * 距离衰减（1 / 0.68 / 0.44 / 0.25 鱼眼），右锚点缩放。 */
-.muse-web-canvas {
-  scrollbar-width: none;
-}
-.muse-web-canvas::-webkit-scrollbar {
-  display: none;
-}
+/* ── 结构导航 rail ────────────────────────────────────────────────────────
+ * 逐项对齐 antdv-next/x packages/x-pro/src/message-scroller：
+ * - 每块一条 16×2 刻度，右锚点 scaleX 按离高亮项的距离衰减
+ *   （1 / 0.68 / 0.44 / 0.25 鱼眼）；
+ * - 导轨上下各内缩 12px、贴右侧 8px、宽 28px，装不下时单项高 14→6 压缩；
+ * - 单例预览卡（256px）由 track 的 translateY 在刻度间连续滑动；
+ * - 颜色阶梯 colorTextQuaternary → colorTextSecondary → colorText。 */
 
 .muse-rail {
   position: absolute;
   inset-block: 12px;
-  inset-inline-end: 4px;
-  z-index: 4;
+  inset-inline-end: 8px;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -114,12 +136,12 @@ body {
 }
 
 /* 单例预览卡：整层随导轨垂直居中，卡片由 track 的 translateY 在刻度间
- * 连续滑动；内容随悬停项即时替换（切换即换文，无新旧同帧重影）。 */
+ * 连续滑动；内容随激活项即时替换（切换即换文，无新旧同帧重影）。 */
 .muse-rail-preview-layer {
   position: absolute;
   inset-block: 12px;
-  inset-inline-end: calc(28px + 4px);
-  z-index: 5;
+  inset-inline-end: calc(28px + 8px);
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -136,7 +158,7 @@ body {
 
 .muse-rail-preview {
   width: 100%;
-  padding: 5px 10px;
+  padding: 8px 12px;
   border: 1px solid var(--muse-border, rgba(127, 127, 127, 0.2));
   border-radius: 8px;
   background: var(--muse-surface, #2a2a30);
@@ -149,9 +171,9 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
   color: var(--muse-text, #ececf0);
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.57;
 }
 
 .muse-rail-preview-desc {
@@ -160,118 +182,29 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-align: start;
-  margin-top: 2px;
+  margin-top: 4px;
   color: var(--muse-muted, #a9a9b4);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
-/* 刻度颜色阶梯（antd: colorTextQuaternary → Secondary → Text） */
+/* 刻度颜色阶梯（antd 默认 token 的等价值，双主题各一份）。 */
 .muse-app[data-theme='dark'] {
-  --rail-tick-base: rgba(236, 236, 240, 0.3);
-  --rail-tick-highlight: rgba(236, 236, 240, 0.65);
-  --rail-tick-active: #ececf0;
+  --rail-tick-base: rgba(255, 255, 255, 0.25);
+  --rail-tick-highlight: rgba(255, 255, 255, 0.65);
+  --rail-tick-active: rgba(255, 255, 255, 0.85);
 }
 
 .muse-app[data-theme='light'] {
-  --rail-tick-base: rgba(29, 29, 31, 0.3);
-  --rail-tick-highlight: rgba(29, 29, 31, 0.65);
-  --rail-tick-active: #1d1d1f;
+  --rail-tick-base: rgba(0, 0, 0, 0.25);
+  --rail-tick-highlight: rgba(0, 0, 0, 0.65);
+  --rail-tick-active: rgba(0, 0, 0, 0.88);
 }
 
-.muse-app[data-ready='false'] {
-  visibility: hidden;
-}
-
-/* 空内容占位符：decoration 打上 .empty-node[data-placeholder]，
- * ::before 画出灰字；float + height:0 让光标停在占位符上。 */
-.muse-web-canvas .empty-node::before {
-  content: attr(data-placeholder);
-  color: var(--muse-muted, #a9a9b4);
-  pointer-events: none;
-  float: left;
-  height: 0;
-}
-
-/* 原生滚动条隐藏：右侧结构导航 rail 取代之（antd message-scroller
- * 的 rail 模式——每块一条 tick，宽度编码块长，活动块变亮变宽）。 */
-.muse-web-canvas {
-  scrollbar-width: none;
-}
-.muse-web-canvas::-webkit-scrollbar {
-  display: none;
-}
-
-.muse-rail {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  max-height: 62vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  z-index: 4;
-}
-
-.muse-rail-item {
-  flex: 1 1 0;
-  min-height: 8px;
-  width: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.muse-rail-tick {
-  display: block;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--muse-text, #ececf0);
-  opacity: 0.22;
-  transition:
-    opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.muse-rail-item:hover .muse-rail-tick {
-  opacity: 0.5;
-}
-
-.muse-rail-item.active .muse-rail-tick {
-  opacity: 0.85;
-  transform: scaleX(1.45);
-}
-
-/* hover 预览浮层（antd message-scroller 的 preview-layer 模式）：
- * 悬停项左侧浮出 块类型 · 首行文本，纯 CSS 显隐、不挡指针。 */
-.muse-rail-preview {
-  position: absolute;
-  right: 32px;
-  top: 50%;
-  transform: translateY(-50%) translateX(4px);
-  white-space: nowrap;
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 5px 10px;
-  border-radius: 8px;
-  background: var(--muse-surface, #2a2a30);
-  border: 1px solid var(--muse-border, rgba(127, 127, 127, 0.2));
-  color: var(--muse-text, #ececf0);
-  font-size: 11.5px;
-  line-height: 1.4;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.muse-rail-item:hover .muse-rail-preview {
-  opacity: 1;
-  transform: translateY(-50%) translateX(0);
+@media (prefers-reduced-motion: reduce) {
+  .muse-rail-item,
+  .muse-rail-tick,
+  .muse-rail-preview-track {
+    transition: none;
+  }
 }

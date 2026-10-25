@@ -92,11 +92,13 @@ func TestRailTogglesPanel(t *testing.T) {
 
 func TestDarkThemeRenders(t *testing.T) {
 	a := New()
+	a.source = "# 标题\n\n正文。\n"
+	a.refreshDoc()
 	a.themeMode = 1
 	tt := ui.NewTester(a.View, 1200, 800)
 	tt.SetDark(true)
 	tt.Frame()
-	if !tt.HasText("Muse · 原生工作台") {
+	if !tt.HasText("标题") {
 		t.Fatalf("missing rendered title; texts = %q", tt.Texts())
 	}
 }

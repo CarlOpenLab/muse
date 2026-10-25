@@ -101,13 +101,17 @@ func TestE2ESaveUntitledViaDialog(t *testing.T) {
 	a := New()
 	tt := ui.NewTester(a.View, 1200, 800)
 	tt.Frame()
-	if !tt.HasText("Muse · 原生工作台") {
-		t.Fatalf("welcome doc missing; texts = %q", tt.Texts())
+	if !tt.HasText("空文档") {
+		t.Fatalf("empty untitled document missing; texts = %q", tt.Texts())
 	}
 
-	// edit the welcome quote line in place (click by full element text)
-	if err := tt.Click("原生渲染由 mdoc 完成：标题、列表、引用、代码块、表格与行内样式都在这里重画。"); err != nil {
-		t.Fatalf("click welcome quote: %v", err)
+	// 空白文档先经空态按钮落成标题 + 正文位，再改正文段落。
+	if err := tt.Click("开始写作"); err != nil {
+		t.Fatalf("click start writing: %v", err)
+	}
+	tt.Frame()
+	if err := tt.Click("无标题"); err != nil {
+		t.Fatalf("click untitled heading: %v", err)
 	}
 	tt.Frame()
 	tt.Type("E2E 已验证")
