@@ -72,14 +72,25 @@ func (a *App) openWindow() {
 		BackgroundColor: "light-dark(#f5f5f5, #1a1a1a)",
 		StateKey:        "muse-native",
 		Content:         ui.View(a.View),
+		// 亚克力：窗口背景透明，桌面的模糊由系统的材料给出；视图只在
+		// 编辑卡片上画不透明的表面，轨道与面板后面透出材料来。不支持
+		// 材料的平台上视图自己画不透明的底色。
+		Transparent: true,
+		Vibrancy:    mygo.VibrancyAcrylic,
 		// The rail's first 44px hold the traffic lights; the rest of the
-		// view starts beside them, as the web app did.
+		// view starts beside them, as the web app did. On Windows and
+		// Linux the system's buttons go away and the view draws its own.
 		TitleBarStyle:        mygo.TitleBarHidden,
 		TitleBarHeight:       44,
 		TrafficLightPosition: &mygo.Point{X: 12, Y: 15},
+		HideWindowButtons:    controlsAtRight,
 	})
 	a.installMenu()
 	a.updateTitle()
+	// The window buttons' drawing changes with the maximize state, and the
+	// state can change from outside the view (a double click on the header,
+	// the system's snap). Redraw when it does.
+	a.win.OnMaximize(a.invalidate)
 	a.win.OnClose(func(e *mygo.CloseEvent) {
 		if !a.dirty {
 			return

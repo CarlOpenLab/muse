@@ -44,10 +44,16 @@ var (
 	iconSave = lucide(`<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>` +
 		`<path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>`)
 	iconClose          = lucide(`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`)
+	iconWindowMinimize = lucide(`<path d="M5 12h14"/>`)
+	iconWindowMaximize = lucide(`<rect width="14" height="14" x="5" y="5" rx="2"/>`)
+	iconWindowRestore  = lucide(`<rect width="10" height="10" x="9" y="9" rx="1.5"/>` +
+		`<path d="M6 15H5.5A1.5 1.5 0 0 1 4 13.5v-8A1.5 1.5 0 0 1 5.5 4h8A1.5 1.5 0 0 1 15 5.5V6"/>`)
 	iconChevron        = lucide(`<path d="m9 18 6-6-6-6"/>`)
 	iconChevronDown    = lucide(`<path d="m6 9 6 6 6-6"/>`)
 	iconPanelLeftClose = lucide(`<rect width="18" height="18" x="3" y="3" rx="2"/>` +
 		`<path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>`)
+	iconPanelLeftOpen = lucide(`<rect width="18" height="18" x="3" y="3" rx="2"/>` +
+		`<path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>`)
 	iconArrowUp = lucide(`<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>`)
 	iconStop    = lucide(`<rect width="10" height="10" x="7" y="7" rx="1.5" fill="currentColor" stroke="none"/>`)
 	iconTrash   = lucide(`<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>` +

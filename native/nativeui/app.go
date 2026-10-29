@@ -33,6 +33,18 @@ const (
 	// railInset centres the 34px buttons in the 56px rail instead of letting
 	// them hug the window edge: (56-34)/2 = 11px on each side.
 	railInset = (railWidth - railButtonSize) / 2
+
+	// canvasPadding is how far the editor card sits from the window's top,
+	// right and bottom, and from the context panel; editorHeaderH is the
+	// height of the 44px line the panel header and the editor header share.
+	canvasPadding float32 = 8
+	editorHeaderH float32 = 44
+
+	// The context panel's width, as a drag at its edge moves it: between
+	// these, and folding away when a drag releases past foldWidth.
+	panelMinWidth float32 = 224
+	panelMaxWidth float32 = 440
+	panelFoldOn   float32 = 200
 )
 
 // panelView is the page the context panel shows.
@@ -96,6 +108,10 @@ type App struct {
 	panelW float32
 	// panelPrevTarget 是上一帧的宽度目标，用来识别「开着切换模块」。
 	panelPrevTarget float32
+	// panelDrag 累计一次边缘拖动，拖动期间面板宽度逐帧跟手；
+	// panelNarrow 记录这次拖动已经越过了收起的阈值。
+	panelDrag   float32
+	panelNarrow bool
 
 	// workspace
 	recents []recentEntry
@@ -208,12 +224,22 @@ func New() *App {
 
 func (a *App) View(c *ui.Context) {
 	a.applyTheme(c)
-	ui.Row(c).Fill().Background(a.windowBG()).Children(func() {
+	row := ui.Row(c).Fill()
+	if c.Vibrancy() {
+		// 亚克力在视图没画背景的地方透出来：轨道与面板后面是材料，
+		// 编辑卡片仍是不透明的表面。材料只在支持它的窗口上有，其余
+		// 平台画不透明的底色。
+		c.Root().Background(ui.Transparent)
+	} else {
+		row.Background(a.windowBG())
+	}
+	row.Children(func() {
 		a.rail(c)
 		a.contextPanel(c)
 		a.canvas(c)
 	})
 
+	a.windowControls(c)
 	a.settingsDialog(c)
 	a.renameDialog(c)
 	a.quickOpenDialog(c)
@@ -270,10 +296,10 @@ func (a *App) applyTheme(c *ui.Context) {
 
 // canvas is the floating editor card: 8px away from the window's top, right
 // and bottom, and 8px from the context panel. The rail and the panel paint
-// nothing, so the window color shows behind them.
+// nothing, so the window color — or the acrylic material — shows behind them.
 func (a *App) canvas(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Grow(1).FillHeight().MinWidth(0).Padding(8, 8, 8, a.canvasLeft(c)).Children(func() {
+	ui.Row(c).Grow(1).FillHeight().MinWidth(0).Padding(canvasPadding, canvasPadding, canvasPadding, a.canvasLeft(c)).Children(func() {
 		card := ui.Column(c).Fill().Radius(14).Clip().Background(t.Background)
 		if t.Dark {
 			card.Border(1, ui.RGBA(236, 236, 240, 0.12)).
@@ -413,8 +439,39 @@ func (a *App) contextPanel(c *ui.Context) {
 			case panelSearch:
 				a.searchView(c)
 			}
+			// The edge goes in last, so it hits above the content.
+			if a.panelW > a.panelWidth-0.5 {
+				a.panelResizeHandle(c)
+			}
 		})
 	})
+}
+
+// panelResizeHandle is the panel's right edge, which a drag moves, a double
+// click puts back at the module's width, and a drag released past the fold
+// collapses.
+func (a *App) panelResizeHandle(c *ui.Context) {
+	h := ui.Box(c).Key("panel-resize").Absolute().Left(a.panelWidth - 8).Top(editorHeaderH).
+		Bottom(0).Width(8).Cursor(ui.CursorResizeEW).Label("调整面板宽度")
+	if dx, _, ok := h.Dragged(); ok {
+		if a.panelDrag == 0 {
+			a.panelDrag = a.panelWidth
+		}
+		a.panelDrag += dx
+		a.panelNarrow = a.panelDrag < panelFoldOn
+		a.panelWidth = min(max(a.panelDrag, panelMinWidth), panelMaxWidth)
+	} else if a.panelDrag != 0 {
+		a.panelDrag = 0
+		if a.panelNarrow {
+			a.panelNarrow = false
+			a.collapsePanel()
+			return
+		}
+	}
+	if h.DoubleClicked() {
+		a.panelWidth = a.panelTargetWidth()
+		a.invalidate()
+	}
 }
 
 func (a *App) panelHeader(c *ui.Context) {
@@ -423,7 +480,7 @@ func (a *App) panelHeader(c *ui.Context) {
 	if extra := bar.Left - railWidth + 8; extra > left {
 		left = extra
 	}
-	ui.Row(c).Height(44).Shrink(0).Padding(0, 8, 0, left).Gap(4).DragWindow().
+	ui.Row(c).Height(editorHeaderH).Shrink(0).Padding(0, 8, 0, left).Gap(4).DragWindow().
 		AlignItems(ui.Center).Children(func() {
 		ui.Text(c, a.panelTitle()).FontSize(12.5).FontWeight(600).Grow(1).SingleLine().Ellipsis("…")
 		a.smallIcon(c, iconPanelLeftClose, "收起侧栏", a.collapsePanel)
@@ -839,32 +896,45 @@ func (a *App) editorContent(c *ui.Context) {
 
 func (a *App) editorHeader(c *ui.Context) {
 	t := c.Theme()
-	// Windows and Linux put their window buttons at the top right; c.TitleBar
-	// says how much room they take, so the view's own controls move in.
+	// Windows and Linux put the view's own window buttons at the top right
+	// (frame.go); the header keeps them clear. macOS keeps the system's
+	// traffic lights at the left, and c.TitleBar says how much they take.
 	bar := c.TitleBar()
-	ui.Row(c).Height(44).Shrink(0).Padding(0, 18+bar.Right, 0, 18).Gap(8).
+	padRight := 18 + bar.Right
+	if controlsAtRight {
+		padRight += windowButtonsRoom
+	}
+	ui.Row(c).Height(editorHeaderH).Shrink(0).Padding(0, padRight, 0, 8).Gap(8).
 		DragWindow().
-		Children(func() {
-			ui.Text(c, a.displayName()).FontSize(13).FontWeight(600).SingleLine().Ellipsis("…")
-			if a.dirty {
-				ui.Box(c).Size(6, 6).Radius(3).Background(t.Accent)
-			}
-			if a.path != "" {
-				ui.Row(c).Gap(4).Padding(2, 6).Radius(6).Background(t.Surface).Children(func() {
-					ui.Icon(c, iconFolder).Size(11, 11).TextColor(t.TextMuted)
-					ui.Text(c, a.location()).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-				})
-			}
-			ui.Spacer(c)
-			chars, _, lines := countText(a.source)
-			if a.status != "" {
-				ui.Text(c, a.status).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-			}
-			ui.Textf(c, "%d 字 · %d 行", chars, lines).FontSize(11).TextColor(t.TextMuted)
-			if a.dirty {
-				a.smallIcon(c, iconSave, "保存", func() { a.save() })
-			}
-		})
+		AlignItems(ui.Center).Children(func() {
+		// The panel's reopen slot: the icon that brings the panel back
+		// keeps this room at the header's left whether it shows or not,
+		// so the title never slides when the panel folds away.
+		if !a.panelOpen {
+			a.smallIcon(c, iconPanelLeftOpen, "打开侧栏", func() { a.showPanel(a.panel) })
+		} else {
+			ui.Box(c).Width(26).Shrink(0)
+		}
+		ui.Text(c, a.displayName()).FontSize(13).FontWeight(600).SingleLine().Ellipsis("…")
+		if a.dirty {
+			ui.Box(c).Size(6, 6).Radius(3).Background(t.Accent)
+		}
+		if a.path != "" {
+			ui.Row(c).Gap(4).Padding(2, 6).Radius(6).Background(t.Surface).Children(func() {
+				ui.Icon(c, iconFolder).Size(11, 11).TextColor(t.TextMuted)
+				ui.Text(c, a.location()).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+			})
+		}
+		ui.Spacer(c)
+		chars, _, lines := countText(a.source)
+		if a.status != "" {
+			ui.Text(c, a.status).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+		}
+		ui.Textf(c, "%d 字 · %d 行", chars, lines).FontSize(11).TextColor(t.TextMuted)
+		if a.dirty {
+			a.smallIcon(c, iconSave, "保存", func() { a.save() })
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -1908,7 +1978,7 @@ func (a *App) togglePanel(v panelView) {
 // them room). It follows the animated panel width so the card slides with
 // the panel instead of jumping when panelOpen flips.
 func (a *App) canvasLeft(c *ui.Context) float32 {
-	left := float32(8)
+	left := canvasPadding
 	if a.panelWidth <= 0 {
 		return left
 	}
