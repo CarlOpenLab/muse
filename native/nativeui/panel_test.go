@@ -79,3 +79,25 @@ func TestCollapsedPanelReopensFromTheHeader(t *testing.T) {
 		t.Fatal("the reopen icon did not bring the panel back")
 	}
 }
+
+// TestTopBarControlsShareOneLine reads the top bar off the layout: the rail's
+// module buttons, the panel header's close and the editor header's title and
+// status all centre on the same height, the one the window buttons sit on.
+func TestTopBarControlsShareOneLine(t *testing.T) {
+	a := New()
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	tt.Frame()
+	for _, s := range []string{"文件", "收起侧栏", "未命名", "0 字 · 1 行"} {
+		r, ok := tt.Find(s)
+		if !ok {
+			t.Fatalf("%q is not on screen", s)
+		}
+		if s == "文件" && r.X >= railWidth {
+			continue // the panel's title shares the word; the rail's button is meant
+		}
+		if d := r.Y + r.H/2 - topLineCenter; d < -0.5 || d > 0.5 {
+			t.Errorf("%q centres at %.2f, want the top line at %.1f", s, r.Y+r.H/2, topLineCenter)
+		}
+	}
+}

@@ -50,7 +50,7 @@ func (a *App) windowButtons(c *ui.Context) {
 	win := a.win
 	row := ui.Row(c).Key("window-controls").Absolute().
 		Right(windowButtonRight).
-		Top(canvasPadding + (editorHeaderH-windowButtonH)/2).
+		Top(canvasPadding + cardBorder + (editorHeaderH-windowButtonH)/2).
 		Height(windowButtonH).Gap(windowButtonGap).AlignItems(ui.Center)
 	row.Children(func() {
 		windowButton(c, "window-minimize", iconWindowMinimize, "最小化", false, false, win.Minimize)

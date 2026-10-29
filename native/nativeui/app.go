@@ -40,6 +40,17 @@ const (
 	canvasPadding float32 = 8
 	editorHeaderH float32 = 44
 
+	// railGapY is the vertical rhythm between the rail's buttons.
+	railGapY float32 = 4
+	// cardBorder is the editor card's hairline. As in CSS it takes room
+	// inside the card, so what the card holds sits 1 DIP inside the padding
+	// the rest of the shell measures from.
+	cardBorder float32 = 1
+	// topLineCenter is the height every control on the window's first line
+	// centres on: the rail's module buttons, the panel header's title and
+	// close, the editor header's title and the window buttons alike.
+	topLineCenter = canvasPadding + cardBorder + editorHeaderH/2
+
 	// The context panel's width, as a drag at its edge moves it: between
 	// these, and folding away when a drag releases past foldWidth.
 	panelMinWidth float32 = 224
@@ -320,8 +331,11 @@ func (a *App) canvas(c *ui.Context) {
 // view is a raised card, as the demo's chosen sidebar row is.
 func (a *App) rail(c *ui.Context) {
 	bar := c.TitleBar()
-	ui.Column(c).Width(railWidth).FillHeight().Padding(0, railInset).GapY(4).Children(func() {
-		ui.Box(c).Height(bar.Height).DragWindow()
+	ui.Column(c).Width(railWidth).FillHeight().Padding(0, railInset).GapY(railGapY).Children(func() {
+		// The room above the first button: macOS's traffic lights when the
+		// system reports them, else just enough to centre the first button
+		// on the window's one top line.
+		ui.Box(c).Height(max(bar.Height, topLineCenter-railButtonSize/2-railGapY)).DragWindow()
 		// 最左侧只放模块切换；新建/打开都是文件模块的内容（面板顶部与菜单）。
 		a.railButton(c, iconFiles, "文件", a.panelOpen && a.panel == panelFiles, func() {
 			a.showPanel(panelFiles)
@@ -365,7 +379,7 @@ func (a *App) railButton(c *ui.Context, icon *ui.SVG, label string, active bool,
 	}
 	b.OnClick(fn)
 	b.Children(func() {
-		el := ui.Icon(c, icon).Size(17, 17)
+		el := ui.Icon(c, icon).Size(16, 16)
 		if active {
 			el.TextColor(t.Accent)
 		} else {
@@ -427,7 +441,8 @@ func (a *App) contextPanel(c *ui.Context) {
 		openness = 1
 	}
 	panel.Children(func() {
-		ui.Column(c).Width(a.panelWidth).FillHeight().Opacity(openness).Children(func() {
+		ui.Column(c).Width(a.panelWidth).FillHeight().Opacity(openness).
+			Padding(canvasPadding+cardBorder, 0, 0, 0).Children(func() {
 			a.panelHeader(c)
 			switch a.panel {
 			case panelFiles:
@@ -451,7 +466,8 @@ func (a *App) contextPanel(c *ui.Context) {
 // click puts back at the module's width, and a drag released past the fold
 // collapses.
 func (a *App) panelResizeHandle(c *ui.Context) {
-	h := ui.Box(c).Key("panel-resize").Absolute().Left(a.panelWidth - 8).Top(editorHeaderH).
+	h := ui.Box(c).Key("panel-resize").Absolute().Left(a.panelWidth - 8).
+		Top(canvasPadding + cardBorder + editorHeaderH).
 		Bottom(0).Width(8).Cursor(ui.CursorResizeEW).Label("调整面板宽度")
 	if dx, _, ok := h.Dragged(); ok {
 		if a.panelDrag == 0 {
@@ -480,9 +496,9 @@ func (a *App) panelHeader(c *ui.Context) {
 	if extra := bar.Left - railWidth + 8; extra > left {
 		left = extra
 	}
-	ui.Row(c).Height(editorHeaderH).Shrink(0).Padding(0, 8, 0, left).Gap(4).DragWindow().
+	ui.Row(c).Height(editorHeaderH).Shrink(0).Padding(0, 12, 0, left).Gap(4).DragWindow().
 		AlignItems(ui.Center).Children(func() {
-		ui.Text(c, a.panelTitle()).FontSize(12.5).FontWeight(600).Grow(1).SingleLine().Ellipsis("…")
+		ui.Text(c, a.panelTitle()).FontSize(13).FontWeight(600).Grow(1).SingleLine().Ellipsis("…")
 		a.smallIcon(c, iconPanelLeftClose, "收起侧栏", a.collapsePanel)
 	})
 }
@@ -511,7 +527,7 @@ func (a *App) smallIcon(c *ui.Context, icon *ui.SVG, label string, fn func()) {
 		b.Background(t.SurfaceHover)
 	}
 	b.OnClick(fn)
-	b.Children(func() { ui.Icon(c, icon).Size(14, 14).TextColor(t.TextMuted) })
+	b.Children(func() { ui.Icon(c, icon).Size(16, 16).TextColor(t.TextMuted) })
 }
 
 // filesView draws the workspace tree. Directories open lazily; the list builds
@@ -549,10 +565,10 @@ func (a *App) filesView(c *ui.Context) {
 	// 新建文件/新建文件夹在列表内容顶部成排展示（Obsidian 的资源管理器
 	// 头部方式），落在选中的文件夹里；未选中任何目录时落在根目录。
 	ui.Row(c).Shrink(0).Padding(6, 10, 4, 6).Gap(2).AlignItems(ui.Center).Children(func() {
-		a.panelToolButton(c, iconFilePlus, "新建文件", func() { a.newFileIn(a.createTarget()) })
-		a.panelToolButton(c, iconFolderPlus, "新建文件夹", func() { a.newFolderIn(a.createTarget()) })
+		a.smallIcon(c, iconFilePlus, "新建文件", func() { a.newFileIn(a.createTarget()) })
+		a.smallIcon(c, iconFolderPlus, "新建文件夹", func() { a.newFolderIn(a.createTarget()) })
 		ui.Spacer(c)
-		a.panelToolButton(c, iconChevron, "全部折叠", a.collapseAll)
+		a.smallIcon(c, iconChevronDown, "全部折叠", a.collapseAll)
 	})
 
 	rows := a.fileRows()
@@ -1319,34 +1335,6 @@ func (a *App) createTarget() string {
 		return a.selectedPath
 	}
 	return a.root
-}
-
-// panelToolButton is an icon-only square button for the panel toolbar.
-func (a *App) panelToolButton(c *ui.Context, icon *ui.SVG, label string, fn func()) {
-	t := c.Theme()
-	b := ui.ButtonBase(c).Size(24, 24).Radius(6).Padding(0).
-		Justify(ui.Center).AlignItems(ui.Center).Label(label).Tooltip(label)
-	if b.Hovered() {
-		b.Background(t.SurfaceHover)
-	}
-	b.OnClick(fn)
-	b.Children(func() {
-		ui.Icon(c, icon).Size(14, 14).TextColor(t.TextMuted)
-	})
-}
-
-func (a *App) newFileInRoot() {
-	if a.root == "" {
-		return
-	}
-	a.newFileIn(a.root)
-}
-
-func (a *App) newFolderInRoot() {
-	if a.root == "" {
-		return
-	}
-	a.newFolderIn(a.root)
 }
 
 func (a *App) newFileIn(dir string) {

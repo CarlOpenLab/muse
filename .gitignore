@@ -20,3 +20,4 @@ native/build/
 # Legacy Electron build output
 out/
 native/muse
+native/Muse.exe~
