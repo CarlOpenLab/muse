@@ -31,7 +31,7 @@ func (a *App) paletteCommands() []paletteCommand {
 		{name: "打开文件夹…", hint: "⇧⌘O", run: a.openFolderDialog},
 		{name: "新建文件", hint: "", run: func() { a.newFileIn(a.createTarget()) }},
 		{name: "新建文件夹", hint: "", run: func() { a.newFolderIn(a.createTarget()) }},
-		{name: "切换主题", hint: "⇧⌘T", run: func() { a.themeMode = 1 - a.themeMode; a.pushWebTheme() }},
+		{name: "切换主题", hint: "⇧⌘T", run: func() { a.themeMode = 1 - a.themeMode }},
 		{name: "文件面板", hint: "", run: toggle(panelFiles)},
 		{name: "大纲面板", hint: "", run: toggle(panelOutline)},
 		{name: "搜索面板", hint: "", run: toggle(panelSearch)},

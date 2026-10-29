@@ -6,83 +6,86 @@ import (
 	"strings"
 )
 
-// go-latex parses the AST for sup/sub but does not lay them out. When it
-// returns an error for an expression containing ^ or _, Muse splits the
-// expression at the first top-level script and composes the base, script and
-// trailing text itself.
-func renderScriptImage(expr string, size float64) (image.Image, error) {
+// go-latex parses the AST for sup/sub but does not lay out every case, as
+// the limits of \int. When it fails on an expression containing ^ or _,
+// Muse splits the expression at the first top-level script and composes the
+// base, its scripts and the text after them itself, on one baseline.
+func typesetScripts(expr string, size float64) (typeset, error) {
 	base, sup, sub, rest, ok := splitScript(expr)
 	if !ok || strings.TrimSpace(base) == "" {
-		return nil, errNoScripts
+		return typeset{}, errNoScripts
 	}
-	baseImg, err := renderMathImage(base, size)
+	b, err := typesetMath(base, size)
 	if err != nil {
-		return nil, err
+		return typeset{}, err
 	}
-	var supImg, subImg, restImg image.Image
+	em := size * mathDPI / 72
+	var parts []placed
+	parts = append(parts, placed{ts: b})
+	x := b.img.Bounds().Dx()
+	scriptW := 0
+	ascent := b.baseline
+	depth := b.img.Bounds().Dy() - b.baseline
 	if sup != "" {
-		supImg, err = renderMathImage(sup, size*0.68)
+		s, err := typesetMath(sup, size*0.7)
 		if err != nil {
-			return nil, err
+			return typeset{}, err
 		}
+		// Raised by at least half an em, more for a tall base, as \int.
+		shift := max(int(em*0.42), ascent-s.baseline*2/3)
+		parts = append(parts, placed{ts: s, x: x + 1, rise: shift})
+		scriptW = max(scriptW, s.img.Bounds().Dx()+1)
 	}
 	if sub != "" {
-		subImg, err = renderMathImage(sub, size*0.68)
+		s, err := typesetMath(sub, size*0.7)
 		if err != nil {
-			return nil, err
+			return typeset{}, err
 		}
+		// Lowered by a fifth of an em, more under a deep base.
+		shift := max(int(em*0.22), depth-(s.img.Bounds().Dy()-s.baseline)/2)
+		parts = append(parts, placed{ts: s, x: x + 1, rise: -shift})
+		scriptW = max(scriptW, s.img.Bounds().Dx()+1)
 	}
-	if strings.TrimSpace(rest) != "" {
-		restImg, err = renderMathImage(strings.TrimLeft(rest, " "), size)
+	x += scriptW
+	if trimmed := strings.TrimLeft(rest, " "); strings.TrimSpace(trimmed) != "" {
+		r, err := typesetMath(trimmed, size)
 		if err != nil {
-			return nil, err
+			return typeset{}, err
 		}
-		if strings.HasPrefix(rest, " ") {
-			restImg = padLeft(restImg, 6)
+		if len(trimmed) < len(rest) {
+			x += int(em * 0.25)
 		}
+		parts = append(parts, placed{ts: r, x: x + int(em*0.1)})
 	}
-	scriptW := 0
-	if supImg != nil {
-		scriptW = supImg.Bounds().Dx()
+	return compose(parts), nil
+}
+
+// placed is a part of a formula composed by Muse: its typesetting, where it
+// starts across, and how far its baseline is raised above the formula's.
+type placed struct {
+	ts   typeset
+	x    int
+	rise int
+}
+
+// compose draws parts on one baseline, into an image as large as all of
+// them.
+func compose(parts []placed) typeset {
+	top, bottom, right := 0, 0, 0
+	for _, p := range parts {
+		b := p.ts.img.Bounds()
+		// Relative to the common baseline at 0: the part's top and bottom.
+		top = min(top, -p.rise-p.ts.baseline)
+		bottom = max(bottom, -p.rise-p.ts.baseline+b.Dy())
+		right = max(right, p.x+b.Dx())
 	}
-	if subImg != nil && subImg.Bounds().Dx() > scriptW {
-		scriptW = subImg.Bounds().Dx()
+	dst := image.NewRGBA(image.Rect(0, 0, right, bottom-top))
+	for _, p := range parts {
+		b := p.ts.img.Bounds()
+		y := -p.rise - p.ts.baseline - top
+		draw.Draw(dst, image.Rect(p.x, y, p.x+b.Dx(), y+b.Dy()), p.ts.img, b.Min, draw.Over)
 	}
-	baseW, baseH := baseImg.Bounds().Dx(), baseImg.Bounds().Dy()
-	supH, subH := 0, 0
-	if supImg != nil {
-		supH = supImg.Bounds().Dy()
-	}
-	if subImg != nil {
-		subH = subImg.Bounds().Dy()
-	}
-	restW := 0
-	if restImg != nil {
-		restW = restImg.Bounds().Dx()
-	}
-	baseY := supH
-	totalW := baseW + scriptW + restW + 4
-	totalH := baseY + baseH + subH/2
-	if totalH < baseH+supH {
-		totalH = baseH + supH
-	}
-	if totalW < baseW {
-		totalW = baseW
-	}
-	dst := image.NewRGBA(image.Rect(0, 0, totalW, totalH))
-	draw.Draw(dst, image.Rect(0, baseY, baseW, baseY+baseH), baseImg, image.Point{}, draw.Over)
-	if supImg != nil {
-		draw.Draw(dst, image.Rect(baseW+2, 0, baseW+2+supImg.Bounds().Dx(), supH), supImg, image.Point{}, draw.Over)
-	}
-	if subImg != nil {
-		y := baseY + baseH - subH/3
-		draw.Draw(dst, image.Rect(baseW+2, y, baseW+2+subImg.Bounds().Dx(), y+subH), subImg, image.Point{}, draw.Over)
-	}
-	if restImg != nil {
-		rx := baseW + scriptW + 2
-		draw.Draw(dst, image.Rect(rx, baseY, rx+restW, baseY+restImg.Bounds().Dy()), restImg, image.Point{}, draw.Over)
-	}
-	return dst, nil
+	return typeset{img: dst, baseline: -top}
 }
 
 func splitScript(expr string) (base, sup, sub, rest string, ok bool) {
@@ -141,14 +144,6 @@ func scriptContent(expr string, i int) (content string, next int) {
 		return "", i
 	}
 	return string(expr[i]), i + 1
-}
-
-func padLeft(img image.Image, n int) image.Image {
-	w := img.Bounds().Dx()
-	h := img.Bounds().Dy()
-	dst := image.NewRGBA(image.Rect(0, 0, w+n, h))
-	draw.Draw(dst, image.Rect(n, 0, n+w, h), img, image.Point{}, draw.Over)
-	return dst
 }
 
 type noScriptsError struct{}

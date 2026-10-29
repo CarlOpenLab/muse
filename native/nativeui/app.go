@@ -1,11 +1,11 @@
 // Package nativeui is Muse's fully native shell: MyGo draws the window, the
-// icon rail, the context panel and the Markdown editor with no webview and no
-// frontend build.
+// icon rail, the context panel and the Markdown editor, with no webview and
+// no frontend build.
 //
-// The first milestone keeps the current layout and the parts a writer needs
-// every day: a 56px icon rail, one shared context panel (files / outline /
-// search / AI), and a Markdown editor that renders with mdoc and edits the
-// source in mygo's native text area.
+// The layout is a 56px icon rail, one shared context panel (files / outline
+// / search / AI) and the editor card, which shows the document as Typora
+// does: one surface the user writes on, rendered as it reads (package
+// mdedit).
 package nativeui
 
 import (
@@ -20,7 +20,9 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
 
+	"muse/mdedit"
 	"muse/mdoc"
 	"muse/services"
 )
@@ -45,9 +47,9 @@ const (
 
 // heading is one entry of the document outline.
 type heading struct {
-	level int
-	text  string
-	block int // index into App.blocks, so an outline click can scroll to it
+	level  int
+	text   string
+	offset int // where the heading's text starts in the source
 }
 
 // clipboardWrite is a seam for tests: the real clipboard waits on the app's
@@ -68,13 +70,6 @@ var (
 type App struct {
 	win *mygo.Window
 
-	// WebView canvas (webeditor.go): nil when the canvas is unavailable and
-	// the all-native editor runs instead.
-	webView       *mygo.WebView
-	webReady      bool
-	webPushRev    int
-	saveReply     chan string
-	saveMu        sync.Mutex
 	folderToggled map[string]time.Time
 
 	// quick open (⌘O): fuzzy file jump inside the workspace
@@ -86,10 +81,6 @@ type App struct {
 	cmdPalette bool
 	cmdValue   string
 	cmdSel     int
-	webSel     struct {
-		from, to int
-		text     string
-	}
 
 	// appearance
 	themeMode int  // 0 pure white, 1 near black
@@ -100,8 +91,8 @@ type App struct {
 	panelOpen  bool
 	panelWidth float32
 	// panelW is the animated width the last frame drew, 0 when collapsed.
-	// The canvas and the caret mapping read it instead of panelOpen so they
-	// move with the slide instead of jumping at the ends.
+	// The canvas reads it instead of panelOpen so it moves with the slide
+	// instead of jumping at the ends.
 	panelW float32
 	// panelPrevTarget 是上一帧的宽度目标，用来识别「开着切换模块」。
 	panelPrevTarget float32
@@ -118,46 +109,15 @@ type App struct {
 	fileList     ui.ListState
 	selectedPath string
 
-	// document
+	// document: the editor owns the Markdown being written; source mirrors
+	// it for what reads the document (saving, search, the AI's tools), and
+	// every change goes through the editor, as a step of its undo.
+	ed       *mdedit.Editor
 	path     string
 	source   string
-	doc      *mdoc.Doc
+	crlf     bool
 	headings []heading
 	dirty    bool
-
-	// block editing: the chunk shown as an input, and its range in source
-	blocks       []sourceBlock
-	editing      int
-	editSource   string
-	editStart    int
-	editEnd      int
-	editOriginal string
-	editWasFocus bool
-
-	// where the click landed, so the caret starts there instead of at the end
-	editClickX      float32
-	editClickY      float32
-	editPlaceCaret  bool
-	editBefore      string
-	editPasted      bool
-	editCaretSet    bool
-	editCaretTarget int
-	editAutoFocus   bool
-	editAffixPrefix string
-	editAffixSuffix string
-	editSelStart    int
-	editSelEnd      int
-	editSelectEnd   int
-	editHandle      *ui.Handle
-
-	// the paragraph/heading being edited as rich text
-	rich *richEditor
-
-	// the image block being edited with alt/src fields
-	imageEdit *imageEditor
-
-	// the table cell being edited inline, if any
-	cellEdit *cellEditor
 
 	// settings
 	settingsOpen bool
@@ -190,17 +150,20 @@ type App struct {
 	aiModelsBusy bool
 	aiModelsErr  string
 
-	// search: one hit per block, and the row chosen
+	// search: the matches in the document, and the row chosen
 	query       string
 	matches     int
 	searchHits  []searchHit
 	searchState ui.ListState
 	searchRow   int
+	// searchKey is the query and source the hits were found for.
+	searchKey [2]string
+	// replaceWith is what the matches are replaced with.
+	replaceWith string
 
 	// outline rows
 	outlineState ui.ListState
 	outlineRow   int
-	scrollTarget int
 
 	// status line
 	status   string
@@ -214,37 +177,29 @@ type App struct {
 	renameOpen  bool
 	renamePath  string
 	renameValue string
-
-	// link URL popover (rich editor, Cmd+K on a link)
-	linkPopOpen  bool
-	linkPopURL   string
-	linkPopLabel string
-	linkPopRun   int // index into a.rich.runs
 }
 
 // New returns the app on an empty untitled document, with the panel on files.
 func New() *App {
 	a := &App{
-		panel:        panelFiles,
-		panelOpen:    true,
-		panelWidth:   268,
-		panelW:       268,
-		dirs:         map[string][]string{},
-		isDir:        map[string]bool{},
-		expanded:     map[string]bool{},
-		outlineRow:   -1,
-		scrollTarget: -1,
-		editing:      -1,
-		fontSize:     16,
-		lineHeight:   1.75,
-		recents:      loadRecents(),
-		ai:           loadAISettings(),
-		aiClient:     services.NewAI(),
-		aiMessages:   loadAIChat(),
+		panel:      panelFiles,
+		panelOpen:  true,
+		panelWidth: 268,
+		panelW:     268,
+		dirs:       map[string][]string{},
+		isDir:      map[string]bool{},
+		expanded:   map[string]bool{},
+		outlineRow: -1,
+		fontSize:   16,
+		lineHeight: 1.75,
+		recents:    loadRecents(),
+		ai:         loadAISettings(),
+		aiClient:   services.NewAI(),
+		aiMessages: loadAIChat(),
 	}
-	// 新窗口就是一张空白未命名文档（WebView 里显示双槽占位，原生回退显示空态按钮）。
-	a.source = ""
-	a.refreshDoc()
+	// 新窗口就是一张空白未命名文档：光标停在空段落里，直接就能写。
+	a.ed = mdedit.New("", a.editorOptions())
+	a.loadDoc("")
 	return a
 }
 
@@ -261,7 +216,6 @@ func (a *App) View(c *ui.Context) {
 
 	a.settingsDialog(c)
 	a.renameDialog(c)
-	a.linkPopover(c)
 	a.quickOpenDialog(c)
 	a.commandPaletteDialog(c)
 }
@@ -362,7 +316,7 @@ func (a *App) rail(c *ui.Context) {
 			themeIcon = iconSun
 			themeLabel = "切换到浅色"
 		}
-		a.railButton(c, themeIcon, themeLabel, false, func() { a.themeMode = 1 - a.themeMode; a.pushWebTheme() })
+		a.railButton(c, themeIcon, themeLabel, false, func() { a.themeMode = 1 - a.themeMode })
 		a.railButton(c, iconSettings, "设置", a.settingsOpen, a.openSettings)
 		ui.Box(c).Height(8)
 	})
@@ -602,12 +556,6 @@ func (a *App) filesView(c *ui.Context) {
 	}).Grow(1).Padding(0, 8).Gap(1)
 }
 
-type cellEditor struct {
-	block, row, col int
-	value           string
-	wasFocus        bool
-}
-
 type fileRow struct {
 	path  string
 	depth int
@@ -637,11 +585,20 @@ func (a *App) fileRows() []fileRow {
 
 func (a *App) outlineView(c *ui.Context) {
 	t := c.Theme()
-	if a.doc == nil || len(a.headings) == 0 {
+	if len(a.headings) == 0 {
 		ui.Column(c).Fill().Center().Padding(20).Children(func() {
 			ui.Text(c, "这篇文档还没有标题").FontSize(12).TextColor(t.TextMuted)
 		})
 		return
+	}
+	current := -1
+	for i, h := range a.headings {
+		if h.offset <= a.ed.Caret() {
+			current = i
+		}
+	}
+	if current >= 0 {
+		a.outlineRow = current
 	}
 	ui.List(c, &a.outlineState, len(a.headings), func(i int) {
 		h := a.headings[i]
@@ -672,9 +629,8 @@ func (a *App) outlineView(c *ui.Context) {
 		})
 		row.OnClick(func() {
 			a.outlineRow = i
-			a.scrollTarget = h.block
-			// 画布模式下正文在 WebView 里，滚动要经桥发命令。
-			a.scrollToHeading(h.text)
+			a.ed.ScrollToOffset(h.offset)
+			a.ed.Focus()
 		})
 	}).Grow(1).Padding(0, 8).Gap(0)
 }
@@ -699,23 +655,25 @@ func (a *App) searchView(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Fill().Padding(10).Gap(8).Children(func() {
 		ui.TextInput(c, &a.query).Placeholder("在当前文档中查找").Label("查找")
+		a.refreshSearch()
 		if a.query == "" {
-			ui.Text(c, "输入关键词，点击结果跳到对应段落").FontSize(11.5).TextColor(t.TextMuted).Wrap()
+			ui.Text(c, "输入关键词，点击结果跳到对应位置").FontSize(11.5).TextColor(t.TextMuted).Wrap()
 			return
 		}
-		a.searchHits = a.searchHits[:0]
-		needle := strings.ToLower(a.query)
-		for i, b := range a.blocks {
-			if strings.Contains(strings.ToLower(b.Source), needle) {
-				a.searchHits = append(a.searchHits, searchHit{block: i, snippet: firstMatchLine(b.Source, needle)})
-			}
-		}
-		a.matches = len(a.searchHits)
 		if a.matches == 0 {
 			ui.Text(c, "没有匹配").FontSize(11.5).TextColor(t.TextMuted)
 			return
 		}
-		ui.Textf(c, "%d 个段落匹配", a.matches).FontSize(11).TextColor(t.TextMuted)
+		ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.TextInput(c, &a.replaceWith).Placeholder("替换为").Label("替换为").Grow(1).MinWidth(0)
+			if ui.Button(c, "替换").Clicked() {
+				a.replaceHit()
+			}
+			if ui.Button(c, "全部").Tooltip("全部替换").Clicked() {
+				a.replaceAllHits()
+			}
+		})
+		ui.Textf(c, "%d 处匹配", a.matches).FontSize(11).TextColor(t.TextMuted)
 		ui.List(c, &a.searchState, len(a.searchHits), func(i int) {
 			row := ui.Row(c).Height(28).Radius(6).Padding(0, 8).Cursor(ui.CursorPointer)
 			switch {
@@ -738,35 +696,134 @@ func (a *App) searchView(c *ui.Context) {
 				}
 				ui.Text(c, after).FontSize(11.5).TextColor(t.Text)
 			})
-			row.OnClick(func() {
-				a.searchRow = i
-				a.scrollTarget = a.searchHits[i].block
-				// 画布模式：滚动经桥，用匹配行文本定位。
-				a.scrollToText(a.searchHits[i].snippet)
-			})
+			row.OnClick(func() { a.goToHit(i) })
 		}).Grow(1).Gap(1)
 	})
 }
 
+// searchHit is one match of the search in the document.
 type searchHit struct {
-	block   int
-	snippet string
+	start, end int
+	snippet    string
 }
 
-// firstMatchLine is the first line of a block holding the needle, trimmed and
-// cut for a row: enough to recognise the passage, not the whole paragraph.
-func firstMatchLine(source, needle string) string {
-	for _, line := range strings.Split(source, "\n") {
-		if strings.Contains(strings.ToLower(line), needle) {
-			line = strings.TrimSpace(line)
-			r := []rune(line)
-			if len(r) > 60 {
-				return string(r[:60]) + "…"
-			}
-			return line
-		}
+// refreshSearch finds the query in the document again when either changed,
+// and shows the matches in the editor.
+func (a *App) refreshSearch() {
+	key := [2]string{a.query, a.source}
+	if key == a.searchKey {
+		return
 	}
-	return strings.TrimSpace(source)
+	a.searchKey = key
+	a.searchHits = findHits(a.source, a.query)
+	a.matches = len(a.searchHits)
+	if a.searchRow >= a.matches {
+		a.searchRow = -1
+	}
+	ranges := make([]mdedit.Range, len(a.searchHits))
+	for i, h := range a.searchHits {
+		ranges[i] = mdedit.Range{Start: h.start, End: h.end}
+	}
+	a.ed.SetHighlights(ranges, a.searchRow)
+}
+
+// goToHit selects match i in the editor.
+func (a *App) goToHit(i int) {
+	if i < 0 || i >= len(a.searchHits) {
+		return
+	}
+	a.searchRow = i
+	h := a.searchHits[i]
+	ranges := make([]mdedit.Range, len(a.searchHits))
+	for k, x := range a.searchHits {
+		ranges[k] = mdedit.Range{Start: x.start, End: x.end}
+	}
+	a.ed.SetHighlights(ranges, i)
+	a.ed.Select(h.start, h.end)
+	a.ed.Focus()
+}
+
+// replaceHit replaces the chosen match, or the first, and goes to the next.
+func (a *App) replaceHit() {
+	i := max(a.searchRow, 0)
+	if i >= len(a.searchHits) {
+		return
+	}
+	h := a.searchHits[i]
+	a.ed.Replace(h.start, h.end, a.replaceWith)
+	a.docChanged()
+	a.refreshSearch()
+	if a.matches > 0 {
+		a.goToHit(min(i, a.matches-1))
+	}
+}
+
+// replaceAllHits replaces every match, as one step of undo.
+func (a *App) replaceAllHits() {
+	if len(a.searchHits) == 0 {
+		return
+	}
+	var b strings.Builder
+	at := 0
+	for _, h := range a.searchHits {
+		b.WriteString(a.source[at:h.start])
+		b.WriteString(a.replaceWith)
+		at = h.end
+	}
+	b.WriteString(a.source[at:])
+	n := len(a.searchHits)
+	a.editDoc(b.String())
+	a.refreshSearch()
+	a.notice(fmt.Sprintf("已替换 %d 处", n))
+}
+
+// findHits returns the matches of query in src, ignoring case, at most 500,
+// each with the line it is on, cut for a row.
+func findHits(src, query string) []searchHit {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return nil
+	}
+	hay, needle := src, q
+	if lower := strings.ToLower(src); len(lower) == len(src) {
+		hay, needle = lower, strings.ToLower(q)
+	}
+	var out []searchHit
+	for from := 0; len(out) < 500; {
+		i := strings.Index(hay[from:], needle)
+		if i < 0 {
+			break
+		}
+		s := from + i
+		e := s + len(needle)
+		out = append(out, searchHit{start: s, end: e, snippet: hitSnippet(src, s, e)})
+		from = e
+	}
+	return out
+}
+
+// hitSnippet is the line around a match, trimmed and cut to about 60
+// characters around it: enough to recognise the passage.
+func hitSnippet(src string, s, e int) string {
+	ls := strings.LastIndexByte(src[:s], '\n') + 1
+	le := len(src)
+	if k := strings.IndexByte(src[e:], '\n'); k >= 0 {
+		le = e + k
+	}
+	line := []rune(strings.TrimSpace(src[ls:le]))
+	if len(line) <= 60 {
+		return string(line)
+	}
+	at := len([]rune(strings.TrimLeft(src[ls:s], " \t")))
+	from := max(0, min(at-20, len(line)-60))
+	out := string(line[from:min(from+60, len(line))])
+	if from > 0 {
+		out = "…" + out
+	}
+	if from+60 < len(line) {
+		out += "…"
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -775,28 +832,8 @@ func firstMatchLine(source, needle string) string {
 func (a *App) editorContent(c *ui.Context) {
 	ui.Column(c).Fill().Children(func() {
 		a.editorHeader(c)
-		if a.webView != nil {
-			// The canvas owns the document while the web editor runs; the
-			// native per-block editors below stay for the fallback path.
-			ui.WebView(c, a.webView).Grow(1)
-			return
-		}
-		if a.editing >= 0 && (c.Shortcut(ui.Cmd, ui.KeyEnter) || c.Shortcut(0, ui.KeyEscape)) {
-			a.commitBlock()
-		}
-		if a.cellEdit != nil && c.Shortcut(0, ui.KeyEscape) {
-			a.commitCell(a.cellEdit, a.cellEdit.value)
-		}
-		if a.cellEdit != nil {
-			if c.Shortcut(0, ui.KeyTab) {
-				a.moveCell(1)
-			} else if c.Shortcut(ui.Shift, ui.KeyTab) {
-				a.moveCell(-1)
-			} else if c.Shortcut(ui.Cmd, ui.KeyEnter) {
-				a.insertRowBelowCell()
-			}
-		}
-		a.blockEditor(c)
+		a.ed.SetOptions(a.editorOptions())
+		a.ed.View(c).Grow(1)
 	})
 }
 
@@ -820,23 +857,6 @@ func (a *App) editorHeader(c *ui.Context) {
 			}
 			ui.Spacer(c)
 			chars, _, lines := countText(a.source)
-			if a.imageEdit != nil {
-				ui.Text(c, "编辑图片 · Esc 完成").FontSize(10.5).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-			} else if a.rich != nil {
-				hint := "编辑中 · Enter 新段落 · Esc 完成"
-				if a.rich.chrome == "list" {
-					hint = "编辑中 · Enter 下一项 · Esc 完成"
-				} else if a.rich.chrome == "quote" {
-					hint = "编辑中 · Enter 下一行 · Esc 完成"
-				}
-				ui.Text(c, hint).FontSize(10.5).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-			} else if a.editing >= 0 {
-				hint := "编辑中 · Enter 新段落 · Esc 完成"
-				if blocks := a.blocks[a.editing].doc.Blocks; len(blocks) > 0 && (blocks[0].Kind == mdoc.Code || blocks[0].Kind == mdoc.Math) {
-					hint = "编辑中 · Enter 换行 · Esc 完成"
-				}
-				ui.Text(c, hint).FontSize(10.5).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-			}
 			if a.status != "" {
 				ui.Text(c, a.status).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
 			}
@@ -938,7 +958,7 @@ func (a *App) finish(fn func()) {
 
 func (a *App) snapshotDoc() (dirty bool, name, path, source string) {
 	a.onMain(func() {
-		dirty, name, path, source = a.dirty, a.displayName(), a.path, a.source
+		dirty, name, path, source = a.dirty, a.displayName(), a.path, a.diskSource()
 	})
 	return
 }
@@ -1022,12 +1042,6 @@ func (a *App) openPathNow(path string) {
 // requestOpen opens a path from the UI. A clean document opens at once; an
 // edited one asks first, with the dialog off the UI thread.
 func (a *App) requestOpen(path string) {
-	if a.imageEdit != nil {
-		a.commitImage()
-	}
-	if a.rich != nil {
-		a.commitRich()
-	}
 	if !isEditableFile(path) {
 		a.notice("不支持的文件类型：" + filepath.Base(path))
 		a.invalidate()
@@ -1057,25 +1071,16 @@ func (a *App) requestOpen(path string) {
 }
 
 func (a *App) applyOpen(path, data string) {
-	a.rich = nil
-	a.imageEdit = nil
 	a.path = path
 	a.selectedPath = path
-	a.source = data
-	a.refreshDoc()
+	a.loadDoc(data)
 	a.dirty = false
 	a.updateTitle()
-	a.pushWebDoc()
 	a.addRecent(path, false)
+	a.ed.Focus()
 }
 
 func (a *App) newDoc() {
-	if a.imageEdit != nil {
-		a.commitImage()
-	}
-	if a.rich != nil {
-		a.commitRich()
-	}
 	if !a.dirty {
 		a.resetDoc()
 		return
@@ -1096,22 +1101,13 @@ func (a *App) newDoc() {
 func (a *App) resetDoc() {
 	a.path = ""
 	a.selectedPath = ""
-	a.source = ""
-	a.refreshDoc()
-	a.pushWebDoc()
+	a.loadDoc("")
 	a.dirty = false
 	a.updateTitle()
+	a.ed.Focus()
 }
 
 func (a *App) save() {
-	// The canvas owns the latest keystrokes; collect them before writing.
-	a.requestWebSave()
-	if a.imageEdit != nil {
-		a.commitImage()
-	}
-	if a.rich != nil {
-		a.commitRich()
-	}
 	if a.path == "" {
 		a.saveAs()
 		return
@@ -1121,7 +1117,7 @@ func (a *App) save() {
 		a.invalidate()
 		return
 	}
-	if err := os.WriteFile(a.path, []byte(a.source), 0o644); err != nil {
+	if err := os.WriteFile(a.path, []byte(a.diskSource()), 0o644); err != nil {
 		a.notice(fmt.Sprintf("保存失败：%v", err))
 	} else {
 		a.dirty = false
@@ -1194,19 +1190,13 @@ func (a *App) saveAs() {
 	if a.busy {
 		return
 	}
-	if a.imageEdit != nil {
-		a.commitImage()
-	}
-	if a.rich != nil {
-		a.commitRich()
-	}
 	var name, source string
 	a.onMain(func() {
 		name = "Untitled.md"
 		if a.path != "" {
 			name = filepath.Base(a.path)
 		}
-		source = a.source
+		source = a.diskSource()
 	})
 	a.startBusy()
 	go func() {
@@ -1355,12 +1345,6 @@ func (a *App) fileMenu(c *ui.Context, row ui.Element, path string) {
 	})
 }
 
-func (a *App) copyCode(text string) {
-	clipboardWrite(text)
-	a.notice("已复制代码")
-	a.invalidate()
-}
-
 func (a *App) copyPath(path string, relative bool) {
 	text := path
 	if relative {
@@ -1406,9 +1390,8 @@ func (a *App) trash(path string) {
 			if a.path == path {
 				a.path = ""
 				a.selectedPath = ""
-				a.source = ""
+				a.loadDoc("")
 				a.dirty = false
-				a.refreshDoc()
 				a.updateTitle()
 			}
 			a.clearTreeCache()
@@ -1610,8 +1593,7 @@ func (a *App) typographySettings(c *ui.Context) {
 		a.settingsDivider(c, false)
 		settingsRow(c, "字号", "编辑器正文的基准字号。", func() {
 			ui.Textf(c, "%.0fpx", a.fontSize).FontSize(12).TextColor(c.Theme().TextMuted).Width(38)
-			ui.Slider(c, &a.fontSize, 12, 22).Width(190).Label("字号").
-				OnChange(func() { a.pushWebTheme() })
+			ui.Slider(c, &a.fontSize, 12, 22).Width(190).Label("字号")
 		})
 		a.settingsDivider(c, true)
 		settingsRow(c, "行高", "正文的行距倍数。", func() {
@@ -1630,33 +1612,9 @@ func (a *App) settingsDivider(c *ui.Context, between bool) {
 }
 
 // ---------------------------------------------------------------------------
-// State helpers
+// The document
 
-func (a *App) refreshDoc() {
-	a.blocks = splitSource(a.source)
-	a.editing = -1
-	a.parseDoc()
-}
-
-func (a *App) parseDoc() {
-	a.doc = mdoc.Parse(a.source)
-	a.headings = a.headings[:0]
-	for i, b := range a.blocks {
-		for _, bb := range b.doc.Blocks {
-			if bb.Kind == mdoc.Heading {
-				a.headings = append(a.headings, heading{
-					level: bb.Level,
-					text:  strings.TrimSpace(plainSpans(bb.Inlines)),
-					block: i,
-				})
-			}
-		}
-	}
-}
-
-// blockEditor draws the rendered document, and one block as an input while it
-// is edited. Clicking a block starts there; the block's source replaces only
-// its own range, so the rest of the document is untouched.
+// docDir is the folder images and links of the document resolve in.
 func (a *App) docDir() string {
 	if a.path != "" {
 		return filepath.Dir(a.path)
@@ -1664,1453 +1622,193 @@ func (a *App) docDir() string {
 	return a.root
 }
 
-func (a *App) blockEditor(c *ui.Context) {
-	t := c.Theme()
-	ui.Scroll(c).Fill().Children(func() {
-		ui.Column(c).FillWidth().MaxWidth(800).Margin(0, ui.Auto).Padding(36, 32, 80, 32).
-			Children(func() {
-				if len(a.blocks) == 0 {
-					ui.Column(c).FillWidth().Padding(20).Center().Gap(10).Children(func() {
-						ui.Text(c, "空文档").FontSize(13).TextColor(t.TextMuted)
-						ui.Button(c, "开始写作").OnClick(a.startBlankBlock)
-					})
-					return
-				}
-				for i := range a.blocks {
-					if a.imageEdit != nil && a.imageEdit.block == i {
-						a.imageEditView(c)
-						continue
-					}
-					if a.rich != nil && a.rich.block == i {
-						a.richView(c)
-						continue
-					}
-					if i == a.editing {
-						a.blockInput(c)
-						continue
-					}
-					a.blockView(c, i)
-				}
-				ui.Box(c).Height(24)
-			})
-	})
-}
-
-func isListItemBlock(b sourceBlock) bool {
-	if len(b.doc.Blocks) != 1 {
-		return false
-	}
-	bb := b.doc.Blocks[0]
-	return bb.Kind == mdoc.List && len(bb.Items) == 1
-}
-
-func isQuoteLineBlock(b sourceBlock) bool {
-	return len(b.doc.Blocks) == 1 && b.doc.Blocks[0].Kind == mdoc.Quote
-}
-
-func (a *App) blockView(c *ui.Context, i int) {
-	padY := float32(6)
-	if isListItemBlock(a.blocks[i]) {
-		padY = 1
-	}
-	if isQuoteLineBlock(a.blocks[i]) {
-		padY = 0
-	}
-	row := ui.Column(c).FillWidth().Padding(padY, 10).Radius(6).
-		Cursor(ui.CursorText)
-	row.OnClick(func() {
-		if a.cellEdit != nil && a.cellEdit.block == i {
-			// The click already chose a table cell; the row must not also open
-			// the whole table's source.
-			return
-		}
-		if bs := a.blocks[i].doc.Blocks; len(bs) > 0 {
-			switch bs[0].Kind {
-			case mdoc.Table, mdoc.Rule:
-				// Table structure is chrome; cells edit themselves. Rules are
-				// contentless.
-				return
-			case mdoc.HTML:
-				// HTML blocks edit as raw source (like code, without fences).
-			}
-		}
-		x, y, over := row.PointerPosition()
-		if !over {
-			x, y = -1, -1
-		}
-		if a.imageEdit != nil {
-			a.commitImage()
-		}
-		if a.rich != nil {
-			a.commitRich()
-		}
-		if a.beginImageEdit(i) {
-			return
-		}
-		if a.beginRichEditAt(i, x, y) {
-			return
-		}
-		a.beginBlockEditAt(i, x, y)
-	})
-	if bs := a.blocks[i].doc.Blocks; len(bs) > 0 && bs[0].Kind == mdoc.Table {
-		a.tableMenu(row, i)
-	}
-	row.Children(func() {
-		opts := mdoc.Options{
-			BodyFontSize: float32(a.fontSize),
-			BaseDir:      a.docDir(),
-			ContentWidth: 800,
-			OnTask: func(item int, checked bool) {
-				a.toggleTask(i, item, checked)
-			},
-			OnCell: func(row, col int) {
-				a.startCellEdit(i, row, col)
-			},
-			OnAsync: a.invalidate,
-			OnCopyCode: func(text string) {
-				a.copyCode(text)
-			},
-		}
-		if a.cellEdit != nil && a.cellEdit.block == i {
-			ce := a.cellEdit
-			opts.CellEdit = &mdoc.CellEditor{
-				Row:      ce.row,
-				Col:      ce.col,
-				Value:    &ce.value,
-				WasFocus: &ce.wasFocus,
-			}
-			opts.OnCellCommit = func(row, col int, value string) {
-				a.commitCell(ce, value)
-			}
-		}
-		mdoc.BlocksView(c, a.blocks[i].doc.Blocks, opts)
-	})
-	if i == a.scrollTarget {
-		row.ScrollIntoView()
-		a.scrollTarget = -1
+// editorOptions are the editor's options, from the settings and the
+// document being edited.
+func (a *App) editorOptions() mdedit.Options {
+	return mdedit.Options{
+		FontSize:    float32(a.fontSize),
+		LineHeight:  float32(a.lineHeight),
+		BaseDir:     a.docDir(),
+		Placeholder: "开始写作…",
+		Label:       "文档",
+		Code:        codeLanguage(a.path),
+		Invalidate:  a.invalidate,
+		OnChange:    a.docChanged,
+		OnLink:      a.openLink,
+		SaveImage:   a.saveImage,
+		OnDropFiles: a.openDropped,
 	}
 }
 
-func (a *App) blockInput(c *ui.Context) {
-	t := c.Theme()
-	mods := c.Modifiers()
-	kind := mdoc.Paragraph
-	if a.editing >= 0 && a.editing < len(a.blocks) {
-		if blocks := a.blocks[a.editing].doc.Blocks; len(blocks) > 0 {
-			kind = blocks[0].Kind
-		}
-	}
-
-	size := float32(a.fontSize)
-	lineHeight := float32(a.lineHeight)
-	font := ""
-	switch kind {
-	case mdoc.Heading:
-		level := 1
-		if blocks := a.blocks[a.editing].doc.Blocks; len(blocks) > 0 {
-			level = blocks[0].Level
-		}
-		size = mdoc.HeadingSize(level, float32(a.fontSize))
-		lineHeight = 1.3
-	case mdoc.Code:
-		size = float32(a.fontSize - 1)
-		lineHeight = 1.55
-		font = "monospace"
-	}
-
-	// The block stays in place: no box, no chrome, just an editable run of
-	// text at the same width and padding as the rendered block. Only a code
-	// block keeps its filled panel, as Typora's does.
-	padY := float32(6)
-	padTop := padY
-	if a.editing >= 0 && a.editing < len(a.blocks) {
-		if isListItemBlock(a.blocks[a.editing]) {
-			padY = 1
-			padTop = 1
-		}
-		if isQuoteLineBlock(a.blocks[a.editing]) {
-			padY = 0
-			padTop = 0
-		}
-	}
-	// Match the extra top padding the rendered heading has, so clicking a
-	// heading does not shift the rest of the document by 5-12px.
-	if kind == mdoc.Heading {
-		level := 1
-		if blocks := a.blocks[a.editing].doc.Blocks; len(blocks) > 0 {
-			level = blocks[0].Level
-		}
-		switch level {
-		case 1:
-			padTop += 12
-		case 2:
-			padTop += 8
-		case 3:
-			padTop += 5
-		}
-	}
-	ui.Column(c).FillWidth().Padding(padTop, 10, padY, 10).Children(func() {
-		weight := 0
-		if kind == mdoc.Heading {
-			level := 1
-			if blocks := a.blocks[a.editing].doc.Blocks; len(blocks) > 0 {
-				level = blocks[0].Level
-			}
-			weight = 700
-			if level > 2 {
-				weight = 650
-			}
-		}
-		if a.editHandle == nil {
-			h := ui.Handle{}
-			a.editHandle = &h
-		}
-		codeLang := ""
-		if kind == mdoc.Code {
-			if blocks := a.blocks[a.editing].doc.Blocks; len(blocks) > 0 {
-				codeLang = blocks[0].Lang
-			}
-			if codeLang != "" {
-				ui.Row(c).Padding(0, 0, 6, 2).Children(func() {
-					ui.Text(c, codeLang).FontSize(10.5).TextColor(t.TextMuted).SingleLine()
-				})
-			}
-		}
-		if kind == mdoc.Math {
-			if bmp := mdoc.RenderMath(a.editSource, 18, t.Dark); bmp != nil {
-				w, h := bmp.Size()
-				fw := float32(w) * 72 / 192 * 1.4
-				fh := float32(h) * 72 / 192 * 1.4
-				maxW := float32(660)
-				if fw > maxW {
-					fh = fh * maxW / fw
-					fw = maxW
-				}
-				ui.Row(c).FillWidth().Justify(ui.Center).Padding(0, 0, 8, 0).Children(func() {
-					ui.Image(c, bmp).Size(fw, fh)
-				})
-			}
-		}
-		ta := ui.TextAreaBase(c, &a.editSource).
-			Bind(a.editHandle).
-			Lines(1, 40).
-			FontSize(size).LineHeight(lineHeight).
-			TextColor(t.Text).Label("编辑块").
-			OnPaste(func(string) bool {
-				a.editPasted = true
-				return false
-			})
-		if a.editAutoFocus {
-			a.editAutoFocus = false
-			ta.Focus()
-		}
-		if weight > 0 {
-			ta.FontWeight(weight)
-		}
-		ta.HandleInput(func(ev ui.InputEvent) bool {
-			if ev.Kind == ui.InputText {
-				return a.autoPair(ev.Text)
-			}
-			if ev.Kind != ui.InputKeyDown {
-				return false
-			}
-			start, end := a.editSelStart, a.editSelEnd
-			if ev.Mods == ui.Cmd {
-				switch ev.Key {
-				case ui.KeyB:
-					a.wrapEdit(start, end, "**")
-					return true
-				case ui.KeyI:
-					a.wrapEdit(start, end, "*")
-					return true
-				case ui.KeyU:
-					a.wrapEdit(start, end, "~~")
-					return true
-				case ui.KeyE:
-					a.wrapEdit(start, end, "`")
-					return true
-				case ui.KeyK:
-					a.insertLink(start, end)
-					return true
-				case ui.Key0:
-					a.setHeading(0)
-					return true
-				}
-				if ev.Key >= ui.Key1 && ev.Key <= ui.Key6 {
-					a.setHeading(int(ev.Key - ui.Key0))
-					return true
-				}
-			}
-			if ev.Mods == ui.Shift {
-				switch ev.Key {
-				case ui.KeyTab:
-					a.indentEdit(start, end, true)
-					return true
-				case ui.KeyDown:
-					return a.extendSelectionDown()
-				case ui.KeyUp:
-					return a.extendSelectionUp()
-				}
-				return false
-			}
-			if ev.Mods == 0 && ev.Key == ui.KeyTab {
-				a.indentEdit(start, end, false)
-				return true
-			}
-			if ev.Mods != 0 {
-				return false
-			}
-			return a.handleBlockArrow(start, end, ev.Key)
-		})
-		if font != "" {
-			ta.Font(font)
-		}
-		switch kind {
-		case mdoc.Code:
-			ta.Padding(14, 16).Radius(4).Background(t.Surface)
-		case mdoc.Math:
-			ta.Padding(10, 12).Radius(4).Background(t.Surface).Font("monospace")
-			ta.FontSize(float32(a.fontSize) - 2)
-		case mdoc.Quote:
-			ta.Padding(0, 0, 0, 16).BorderWidth(0, 0, 0, 3).BorderColor(t.Border)
-			ta.TextColor(t.TextMuted)
-		default:
-			ta.Padding(0)
-		}
-		if kind == mdoc.Code {
-			ta.TextRanges(codeRanges(a.editSource, codeLang, t)...)
-		} else if kind != mdoc.Math {
-			ta.TextRanges(markdownRanges(a.editSource, t)...)
-		}
-		if a.editCaretSet {
-			end := a.editCaretTarget
-			if a.editSelectEnd > end {
-				end = a.editSelectEnd
-			}
-			ta.SetTextSelection(a.editCaretTarget, end)
-			a.editCaretSet = false
-			a.editSelectEnd = 0
-		} else if a.editPlaceCaret {
-			caret := a.caretFromPoint(c, kind, a.editClickX, a.editClickY, size, lineHeight, font, a.blockTextWidth(c))
-			ta.SetTextSelection(caret, caret)
-			a.editPlaceCaret = false
-		}
-		if ta.Changed() {
-			cut := -1
-			if !a.editPasted && canSplitBlock(kind) {
-				cut = newlineInsertion(a.editBefore, a.editSource)
-			}
-			if cut >= 0 && mods&ui.Shift == 0 {
-				a.splitBlockAtNewline(cut)
-				return
-			}
-			if cut >= 0 && mods&ui.Shift != 0 {
-				// Shift+Enter is Markdown's hard break: two spaces before the
-				// newline keeps it inside the paragraph, and the caret moves
-				// after the break so typing continues on the next line.
-				a.editSource = a.editSource[:cut] + "  " + a.editSource[cut:]
-				a.editCaretSet = true
-				a.editCaretTarget = len([]rune(a.editSource[:cut+3]))
-				a.editPlaceCaret = false
-			}
-			a.editPasted = false
-			a.applyBlockEdit()
-			a.editBefore = a.editSource
-		}
-		focused := ta.Focused()
-		if a.editWasFocus && !focused {
-			a.commitBlock()
-			return
-		}
-		if focused {
-			a.editWasFocus = true
-		}
-		a.editSelStart, a.editSelEnd = ta.TextSelection()
-	})
-}
-
-func (a *App) beginBlockEdit(i int) {
-	a.beginBlockEditAt(i, -1, -1)
-}
-
-func (a *App) beginBlockEditAt(i int, x, y float32) {
-	if i < 0 || i >= len(a.blocks) {
-		return
-	}
-	if a.imageEdit != nil {
-		a.commitImage()
-	}
-	if a.rich != nil {
-		a.commitRich()
-	}
-	if a.editing == i {
-		return
-	}
-	if a.cellEdit != nil {
-		a.commitCell(a.cellEdit, a.cellEdit.value)
-	}
-	if a.editing >= 0 {
-		a.commitBlock()
-	}
-	b := a.blocks[i]
-	content, prefix, suffix := "", "", ""
-	if blocks := b.doc.Blocks; len(blocks) > 0 && blocks[0].Kind == mdoc.Code {
-		prefix, content, suffix = codeFenceParts(b.Source)
-	} else if len(blocks) > 0 && blocks[0].Kind == mdoc.Math {
-		prefix, content, suffix = mathFenceParts(b.Source)
-	} else {
-		content = b.Source
-	}
-	a.editing = i
-	a.editSource = content
-	a.editAffixPrefix = prefix
-	a.editAffixSuffix = suffix
-	a.editStart = b.Start
-	a.editEnd = b.End
-	a.editWasFocus = false
-	a.editClickX, a.editClickY = x, y
-	a.editPlaceCaret = x >= 0 && y >= 0
-	a.editBefore = a.editSource
-	a.editPasted = false
-	a.editCaretSet = false
-	a.editAutoFocus = true
-	h := ui.Handle{}
-	a.editHandle = &h
-	a.editSelStart, a.editSelEnd = 0, 0
-	a.editSelectEnd = 0
-}
-
-// caretFromPoint turns the click in the rendered block into a rune offset in
-// its Markdown source. The text is laid out with the same font and line
-// height as the editor, so a click lands near the character under it; markup
-// markers make the mapping approximate, as in any source-based inline editor.
-func (a *App) blockTextWidth(c *ui.Context) float32 {
-	w, _ := c.Size()
-	card := w - railWidth - a.canvasLeft(c) - 8 - a.panelW
-	content := card
-	if content > 800 {
-		content = 800
-	}
-	return content - 64 - 20
-}
-
-// caretFromPoint turns the click in the rendered block into a rune offset in
-// its Markdown source. It wraps the source at the editor's width, picks the
-// visual line under the pointer and measures the prefix to the nearest rune;
-// markup markers make the mapping approximate, as in any source-based inline
-// editor.
-func (a *App) caretFromPoint(c *ui.Context, kind mdoc.Kind, x, y, size, lineHeight float32, font string, width float32) int {
-	src := []rune(a.editSource)
-	if len(src) == 0 {
-		return 0
-	}
-	padX, padY := float32(10), float32(5)
-	textW := width
-	switch kind {
-	case mdoc.Code:
-		padX, padY = 26, 19
-		textW -= 32
-	case mdoc.Quote:
-		padX = 26
-		textW -= 16
-	}
-	x -= padX
-	y -= padY
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-	if textW < 40 {
-		textW = 40
-	}
-
-	type vline struct{ start, end int }
-	var lines []vline
-	offset := 0
-	for _, raw := range strings.Split(a.editSource, "\n") {
-		runes := []rune(raw)
-		if len(runes) == 0 {
-			lines = append(lines, vline{offset, offset})
-			offset++
-			continue
-		}
-		start := 0
-		for start < len(runes) {
-			end := start + 1
-			for end <= len(runes) {
-				w, _ := c.MeasureText(0, ui.Span{Text: string(runes[start:end]), Font: font, Size: size})
-				if w > textW && end-start > 1 {
-					break
-				}
-				end++
-			}
-			if end > len(runes) {
-				end = len(runes)
-			}
-			lines = append(lines, vline{offset + start, offset + end})
-			start = end
-		}
-		offset += len(runes) + 1
-	}
-	if len(lines) == 0 {
-		return 0
-	}
-
-	line := 0
-	if lh := size * lineHeight; lh > 0 {
-		line = int(y / lh)
-	}
-	if line < 0 {
-		line = 0
-	}
-	if line >= len(lines) {
-		line = len(lines) - 1
-	}
-	vl := lines[line]
-	best, bestDist := vl.start, float32(1<<30)
-	for i := vl.start; i <= vl.end && i <= len(src); i++ {
-		w, _ := c.MeasureText(0, ui.Span{Text: string(src[vl.start:i]), Font: font, Size: size})
-		d := w - x
-		if d < 0 {
-			d = -d
-		}
-		if d < bestDist {
-			best, bestDist = i, d
-		}
-	}
-	if best < 0 {
-		return 0
-	}
-	if best > len(src) {
-		return len(src)
-	}
-	return best
-}
-
-// toggleTask flips the item-th task marker in a list block's raw source.
-func (a *App) toggleTask(block, item int, checked bool) {
-	// The task box is clickable while the item is in rich editing: toggle the
-	// run model there and let the rich commit serialize [x]/[ ].
-	if r := a.rich; r != nil && r.block == block && r.task {
-		if r.checked != checked {
-			r.toggleTask()
-		}
-		a.richDirty()
-		a.invalidate()
-		return
-	}
-	if block < 0 || block >= len(a.blocks) {
-		return
-	}
-	b := a.blocks[block]
-	src := b.Source
-	offset, seen := -1, 0
-	for i := 0; i+2 < len(src); i++ {
-		if src[i] == '[' && (src[i+1] == ' ' || src[i+1] == 'x' || src[i+1] == 'X') && src[i+2] == ']' {
-			if seen == item {
-				offset = i
-				break
-			}
-			seen++
-		}
-	}
-	if offset < 0 {
-		return
-	}
-	mark := "[ ]"
-	if checked {
-		mark = "[x]"
-	}
-	next := src[:offset] + mark + src[offset+3:]
-	a.source = a.source[:b.Start] + next + a.source[b.End:]
-	a.refreshDoc()
-	a.dirty = true
-	a.updateTitle()
-	a.invalidate()
-}
-
-func (a *App) moveCell(dir int) {
-	ce := a.cellEdit
-	if ce == nil || ce.block < 0 || ce.block >= len(a.blocks) {
-		return
-	}
-	b := a.blocks[ce.block]
-	if len(b.doc.Blocks) == 0 || b.doc.Blocks[0].Kind != mdoc.Table {
-		return
-	}
-	rows := len(b.doc.Blocks[0].Rows)
-	cols := 0
-	for _, r := range b.doc.Blocks[0].Rows {
-		if len(r) > cols {
-			cols = len(r)
-		}
-	}
-	if cols == 0 {
-		return
-	}
-	row, col := ce.row, ce.col+dir
-	if col >= cols {
-		row++
-		col = 0
-	}
-	if col < 0 {
-		row--
-		col = cols - 1
-	}
-	if row < 0 {
-		row = rows - 1
-		col = cols - 1
-	}
-	appendRow := row >= rows
-	if appendRow {
-		row = rows
-		col = 0
-	}
-	a.commitCell(ce, ce.value)
-	if appendRow && !a.appendTableRow(ce.block, cols) {
-		return
-	}
-	a.startCellEdit(ce.block, row, col)
-	a.invalidate()
-}
-
-func (a *App) appendTableRow(block, cols int) bool {
-	if block < 0 || block >= len(a.blocks) {
-		return false
-	}
-	b := a.blocks[block]
-	if b.Source == "" {
-		return false
-	}
-	row := "|" + strings.Repeat("   |", cols)
-	next := b.Source + "\n" + row
-	a.source = a.source[:b.Start] + next + a.source[b.End:]
-	a.refreshDoc()
-	a.dirty = true
-	a.updateTitle()
-	return true
-}
-
-func (a *App) startCellEdit(block, row, col int) {
-	if block < 0 || block >= len(a.blocks) {
-		return
-	}
-	if a.cellEdit != nil {
-		if a.cellEdit.block == block && a.cellEdit.row == row && a.cellEdit.col == col {
-			return
-		}
-		a.commitCell(a.cellEdit, a.cellEdit.value)
-	}
-	if a.editing >= 0 {
-		a.commitBlock()
-	}
-	if block >= len(a.blocks) {
-		return
-	}
-	line, ok := tableSourceLine(a.blocks[block].Source, row)
-	if !ok {
-		return
-	}
-	parts, _, _ := splitTableLine(line)
-	if col < 0 || col >= len(parts) {
-		return
-	}
-	a.cellEdit = &cellEditor{
-		block: block,
-		row:   row,
-		col:   col,
-		value: strings.TrimSpace(parts[col]),
-	}
-	a.invalidate()
-}
-
-func (a *App) commitCell(ce *cellEditor, value string) {
-	if ce == nil || a.cellEdit != ce {
-		return
-	}
-	a.cellEdit = nil
-	if ce.block < 0 || ce.block >= len(a.blocks) {
-		return
-	}
-	b := a.blocks[ce.block]
-	lines := strings.Split(b.Source, "\n")
-	idx := 0
-	if ce.row > 0 {
-		idx = ce.row + 1
-	}
-	if idx < 0 || idx >= len(lines) {
-		return
-	}
-	parts, lead, trail := splitTableLine(lines[idx])
-	if ce.col < 0 || ce.col >= len(parts) {
-		return
-	}
-	seg := parts[ce.col]
-	left := seg[:len(seg)-len(strings.TrimLeft(seg, " \t"))]
-	right := seg[len(strings.TrimRight(seg, " \t")):]
-	value = strings.ReplaceAll(value, "|", "\\|")
-	parts[ce.col] = left + value + right
-	lines[idx] = joinTableLine(parts, lead, trail)
-	next := strings.Join(lines, "\n")
-	if next != b.Source {
-		a.source = a.source[:b.Start] + next + a.source[b.End:]
-		a.refreshDoc()
-		a.dirty = true
-		a.updateTitle()
-	}
-	a.invalidate()
-}
-
-// tableSourceLine maps a rendered table row to its line in the block source:
-// row 0 is the header, row 1 the first body row, with the alignment line in
-// between.
-func tableSourceLine(src string, row int) (string, bool) {
-	lines := strings.Split(src, "\n")
-	idx := 0
-	if row > 0 {
-		idx = row + 1
-	}
-	if idx < 0 || idx >= len(lines) {
-		return "", false
-	}
-	return lines[idx], true
-}
-
-func splitTableLine(line string) (parts []string, lead, trail bool) {
-	trimmed := strings.TrimSpace(line)
-	lead = strings.HasPrefix(trimmed, "|")
-	trail = strings.HasSuffix(trimmed, "|")
-	if lead {
-		trimmed = trimmed[1:]
-	}
-	if trail && len(trimmed) > 0 {
-		trimmed = trimmed[:len(trimmed)-1]
-	}
-	return strings.Split(trimmed, "|"), lead, trail
-}
-
-func joinTableLine(parts []string, lead, trail bool) string {
-	s := strings.Join(parts, "|")
-	if lead {
-		s = "|" + s
-	}
-	if trail {
-		s += "|"
-	}
-	return s
-}
-
-// ---------------------------------------------------------------------------
-// Table structure commands: rows and columns are edited through the block's
-// source lines, keeping the alignment row in sync with every mutation.
-
-// tableColumnCount reads the table's column count from its alignment line.
-func tableColumnCount(src string) int {
-	lines := strings.Split(src, "\n")
-	if len(lines) < 2 {
-		return 0
-	}
-	parts, _, _ := splitTableLine(lines[1])
-	return len(parts)
-}
-
-// tableRows counts rendered rows (header + body rows).
-func tableRows(b sourceBlock) int {
-	if len(b.doc.Blocks) == 0 || b.doc.Blocks[0].Kind != mdoc.Table {
-		return 0
-	}
-	return len(b.doc.Blocks[0].Rows)
-}
-
-// mutateTable rewrites the table block's source through fn and refreshes.
-func (a *App) mutateTable(block int, fn func(lines []string) []string) bool {
-	if block < 0 || block >= len(a.blocks) {
-		return false
-	}
-	b := a.blocks[block]
-	if b.Source == "" {
-		return false
-	}
-	next := strings.Join(fn(strings.Split(b.Source, "\n")), "\n")
-	if next == b.Source {
-		return false
-	}
-	a.source = a.source[:b.Start] + next + a.source[b.End:]
-	a.refreshDoc()
-	a.dirty = true
-	a.updateTitle()
-	a.invalidate()
-	return true
-}
-
-// tableAnchor commits an open cell edit and returns its row/col as the
-// anchor for structure commands.
-func (a *App) tableAnchor(block int) (row, col int, ok bool) {
-	if a.cellEdit != nil && a.cellEdit.block == block {
-		ce := a.cellEdit
-		a.commitCell(ce, ce.value)
-		return ce.row, ce.col, true
-	}
-	return 1, 0, false
-}
-
-// insertTableRowBelow inserts an empty body row after rendered row at
-// (at < 0 or past the end appends after the last row).
-func (a *App) insertTableRowBelow(block, at int) bool {
-	if block < 0 || block >= len(a.blocks) {
-		return false
-	}
-	cols := tableColumnCount(a.blocks[block].Source)
-	if cols == 0 {
-		return false
-	}
-	rows := tableRows(a.blocks[block])
-	row := at
-	if row < 0 || row >= rows {
-		row = rows - 1
-	}
-	return a.mutateTable(block, func(lines []string) []string {
-		idx := row + 2 // row 0 → after the alignment line; row r → after line r+1
-		if idx > len(lines) {
-			idx = len(lines)
-		}
-		empty := "|" + strings.Repeat("   |", cols)
-		out := make([]string, 0, len(lines)+1)
-		out = append(out, lines[:idx]...)
-		out = append(out, empty)
-		return append(out, lines[idx:]...)
-	})
-}
-
-// deleteTableRow removes the body row at rendered row at. The header and
-// alignment lines are chrome and cannot be deleted.
-func (a *App) deleteTableRow(block, at int) bool {
-	if at < 1 {
-		return false
-	}
-	return a.mutateTable(block, func(lines []string) []string {
-		idx := at + 1
-		if idx >= len(lines) {
-			return lines
-		}
-		return append(lines[:idx], lines[idx+1:]...)
-	})
-}
-
-// alignmentStyle mirrors a neighbour alignment cell's colon style.
-func alignmentStyle(seg string) string {
-	s := strings.TrimSpace(seg)
-	left := strings.HasPrefix(s, ":")
-	right := strings.HasSuffix(s, ":") && len(s) > 1
-	switch {
-	case left && right:
-		return ":---:"
-	case right:
-		return "---:"
-	case left:
-		return ":---"
-	default:
-		return "---"
-	}
-}
-
-// insertTableColumnAt inserts an empty column before rendered column at
-// (at == cols appends after the last column). The alignment line's new
-// cell mirrors the neighbour's colon style.
-func (a *App) insertTableColumnAt(block, at int) bool {
-	if block < 0 || block >= len(a.blocks) {
-		return false
-	}
-	cols := tableColumnCount(a.blocks[block].Source)
-	if cols == 0 {
-		return false
-	}
-	if at < 0 {
-		at = 0
-	}
-	if at > cols {
-		at = cols
-	}
-	return a.mutateTable(block, func(lines []string) []string {
-		out := make([]string, len(lines))
-		for i, line := range lines {
-			parts, lead, trail := splitTableLine(line)
-			if len(parts) != cols {
-				out[i] = line // 结构不齐的行保持原样
-				continue
-			}
-			seg := "   "
-			if i == 1 {
-				style := "---"
-				if at > 0 {
-					style = alignmentStyle(parts[at-1])
-				} else if len(parts) > 0 {
-					style = alignmentStyle(parts[0])
-				}
-				neighbour := at
-				if neighbour >= len(parts) {
-					neighbour = len(parts) - 1
-				}
-				p := parts[neighbour]
-				left := p[:len(p)-len(strings.TrimLeft(p, " \t"))]
-				right := p[len(strings.TrimRight(p, " \t")):]
-				seg = left + style + right
-			}
-			next := append(append([]string{}, parts[:at]...), seg)
-			next = append(next, parts[at:]...)
-			out[i] = joinTableLine(next, lead, trail)
-		}
-		return out
-	})
-}
-
-// deleteTableColumnAt removes rendered column at from every line and refuses
-// to reduce the table below one column.
-func (a *App) deleteTableColumnAt(block, at int) bool {
-	if block < 0 || block >= len(a.blocks) {
-		return false
-	}
-	cols := tableColumnCount(a.blocks[block].Source)
-	if cols <= 1 {
-		a.notice("表格至少保留一列")
-		return false
-	}
-	if at < 0 || at >= cols {
-		return false
-	}
-	return a.mutateTable(block, func(lines []string) []string {
-		out := make([]string, len(lines))
-		for i, line := range lines {
-			parts, lead, trail := splitTableLine(line)
-			if len(parts) != cols {
-				out[i] = line
-				continue
-			}
-			next := append(append([]string{}, parts[:at]...), parts[at+1:]...)
-			out[i] = joinTableLine(next, lead, trail)
-		}
-		return out
-	})
-}
-
-// tableMenu attaches the row/column commands to a rendered table. The
-// commands anchor to the cell being edited; without one, insertion appends
-// at the end and the delete items are not offered.
-func (a *App) tableMenu(el ui.Element, block int) {
-	el.ContextMenu(func(m *ui.Menu) {
-		row, col, hasAnchor := a.tableAnchor(block)
-		if m.Item("在下方插入行").Chosen() {
-			a.insertTableRowBelow(block, row)
-		}
-		if hasAnchor && row >= 1 && m.Item("删除此行").Chosen() {
-			a.deleteTableRow(block, row)
-		}
-		m.Separator()
-		if m.Item("在左侧插入列").Chosen() {
-			a.insertTableColumnAt(block, col)
-		}
-		if m.Item("在右侧插入列").Chosen() {
-			a.insertTableColumnAt(block, col+1)
-		}
-		if hasAnchor && m.Item("删除此列").Chosen() {
-			a.deleteTableColumnAt(block, col)
-		}
-	})
-}
-
-// insertRowBelowCell commits the cell and starts editing a fresh row below
-// it, same column (Cmd+Enter inside a cell).
-func (a *App) insertRowBelowCell() {
-	ce := a.cellEdit
-	if ce == nil {
-		return
-	}
-	block, row, col := ce.block, ce.row, ce.col
-	a.commitCell(ce, ce.value)
-	if !a.insertTableRowBelow(block, row) {
-		return
-	}
-	a.startCellEdit(block, row+1, col)
-	a.invalidate()
-}
-
-func canSplitBlock(kind mdoc.Kind) bool {
-	switch kind {
-	case mdoc.Paragraph, mdoc.Heading, mdoc.List, mdoc.Quote:
-		return true
-	}
-	return false
-}
-
-// newlineInsertion reports where a single newline was inserted, if it was the
-// only change. That is how a TextArea's Enter arrives: it has no Submitted.
-func newlineInsertion(prev, cur string) int {
-	if len(cur) != len(prev)+1 {
-		return -1
-	}
-	i := 0
-	for i < len(prev) && prev[i] == cur[i] {
-		i++
-	}
-	if i < len(cur) && cur[i] == '\n' {
-		return i
-	}
-	return -1
-}
-
-// splitBlockAtNewline turns Enter in a paragraph, heading, list item or quote
-// line into a new editable block, as Typora does, instead of a soft newline.
-func (a *App) splitBlockAtNewline(cut int) {
-	if a.editing < 0 || a.editing >= len(a.blocks) {
-		return
-	}
-	b := a.blocks[a.editing]
-	src := a.editSource
-	if cut < 0 || cut >= len(src) || src[cut] != '\n' {
-		a.applyBlockEdit()
-		return
-	}
-	before, after := src[:cut], src[cut+1:]
-
-	kind := mdoc.Paragraph
-	if blocks := b.doc.Blocks; len(blocks) > 0 {
-		kind = blocks[0].Kind
-	}
-	sep := "\n\n"
-	newSource := after
-	caret := 0
-	switch kind {
-	case mdoc.List:
-		sep = "\n"
-		marker := listMarker(src)
-		newSource = marker + after
-		caret = len([]rune(marker))
-	case mdoc.Quote:
-		sep = "\n"
-		marker := "> "
-		newSource = marker + after
-		caret = len([]rune(marker))
-	}
-
-	newText := before + sep + newSource
-	pos := b.Start + len(before) + len(sep)
-	a.source = a.source[:b.Start] + newText + a.source[b.End:]
-	a.refreshDoc()
-
-	idx := -1
-	if newSource != "" {
-		for i := range a.blocks {
-			if a.blocks[i].Start == pos {
-				idx = i
-				break
-			}
-		}
-	}
-	if idx < 0 {
-		if newSource != "" {
-			a.applyBlockEdit()
-			return
-		}
-		// A new empty paragraph needs a block to type into; the source has a
-		// blank gap, so insert a transient block at that position.
-		idx = 0
-		for idx < len(a.blocks) && a.blocks[idx].Start < pos {
-			idx++
-		}
-		a.blocks = append(a.blocks, sourceBlock{})
-		copy(a.blocks[idx+1:], a.blocks[idx:])
-		a.blocks[idx] = sourceBlock{Start: pos, End: pos, Source: "", doc: mdoc.Parse("")}
-	}
-	if idx >= len(a.blocks) {
-		a.editing = -1
-		return
-	}
-	x := a.blocks[idx]
-	a.editing = idx
-	a.editSource = x.Source
-	a.editAffixPrefix = ""
-	a.editAffixSuffix = ""
-	a.editStart = x.Start
-	a.editEnd = x.End
-	a.editWasFocus = false
-	a.editBefore = a.editSource
-	a.editPasted = false
-	a.editPlaceCaret = false
-	a.editCaretSet = true
-	a.editCaretTarget = caret
-	a.editAutoFocus = true
-	h := ui.Handle{}
-	a.editHandle = &h
-	a.editSelStart, a.editSelEnd = 0, 0
-	a.editSelectEnd = 0
-	a.dirty = true
-	a.updateTitle()
-	a.invalidate()
-}
-
-func listMarker(src string) string {
-	lower := strings.ToLower(src)
-	for _, task := range []string{"- [ ] ", "- [x] ", "* [ ] ", "* [x] ", "+ [ ] ", "+ [x] "} {
-		if strings.HasPrefix(lower, task) {
-			return "- [ ] "
-		}
-	}
-	for _, p := range []string{"- ", "* ", "+ "} {
-		if strings.HasPrefix(src, p) {
-			return p
-		}
-	}
-	i := 0
-	for i < len(src) && i < 3 && src[i] >= '0' && src[i] <= '9' {
-		i++
-	}
-	if i > 0 && i+1 < len(src) && (src[i] == '.' || src[i] == ')') && src[i+1] == ' ' {
-		return src[:i+2]
-	}
-	return "- "
-}
-
-func (a *App) handleBlockArrow(start, end int, key ui.Key) bool {
-	if a.editing < 0 {
-		return false
-	}
-	n := len([]rune(a.editSource))
-	switch key {
-	case ui.KeyRight, ui.KeyDown:
-		if start == end && end >= n && a.editing+1 < len(a.blocks) {
-			a.moveEditTo(a.editing+1, 0)
-			return true
-		}
-	case ui.KeyLeft, ui.KeyUp:
-		if start == end && start <= 0 && a.editing > 0 {
-			prev := a.editing - 1
-			a.moveEditTo(prev, len([]rune(a.blocks[prev].Source)))
-			return true
-		}
-	}
-	return false
-}
-
-func (a *App) moveEditTo(idx, caret int) {
-	if idx < 0 || idx >= len(a.blocks) {
-		return
-	}
-	a.applyBlockEdit()
-	a.commitBlock()
-	a.beginBlockEditAt(idx, -1, -1)
-	a.editCaretSet = true
-	a.editCaretTarget = caret
-	a.editPlaceCaret = false
-	a.editSelStart, a.editSelEnd = caret, caret
-	a.invalidate()
-}
-
-func (a *App) wrapEdit(start, end int, marker string) {
-	src := []rune(a.editSource)
-	if start < 0 || end < start || end > len(src) {
-		return
-	}
-	selected := string(src[start:end])
-	next := string(src[:start]) + marker + selected + marker + string(src[end:])
-	a.editSource = next
-	a.editBefore = next
-	a.applyBlockEdit()
-	caret := start + len(marker) + len([]rune(selected))
-	a.editCaretSet = true
-	a.editCaretTarget = caret
-	a.editPlaceCaret = false
-	a.editSelStart, a.editSelEnd = caret, caret
-	a.invalidate()
-}
-
-// applyEditSource writes the editor value back, keeping a selection for the
-// next frame (used by link/heading/indent shortcuts and auto-pair).
-func (a *App) applyEditSource(next string, selStart, selEnd int) {
-	a.editSource = next
-	a.editBefore = next
-	a.applyBlockEdit()
-	a.editCaretSet = true
-	a.editCaretTarget = selStart
-	a.editSelectEnd = selEnd
-	a.editSelStart, a.editSelEnd = selStart, selEnd
-	a.editPlaceCaret = false
-	a.invalidate()
-}
-
-func (a *App) setHeading(level int) {
-	src := []rune(a.editSource)
-	i := 0
-	for i < len(src) && src[i] == '#' {
-		i++
-	}
-	prefixLen := 0
-	if i > 0 && i < len(src) && src[i] == ' ' {
-		prefixLen = i + 1
-	}
-	content := string(src[prefixLen:])
-	prefix := ""
-	if level > 0 {
-		prefix = strings.Repeat("#", level) + " "
-	}
-	a.applyEditSource(prefix+content, len([]rune(prefix)), len([]rune(prefix)))
-}
-
-func (a *App) insertLink(start, end int) {
-	src := []rune(a.editSource)
-	if start < 0 || end < start || end > len(src) {
-		return
-	}
-	selected := string(src[start:end])
-	label := "[" + selected + "]"
-	url := "https://"
-	next := string(src[:start]) + label + "(" + url + ")" + string(src[end:])
-	urlStart := start + len([]rune(label)) + 1
-	a.applyEditSource(next, urlStart, urlStart+len([]rune(url)))
-}
-
-// The link URL popover edits the run in the rich editor directly: runs
-// carry the link target and r.markdown() serializes it back to source.
-
-// editLinkAtCaret opens the URL popover when the rich caret sits inside a
-// link run. It reports whether a link was found.
-func (a *App) editLinkAtCaret() bool {
-	if a.rich == nil {
-		return false
-	}
-	off := 0
-	for i, run := range a.rich.runs {
-		n := len([]rune(run.Text))
-		if run.Link != "" && a.rich.caret >= off && a.rich.caret <= off+n {
-			a.linkPopURL = run.Link
-			a.linkPopLabel = run.Text
-			a.linkPopRun = i
-			a.linkPopOpen = true
+// openDropped opens the first document among files dropped on the editor.
+func (a *App) openDropped(paths []string) {
+	for _, p := range paths {
+		if st, err := os.Stat(p); err == nil && st.IsDir() {
+			a.setWorkspace(p)
 			a.invalidate()
-			return true
-		}
-		off += n
-	}
-	return false
-}
-
-// applyLinkPop writes the edited URL back into the link run.
-func (a *App) applyLinkPop() {
-	if !a.linkPopOpen || a.rich == nil || a.linkPopRun < 0 || a.linkPopRun >= len(a.rich.runs) {
-		a.linkPopOpen = false
-		return
-	}
-	url := strings.TrimSpace(a.linkPopURL)
-	if url == "" || strings.ContainsAny(url, ")\n") {
-		a.notice("链接 URL 不能为空或包含括号")
-		a.linkPopOpen = false
-		return
-	}
-	if a.rich.runs[a.linkPopRun].Link == url {
-		a.linkPopOpen = false
-		return
-	}
-	a.rich.runs[a.linkPopRun].Link = url
-	a.linkPopRun = -1
-	a.linkPopOpen = false
-	a.richDirty()
-	a.invalidate()
-}
-
-// linkPopover renders the URL editor over the document (renameDialog style).
-func (a *App) linkPopover(c *ui.Context) {
-	t := c.Theme()
-	ui.Modal(c, &a.linkPopOpen, func() {
-		ui.Column(c).Width(460).Gap(12).Padding(18).Radius(12).
-			Background(t.Background).Border(1, t.Border).
-			Shadow(0, 18, 50, 0, ui.RGBA(0, 0, 0, 0.22)).Children(func() {
-			ui.Text(c, "编辑链接").FontSize(14).FontWeight(600)
-			ui.Text(c, a.linkPopLabel).FontSize(12).TextColor(t.TextMuted).
-				SingleLine().Ellipsis("…")
-			input := ui.TextInput(c, &a.linkPopURL).AutoFocus().Label("URL")
-			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				if ui.Button(c, "取消").Clicked() {
-					a.linkPopOpen = false
-					a.invalidate()
-				}
-				if ui.PrimaryButton(c, "确定").Clicked() || input.Submitted() {
-					a.applyLinkPop()
-				}
-			})
-		})
-	})
-}
-
-func (a *App) indentEdit(start, end int, outdent bool) {
-	src := []rune(a.editSource)
-	if start < 0 || end < start || end > len(src) {
-		return
-	}
-	lineStart := start
-	for lineStart > 0 && src[lineStart-1] != '\n' {
-		lineStart--
-	}
-	delta := 0
-	var next []rune
-	if outdent {
-		remove := 0
-		if lineStart < len(src) && src[lineStart] == '\t' {
-			remove = 1
-		} else {
-			for remove < 2 && lineStart+remove < len(src) && src[lineStart+remove] == ' ' {
-				remove++
-			}
-		}
-		if remove == 0 {
 			return
 		}
-		next = append(append([]rune{}, src[:lineStart]...), src[lineStart+remove:]...)
-		delta = -remove
-	} else {
-		next = append(append([]rune{}, src[:lineStart]...), append([]rune{' ', ' '}, src[lineStart:]...)...)
-		delta = 2
+		if isEditableFile(p) {
+			a.requestOpen(p)
+			return
+		}
 	}
-	ns := max(0, start+delta)
-	ne := max(0, end+delta)
-	if ns > lineStart+delta {
-		// keep within line
-	}
-	a.applyEditSource(string(next), ns, ne)
 }
 
-func (a *App) extendSelectionUp() bool {
-	if a.editing <= 0 {
-		return false
+// codeLanguage returns the language a file is code in, for the editor to
+// show it as code, or "" for Markdown: .md files, and README-like files
+// without an extension.
+func codeLanguage(path string) string {
+	if path == "" {
+		return ""
 	}
-	if a.editSelStart != a.editSelEnd || a.editSelStart > 0 {
-		return false
+	base := filepath.Base(path)
+	ext := strings.ToLower(filepath.Ext(base))
+	switch ext {
+	case ".md", ".markdown", ".mdx":
+		return ""
 	}
-	a.applyBlockEdit()
-	if a.editing <= 0 {
-		return false
+	if lang := editor.LanguageFor(base); lang != nil {
+		if strings.EqualFold(lang.Name, "markdown") {
+			return ""
+		}
+		return lang.Name
 	}
-	idx := a.editing
-	prev := a.blocks[idx-1]
-	current := a.blocks[idx]
-	before := a.editSource
-	merged := prev.Source + "\n\n" + before
-	a.editSource = merged
-	a.editStart = prev.Start
-	a.editEnd = current.End
-	a.blocks = append(a.blocks[:idx], a.blocks[idx+1:]...)
-	a.editing = idx - 1
-	a.applyBlockEdit()
-	a.editCaretSet = true
-	a.editCaretTarget = 0
-	a.editSelectEnd = len([]rune(prev.Source))
-	a.editSelStart = 0
-	a.editSelEnd = a.editSelectEnd
-	a.editPlaceCaret = false
-	a.invalidate()
-	return true
+	if ext == "" {
+		return ""
+	}
+	return "text"
 }
 
-func (a *App) extendSelectionDown() bool {
-	if a.editing < 0 || a.editing+1 >= len(a.blocks) {
-		return false
+// loadDoc makes src the document, as opening a file does: the history of
+// undo starts over. Windows line endings are kept as \n while editing and
+// written back as they were.
+func (a *App) loadDoc(src string) {
+	a.crlf = strings.Contains(src, "\r\n")
+	if a.crlf {
+		src = strings.ReplaceAll(src, "\r\n", "\n")
 	}
-	if a.editSelStart != a.editSelEnd || a.editSelEnd < len([]rune(a.editSource)) {
-		return false
-	}
-	a.applyBlockEdit()
-	if a.editing+1 >= len(a.blocks) {
-		return false
-	}
-	next := a.blocks[a.editing+1]
-	before := a.editSource
-	merged := before + "\n\n" + next.Source
-	a.editSource = merged
-	a.editEnd = next.End
-	a.blocks = append(a.blocks[:a.editing+1], a.blocks[a.editing+2:]...)
-	a.applyBlockEdit()
-	a.editCaretSet = true
-	a.editCaretTarget = len([]rune(before))
-	a.editSelectEnd = len([]rune(merged))
-	a.editSelStart = a.editCaretTarget
-	a.editSelEnd = a.editSelectEnd
-	a.editPlaceCaret = false
-	a.invalidate()
-	return true
+	a.ed.SetOptions(a.editorOptions())
+	a.ed.SetSource(src)
+	a.source = src
+	a.searchKey = [2]string{}
+	a.refreshHeadings()
 }
 
-func (a *App) autoPair(text string) bool {
-	r := []rune(text)
-	if len(r) != 1 {
-		return false
-	}
-	open := r[0]
-	close, ok := map[rune]rune{
-		'(': ')', '[': ']', '{': '}', '"': '"', '\'': '\'', '`': '`',
-		'*': '*', '_': '_', '~': '~',
-	}[open]
-	if !ok {
-		return false
-	}
-	src := []rune(a.editSource)
-	start, end := a.editSelStart, a.editSelEnd
-	if start < 0 || end < start || end > len(src) {
-		return false
-	}
-	if start != end {
-		selected := string(src[start:end])
-		next := string(src[:start]) + string(open) + selected + string(close) + string(src[end:])
-		a.applyEditSource(next, start+1, start+1+len([]rune(selected)))
-		return true
-	}
-	if start < len(src) && src[start] == close {
-		a.applyEditSource(string(src), start+1, start+1)
-		return true
-	}
-	next := string(src[:start]) + string(open) + string(close) + string(src[start:])
-	a.applyEditSource(next, start+1, start+1)
-	return true
-}
-
-func (a *App) applyBlockEdit() {
-	if a.editing < 0 {
+// docChanged takes a change of the document from the editor: the user's
+// typing, or an edit the app made through it.
+func (a *App) docChanged() {
+	src := a.ed.Source()
+	if src == a.source {
 		return
 	}
-	old := a.source
-	next := a.editAffixPrefix + a.editSource + a.editAffixSuffix
-	a.source = a.source[:a.editStart] + next + a.source[a.editEnd:]
-	a.editEnd = a.editStart + len(next)
-	a.parseDoc()
-	if a.source != old {
-		a.dirty = true
-		a.updateTitle()
-	}
-}
-
-func (a *App) commitBlock() {
-	if a.editing < 0 {
-		return
-	}
-	a.blocks = splitSource(a.source)
-	a.editing = -1
-	a.editSource = ""
-	a.editAffixPrefix = ""
-	a.editAffixSuffix = ""
-	a.editWasFocus = false
-	a.editBefore = ""
-	a.editPasted = false
-	a.editCaretSet = false
-	a.parseDoc()
-	a.updateTitle()
-	a.invalidate()
-}
-
-func (a *App) startBlankBlock() {
-	a.source = "# 无标题\n\n"
-	a.refreshDoc()
+	a.source = src
 	a.dirty = true
+	a.refreshHeadings()
 	a.updateTitle()
+}
+
+// refreshHeadings reads the outline from the editor's parse.
+func (a *App) refreshHeadings() {
+	a.headings = a.headings[:0]
+	for _, h := range a.ed.Headings() {
+		a.headings = append(a.headings, heading{level: h.Level, text: h.Text, offset: h.Offset})
+	}
+	if a.outlineRow >= len(a.headings) {
+		a.outlineRow = -1
+	}
+}
+
+// editDoc replaces the document with src as an edit the user can undo, as
+// the AI's tools change it.
+func (a *App) editDoc(src string) {
+	a.ed.ReplaceAll(src)
+	a.docChanged()
 	a.invalidate()
+}
+
+// diskSource is the document as it is written to disk.
+func (a *App) diskSource() string {
+	if a.crlf {
+		return strings.ReplaceAll(a.source, "\n", "\r\n")
+	}
+	return a.source
+}
+
+// openLink opens a link Cmd-clicked in the document: a heading of the
+// document by its anchor, a document of the workspace by its path, or a
+// page in the browser.
+func (a *App) openLink(href string) {
+	href = strings.TrimSpace(href)
+	switch {
+	case href == "":
+		return
+	case strings.HasPrefix(href, "#"):
+		slug := strings.TrimPrefix(href, "#")
+		for _, h := range a.headings {
+			if headingSlug(h.text) == strings.ToLower(slug) {
+				a.ed.ScrollToOffset(h.offset)
+				return
+			}
+		}
+		return
+	case strings.Contains(href, "://") || strings.HasPrefix(href, "mailto:"):
+		go openExternal(href)
+		return
+	}
+	p := href
+	if i := strings.IndexAny(p, "#?"); i >= 0 {
+		p = p[:i]
+	}
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(a.docDir(), filepath.FromSlash(p))
+	}
+	if st, err := os.Stat(p); err == nil && !st.IsDir() && isEditableFile(p) {
+		a.requestOpen(p)
+		return
+	}
+	go openExternal(p)
+}
+
+// headingSlug is the anchor of a heading, as GitHub makes it.
+func headingSlug(text string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(text)) {
+		switch {
+		case r == ' ' || r == '-':
+			b.WriteRune('-')
+		case r == '_' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r > 127:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// saveImage stores an image pasted into the document in an assets folder
+// next to it, and returns the path the document links it by. An unsaved
+// document keeps it in the temporary folder, by its absolute path.
+func (a *App) saveImage(data []byte, ext string) (string, error) {
+	if ext == "" {
+		ext = ".png"
+	}
+	dir := a.docDir()
+	rel := dir != ""
+	if !rel {
+		dir = filepath.Join(os.TempDir(), "muse-images")
+	} else {
+		dir = filepath.Join(dir, "assets")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	p := uniquePath(dir, "image-"+time.Now().Format("20060102-150405"), ext)
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		return "", err
+	}
+	if rel {
+		return "assets/" + filepath.Base(p), nil
+	}
+	return filepath.ToSlash(p), nil
 }
 
 func plainSpans(spans []mdoc.Span) string {

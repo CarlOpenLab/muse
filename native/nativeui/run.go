@@ -9,6 +9,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"muse/mdedit"
 )
 
 // Run opens the native Muse window and runs the app loop. It is called by the
@@ -17,11 +19,6 @@ import (
 func Run() {
 	app := New()
 	mygo.App.SetName("Muse")
-	// The WebView canvas (editor-web/ → nativeui/web/dist) rides along in
-	// the binary; MUSE_NATIVE_EDITOR=1 or a missing web engine falls back
-	// to the all-native editor.
-	serveWebFrontend()
-	mygo.BindAs("Muse", &webBridgeService{a: app})
 	mygo.App.WhenReady(func() {
 		switch os.Getenv("MUSE_THEME") {
 		case "light":
@@ -81,7 +78,6 @@ func (a *App) openWindow() {
 		TitleBarHeight:       44,
 		TrafficLightPosition: &mygo.Point{X: 12, Y: 15},
 	})
-	a.initWebEditor()
 	a.installMenu()
 	a.updateTitle()
 	a.win.OnClose(func(e *mygo.CloseEvent) {
@@ -116,25 +112,6 @@ func (a *App) openWindow() {
 	a.win.Focus()
 	mygo.App.Focus()
 
-	if path := os.Getenv("MUSE_CAPTURE_WEB"); path != "" {
-		go func() {
-			delay := 5 * time.Second
-			if ms := os.Getenv("MUSE_CAPTURE_DELAY_MS"); ms != "" {
-				if n, err := strconv.Atoi(ms); err == nil {
-					delay = time.Duration(n) * time.Millisecond
-				}
-			}
-			time.Sleep(delay)
-			if a.webView != nil {
-				if png, err := a.webView.CapturePage(); err == nil {
-					_ = os.WriteFile(path, png, 0o644)
-				} else {
-					log.Printf("capture web canvas: %v", err)
-				}
-			}
-			mygo.App.Exit(0)
-		}()
-	}
 	if path := os.Getenv("MUSE_CAPTURE"); path != "" {
 		go func() {
 			delay := 1200 * time.Millisecond
@@ -181,6 +158,10 @@ func (a *App) installMenu() {
 			},
 		},
 		{Role: mygo.RoleEditMenu},
+		// 段落与格式：快捷键由编辑器自己处理（见右键菜单），这里不再挂
+		// Accelerator，免得同一按键在菜单和编辑器里各触发一次。
+		{Label: "段落", Submenu: a.paragraphMenu(click)},
+		{Label: "格式", Submenu: a.formatMenu(click)},
 		{
 			Label: "视图",
 			Submenu: []*mygo.MenuItem{
@@ -189,11 +170,56 @@ func (a *App) installMenu() {
 				{Label: "搜索", Accelerator: "CmdOrCtrl+F", Click: click(func() { a.togglePanel(panelSearch) })},
 				{Label: "AI 助手", Click: click(func() { a.togglePanel(panelAI) })},
 				mygo.Separator(),
-				{Label: "切换主题", Accelerator: "CmdOrCtrl+Shift+T", Click: click(func() { a.themeMode = 1 - a.themeMode; a.pushWebTheme() })},
+				{Label: "切换主题", Accelerator: "CmdOrCtrl+Shift+T", Click: click(func() { a.themeMode = 1 - a.themeMode })},
 				mygo.Separator(),
 				{Label: "设置…", Accelerator: "CmdOrCtrl+,", Click: click(a.openSettings)},
 			},
 		},
 		{Role: mygo.RoleWindowMenu},
 	}))
+}
+
+// editorAction runs fn on the editor and gives it the keyboard back, as a
+// menu item takes it.
+func (a *App) editorAction(fn func(e *mdedit.Editor)) func() {
+	return func() {
+		fn(a.ed)
+		a.ed.Focus()
+	}
+}
+
+// paragraphMenu is the menu bar's 段落: headings, quotations, lists and
+// the blocks of code, math and tables.
+func (a *App) paragraphMenu(click func(func()) func(*mygo.MenuItem, *mygo.Window)) []*mygo.MenuItem {
+	var items []*mygo.MenuItem
+	for i, name := range []string{"一级标题", "二级标题", "三级标题", "四级标题", "五级标题", "六级标题"} {
+		level := i + 1
+		items = append(items, &mygo.MenuItem{Label: name, Click: click(a.editorAction(func(e *mdedit.Editor) { e.SetHeading(level) }))})
+	}
+	return append(items,
+		&mygo.MenuItem{Label: "正文", Click: click(a.editorAction(func(e *mdedit.Editor) { e.SetHeading(0) }))},
+		mygo.Separator(),
+		&mygo.MenuItem{Label: "引用", Click: click(a.editorAction((*mdedit.Editor).ToggleQuote))},
+		&mygo.MenuItem{Label: "有序列表", Click: click(a.editorAction(func(e *mdedit.Editor) { e.ToggleList("1.") }))},
+		&mygo.MenuItem{Label: "无序列表", Click: click(a.editorAction(func(e *mdedit.Editor) { e.ToggleList("-") }))},
+		&mygo.MenuItem{Label: "任务列表", Click: click(a.editorAction(func(e *mdedit.Editor) { e.ToggleList("- [ ]") }))},
+		mygo.Separator(),
+		&mygo.MenuItem{Label: "代码块", Click: click(a.editorAction((*mdedit.Editor).InsertCodeBlock))},
+		&mygo.MenuItem{Label: "公式块", Click: click(a.editorAction((*mdedit.Editor).InsertMathBlock))},
+		&mygo.MenuItem{Label: "表格", Click: click(a.editorAction(func(e *mdedit.Editor) { e.InsertTable(3, 3) }))},
+		&mygo.MenuItem{Label: "分隔线", Click: click(a.editorAction((*mdedit.Editor).InsertRule))},
+	)
+}
+
+// formatMenu is the menu bar's 格式: the formats of text.
+func (a *App) formatMenu(click func(func()) func(*mygo.MenuItem, *mygo.Window)) []*mygo.MenuItem {
+	return []*mygo.MenuItem{
+		{Label: "加粗", Click: click(a.editorAction((*mdedit.Editor).ToggleBold))},
+		{Label: "斜体", Click: click(a.editorAction((*mdedit.Editor).ToggleItalic))},
+		{Label: "下划线", Click: click(a.editorAction((*mdedit.Editor).ToggleUnderline))},
+		{Label: "删除线", Click: click(a.editorAction((*mdedit.Editor).ToggleStrike))},
+		{Label: "行内代码", Click: click(a.editorAction((*mdedit.Editor).ToggleCode))},
+		mygo.Separator(),
+		{Label: "链接", Click: click(a.editorAction((*mdedit.Editor).InsertLink))},
+	}
 }

@@ -1,6 +1,6 @@
 # Muse · MyGo 原生外壳
 
-Muse 现在完全由 MyGo `ui` 绘制：窗口、56px 图标栏、上下文栏、Markdown 编辑器、AI 面板与设置都在 `nativeui/`，不加载 WebView，也不需要前端构建。
+Muse 完全由 MyGo `ui` 绘制：窗口、56px 图标栏、上下文栏、AI 面板与设置在 `nativeui/`，所见即所得的 Markdown 编辑器在 `mdedit/`；不加载 WebView，也不需要前端构建。
 
 ## 运行
 
@@ -23,7 +23,8 @@ go test -C native ./...
 ```
 native/
 ├── main.go            原生入口，只调用 nativeui.Run
-├── nativeui/          窗口、图标栏、上下文栏、原地编辑、AI、Mermaid
+├── nativeui/          窗口、图标栏、上下文栏、AI
+├── mdedit/            所见即所得编辑器：解析、排版、绘制、光标、输入法、撤销
 ├── mdoc/              Markdown 模型、渲染、代码高亮、go-latex 公式
 ├── doc/               文件类型注册表
 ├── services/          原生 AI HTTP 客户端与遗留服务
@@ -49,4 +50,4 @@ native/
 - 段落、标题、列表、引用、表格内的行内公式，以及块级公式与矩阵都由 go-latex 排版；
 - Mermaid 支持流程图、时序图、状态图、饼图、类图子集与甘特图子集；高级特性可能回退为代码；
 - AI 对话持久化到 chat.json，支持模型发现、插入文档与清空；
-- 更新、导出、最近文件等旧 WebView 功能已随外壳移除，尚未在原生 UI 中重新实现。
+- 更新、导出等旧 Electron 时代的功能尚未在原生 UI 中重新实现。

@@ -198,6 +198,11 @@ func (g *mermaidGraph) height() float32 {
 
 func renderMermaid(c *ui.Context, g *mermaidGraph, s rstyle) {
 	t := c.Theme()
+	ui.Box(c).FillWidth().Height(g.height()).Draw(func(p *ui.Painter, r ui.Rect) { g.draw(p, r, t) })
+}
+
+// draw paints the diagram in r.
+func (g *mermaidGraph) draw(p *ui.Painter, r ui.Rect, t *ui.Theme) {
 	maxLevel := 0
 	for _, n := range g.nodes {
 		if n.level > maxLevel {
@@ -208,20 +213,18 @@ func renderMermaid(c *ui.Context, g *mermaidGraph, s rstyle) {
 	for _, n := range g.nodes {
 		rows[n.level] = append(rows[n.level], n)
 	}
-	ui.Box(c).FillWidth().Height(g.height()).Draw(func(p *ui.Painter, r ui.Rect) {
-		g.layout(r)
-		for _, e := range g.edges {
-			g.drawEdge(p, e, t)
-		}
-		for _, n := range g.nodes {
-			rect := n.rect
-			p.Fill(rect, t.Surface, 7)
-			p.Stroke(rect, t.Border, 7, 1)
-			sp := ui.Span{Text: n.label, Size: 12.5, Color: t.Text}
-			tw, th := p.MeasureText(rect.W-16, sp)
-			p.RichText(rect.X+(rect.W-tw)/2, rect.Y+(rect.H-th)/2, rect.W-16, sp)
-		}
-	})
+	g.layout(r)
+	for _, e := range g.edges {
+		g.drawEdge(p, e, t)
+	}
+	for _, n := range g.nodes {
+		rect := n.rect
+		p.Fill(rect, t.Surface, 7)
+		p.Stroke(rect, t.Border, 7, 1)
+		sp := ui.Span{Text: n.label, Size: 12.5, Color: t.Text}
+		tw, th := p.MeasureText(rect.W-16, sp)
+		p.RichText(rect.X+(rect.W-tw)/2, rect.Y+(rect.H-th)/2, rect.W-16, sp)
+	}
 }
 
 func (g *mermaidGraph) layout(r ui.Rect) {

@@ -1,6 +1,6 @@
 # Muse
 
-**What you write is what you see.** A native-first Markdown editor with a tool-using AI writing agent — a Go shell wrapped around an embedded WYSIWYG canvas, no Electron.
+**What you write is what you see.** A fully native Markdown editor with a tool-using AI writing agent — the whole app is drawn by Go on the GPU: no WebView, no Electron.
 
 [![Release](https://img.shields.io/github/v/release/CarlOpenLab/muse?color=24292f)](https://github.com/CarlOpenLab/muse/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-24292f)](LICENSE)
@@ -10,17 +10,20 @@ English | [简体中文](README.zh-CN.md)
 
 Website: **https://carlopenlab.github.io/muse/**
 
-Built with [MyGo](https://mygo.egoist.dev/). The split:
-
-- **Native shell, drawn by Go on the GPU** (Metal / Direct3D 11 / OpenGL) — window, icon rail, file tree, outline, search, and the whole AI agent panel.
-- **Embedded WYSIWYG canvas** — the Markdown surface is a Vue 3 + Milkdown (ProseMirror) page hosted in MyGo's own WebView element, rendered and edited in one representation. It is built into the binary (`go:embed`), so there is still **one Go binary, no Electron, no Node at runtime**. When no WebView is available, a fully native block editor takes over.
+Built with [MyGo](https://mygo.egoist.dev/). The window, icon rail, file tree, outline, search, the AI agent panel and the editor itself are all drawn by Go with MyGo's `ui` package (Metal / Direct3D 11 / OpenGL), with text laid out by the system's own engine (Core Text / DirectWrite / Pango). One Go binary — no browser engine and no Node at runtime.
 
 ## The editor
 
-- **Typora-style in-place editing** — the canvas *is* the rendered document: click a paragraph, heading, list item, quote or table cell and edit it as rich text. Markers (`#`, `**`, links, fences, pipes) stay out of your way; `Tab`/`Shift+Tab` indents list lines and walks table cells; `⌘B/I/U/E` wraps emphasis and code, `⌘K` edits links, `⌘0–6` switches heading levels.
-- **Native Markdown rendering** — headings, tables, task lists, quotes, code with syntax highlighting, images, and block/inline math typeset with go-latex.
-- **Mermaid, natively** — flowcharts, sequence, state, pie, class and Gantt subsets, typeset by the same engine as your text.
-- **Workspace panel** — file tree, outline jump, full-text search and the AI assistant share one sidebar, switched from the icon rail; recently opened files live in the open menu.
+The editor (`native/mdedit`) is one surface the whole document is written on, behaving as Typora does:
+
+- **Seamless WYSIWYG** — the document *is* the rendering: the caret moves continuously through paragraphs, headings, lists, quotes, tables, code and math, and selections cross blocks to copy, cut and delete.
+- **Syntax only at the caret** — block syntax (`#`, list markers, `>`, fences, table pipes) never shows; the markers of `**bold**`, `` `code` ``, `[links](url)`, `$math$` and `![images](src)` appear in light gray only while the caret is in them, and render again when it leaves.
+- **Markdown as you type** — `# `, `- `, `1. `, `- [ ] `, `> ` at the start of a line become a heading, list, task or quote at once; ```` ``` ```` opens a closed code block, `$$` a math block, and `| a | b |` + Enter a table.
+- **Typora's keys** — Enter continues a list (and leaves it on an empty item) or a quote; `Shift+Enter` breaks the line; Backspace at the start of a block turns a heading into a paragraph and an item out of its list; `Tab`/`Shift+Tab` nest list items and walk table cells; `⌘B/I/U/E/K`, `⌘0–6`, `⌘⇧Q/[/]/K/M` and `⌘⌥T` format; full undo and redo — the agent's edits included.
+- **Native rendering** — headings, task lists, code highlighted in 30+ languages, tables (alignment, row/column commands), images (local, remote, pasted or dropped — saved into `assets/`), block and inline math typeset with go-latex on the text's baseline, footnotes, YAML front matter and inline HTML formatting tags.
+- **Mermaid, natively** — flowcharts, sequence, state, pie, class and Gantt subsets, drawn whenever the caret is elsewhere.
+- **Input methods** — Chinese and Japanese input methods compose at the caret, with their candidate window beside it.
+- **Workspace panel** — file tree, an outline that follows the caret, find and replace, and the AI assistant share one sidebar, switched from the icon rail; text files that are not Markdown (`.json`, `.go`, …) open as highlighted code.
 
 ## The agent
 
@@ -45,25 +48,24 @@ go build -C native -o Muse .  # build a binary
 go test -C native ./...       # tests
 ```
 
-Requires Go 1.27+. No Node, no pnpm, no vite — the canvas ships prebuilt and embedded; `editor-web/` is only needed if you want to hack on the canvas itself.
+Requires Go 1.27.3+. No Node, no pnpm, no vite — there is no frontend build at all.
 
 ## Project layout
 
 ```
 native/
 ├── main.go            native entry point
-├── nativeui/          window, icon rail, context panel, agent, fallback block editor
-│   └── web/           embedded canvas build (served at mygo://localhost)
-├── mdoc/              Markdown model, renderer, syntax highlighting, math images
+├── nativeui/          window, icon rail, context panel, agent
+├── mdedit/            the WYSIWYG Markdown editor: parse, layout, paint, caret, IME, undo
+├── mdoc/              Markdown model and renderer (agent chat), math typesetting, Mermaid
 ├── doc/               document type registry
 ├── services/          native AI HTTP client
 └── cmd/               auxiliary commands
-editor-web/            Vue 3 + Milkdown canvas source (prebuilt into native/nativeui/web/dist)
 ```
 
 ## Known limits
 
-- Inline math is typeset in paragraphs, headings, list items, quotes and table cells; rarer TeX commands may still fall back to source.
+- Math is typeset with go-latex; rarer TeX commands may fall back to source.
 - Mermaid covers flowcharts, sequence, state, pie, a class-diagram subset and a Gantt subset; advanced features may render as code.
 - Chat history is capped at the last 100 messages.
 

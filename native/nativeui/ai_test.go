@@ -198,9 +198,8 @@ func TestAgentToolsOnWorkspace(t *testing.T) {
 	if data, err := os.ReadFile(doc); err != nil {
 		t.Fatal(err)
 	} else {
-		a.source = string(data)
+		a.loadDoc(string(data))
 	}
-	a.refreshDoc()
 
 	// list_documents
 	out := a.execToolOnMain("list_documents", "{}")
@@ -282,8 +281,7 @@ func TestAgentToolsOnWorkspace(t *testing.T) {
 
 func TestAgentToolsUnsavedDoc(t *testing.T) {
 	a := New()
-	a.source = "# 草稿\n\n还没保存\n"
-	a.refreshDoc()
+	a.loadDoc("# 草稿\n\n还没保存\n")
 	out := a.execToolOnMain("read_document", "{}")
 	if !out.OK || !strings.Contains(out.Content, "还没保存") {
 		t.Fatalf("read unsaved = %+v", out)
@@ -542,8 +540,7 @@ func TestAIViewShowsApprovalCard(t *testing.T) {
 
 func TestInsertAIContentAppendsToDocument(t *testing.T) {
 	a := New()
-	a.source = "# 无标题\n\n旧内容\n"
-	a.refreshDoc()
+	a.loadDoc("# 无标题\n\n旧内容\n")
 	a.insertAIContent("## AI 回答\n\n新段落")
 	if !strings.Contains(a.source, "新段落") || !strings.Contains(a.source, "旧内容") {
 		t.Fatalf("source = %q", a.source)
@@ -591,8 +588,7 @@ func TestAgentToolsMoreOnWorkspace(t *testing.T) {
 	a := New()
 	a.root = dir
 	a.path = doc
-	a.source = "# 笔记\n\n正文内容\n"
-	a.refreshDoc()
+	a.loadDoc("# 笔记\n\n正文内容\n")
 
 	// create_folder
 	out := a.execToolOnMain("create_folder", `{"path":"archive/2024"}`)

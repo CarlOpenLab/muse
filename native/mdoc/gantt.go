@@ -248,74 +248,77 @@ func (g *ganttChart) height() float32 {
 
 func renderGantt(c *ui.Context, g *ganttChart) {
 	t := c.Theme()
-	ui.Box(c).FillWidth().Height(g.height()).Draw(func(p *ui.Painter, r ui.Rect) {
-		y := r.Y + 12
-		if g.title != "" {
-			sp := ui.Span{Text: g.title, Size: 13, Weight: 650, Color: t.Text}
-			p.RichText(r.X+16, y, 0, sp)
-			y += 24
-		}
-		labelW := float32(160)
-		timelineX := r.X + labelW
-		timelineW := r.W - labelW - 20
-		if timelineW < 120 {
-			timelineW = 120
-		}
-		days := float32(g.end.Sub(g.start).Hours() / 24)
-		if days <= 0 {
-			days = 1
-		}
-		pxPerDay := timelineW / days
+	ui.Box(c).FillWidth().Height(g.height()).Draw(func(p *ui.Painter, r ui.Rect) { g.draw(p, r, t) })
+}
 
-		// Date ticks.
-		ticks := 5
-		for i := 0; i <= ticks; i++ {
-			x := timelineX + timelineW*float32(i)/float32(ticks)
-			p.Line(x, y, x, y+float32(len(g.rows))*26+4, 1, t.Border)
-			label := g.start.Add(time.Duration(float64(days) * float64(i) / float64(ticks) * float64(24*time.Hour))).Format("01-02")
-			sp := ui.Span{Text: label, Size: 9.5, Color: t.TextMuted}
-			p.RichText(x+3, y-16, 0, sp)
-		}
-		y += 8
+// draw paints the diagram in r.
+func (g *ganttChart) draw(p *ui.Painter, r ui.Rect, t *ui.Theme) {
+	y := r.Y + 12
+	if g.title != "" {
+		sp := ui.Span{Text: g.title, Size: 13, Weight: 650, Color: t.Text}
+		p.RichText(r.X+16, y, 0, sp)
+		y += 24
+	}
+	labelW := float32(160)
+	timelineX := r.X + labelW
+	timelineW := r.W - labelW - 20
+	if timelineW < 120 {
+		timelineW = 120
+	}
+	days := float32(g.end.Sub(g.start).Hours() / 24)
+	if days <= 0 {
+		days = 1
+	}
+	pxPerDay := timelineW / days
 
-		rowY := y
-		for _, row := range g.rows {
-			if row.task == nil {
-				sp := ui.Span{Text: row.section, Size: 11, Weight: 650, Color: t.Text}
-				p.RichText(r.X+16, rowY+5, labelW-24, sp)
-				rowY += 26
-				continue
-			}
-			task := row.task
-			sp := ui.Span{Text: task.name, Size: 10.5, Color: t.Text}
-			p.RichText(r.X+24, rowY+6, labelW-32, sp)
-			offset := float32(task.start.Sub(g.start).Hours() / 24)
-			x := timelineX + offset*pxPerDay
-			w := float32(task.duration.Hours()/24) * pxPerDay
-			if task.milestone {
-				path := ui.Path{}
-				path.MoveTo(x+5, rowY+5)
-				path.LineTo(x+10, rowY+13)
-				path.LineTo(x+5, rowY+21)
-				path.LineTo(x, rowY+13)
-				path.Close()
-				p.FillPath(&path, t.TextMuted)
-				rowY += 26
-				continue
-			}
-			if w < 4 {
-				w = 4
-			}
-			color := ui.Hex(piePalette[0])
-			if task.done {
-				color = ui.Hex("#6aa84f")
-			} else if task.active {
-				color = ui.Hex("#4f7cff")
-			} else if task.crit {
-				color = ui.Hex("#e5679b")
-			}
-			p.Fill(ui.Rect{X: x, Y: rowY + 7, W: w, H: 12}, color, 3)
+	// Date ticks.
+	ticks := 5
+	for i := 0; i <= ticks; i++ {
+		x := timelineX + timelineW*float32(i)/float32(ticks)
+		p.Line(x, y, x, y+float32(len(g.rows))*26+4, 1, t.Border)
+		label := g.start.Add(time.Duration(float64(days) * float64(i) / float64(ticks) * float64(24*time.Hour))).Format("01-02")
+		sp := ui.Span{Text: label, Size: 9.5, Color: t.TextMuted}
+		p.RichText(x+3, y-16, 0, sp)
+	}
+	y += 8
+
+	rowY := y
+	for _, row := range g.rows {
+		if row.task == nil {
+			sp := ui.Span{Text: row.section, Size: 11, Weight: 650, Color: t.Text}
+			p.RichText(r.X+16, rowY+5, labelW-24, sp)
 			rowY += 26
+			continue
 		}
-	})
+		task := row.task
+		sp := ui.Span{Text: task.name, Size: 10.5, Color: t.Text}
+		p.RichText(r.X+24, rowY+6, labelW-32, sp)
+		offset := float32(task.start.Sub(g.start).Hours() / 24)
+		x := timelineX + offset*pxPerDay
+		w := float32(task.duration.Hours()/24) * pxPerDay
+		if task.milestone {
+			path := ui.Path{}
+			path.MoveTo(x+5, rowY+5)
+			path.LineTo(x+10, rowY+13)
+			path.LineTo(x+5, rowY+21)
+			path.LineTo(x, rowY+13)
+			path.Close()
+			p.FillPath(&path, t.TextMuted)
+			rowY += 26
+			continue
+		}
+		if w < 4 {
+			w = 4
+		}
+		color := ui.Hex(piePalette[0])
+		if task.done {
+			color = ui.Hex("#6aa84f")
+		} else if task.active {
+			color = ui.Hex("#4f7cff")
+		} else if task.crit {
+			color = ui.Hex("#e5679b")
+		}
+		p.Fill(ui.Rect{X: x, Y: rowY + 7, W: w, H: 12}, color, 3)
+		rowY += 26
+	}
 }

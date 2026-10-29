@@ -1247,7 +1247,6 @@ func (a *App) toolRenameDocument(rel, relNew string) toolOutcome {
 		a.path = newPath
 		a.selectedPath = newPath
 		a.updateTitle()
-		a.pushWebDoc()
 	}
 	a.addRecent(newPath, false)
 	return toolOK(map[string]any{"path": newPath, "moved": true})
@@ -1733,34 +1732,10 @@ func (a *App) toolInsertIntoDocument(text, position string) toolOutcome {
 	return toolOK(map[string]any{"position": "end"})
 }
 
-// commitOpenEditors 把正在编辑的块/富文本/单元格先提交回源码，
-// 免得工具写入的内容被编辑器的旧副本覆盖。
-func (a *App) commitOpenEditors() {
-	if a.cellEdit != nil {
-		a.commitCell(a.cellEdit, a.cellEdit.value)
-		a.cellEdit = nil
-	}
-	if a.rich != nil {
-		a.commitRich()
-	}
-	if a.imageEdit != nil {
-		a.commitImage()
-	}
-	if a.editing >= 0 {
-		a.applyBlockEdit()
-		a.commitBlock()
-	}
-}
-
-// applyToolSourceEdit 把工具改出的新内容落到当前文档（编辑器状态）。
+// applyToolSourceEdit 把工具改出的新内容落到当前文档：经编辑器作为一步
+// 可撤销的修改写入，用户按 ⌘Z 就能退回 AI 的改动。
 func (a *App) applyToolSourceEdit(content string) {
-	a.commitOpenEditors()
-	a.source = content
-	a.refreshDoc()
-	a.dirty = true
-	a.updateTitle()
-	a.pushWebDoc()
-	a.invalidate()
+	a.editDoc(content)
 }
 
 // applyToolFileEdit 把工具改出的内容写到磁盘上的其他文件。
@@ -1777,12 +1752,8 @@ func (a *App) applyToolFileEdit(path, content string) error {
 
 // insertTextAtStart 把一段 Markdown 放到当前文档最前面。
 func (a *App) insertTextAtStart(text string) {
-	a.commitOpenEditors()
-	a.source = strings.TrimRight(text, "\n") + "\n\n" + strings.TrimLeft(a.source, "\n")
-	a.refreshDoc()
-	a.dirty = true
-	a.updateTitle()
-	a.pushWebDoc()
+	a.ed.PrependBlock(text)
+	a.docChanged()
 	a.notice("已插入到文档开头")
 	a.invalidate()
 }

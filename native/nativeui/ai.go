@@ -344,19 +344,9 @@ func (a *App) insertAIContent(text string) {
 	if text == "" {
 		return
 	}
-	if a.editing >= 0 {
-		a.applyBlockEdit()
-		a.commitBlock()
-	}
-	a.source = strings.TrimRight(a.source, "\n") + "\n\n" + text + "\n"
-	a.refreshDoc()
-	a.dirty = true
-	a.updateTitle()
-	// 画布模式：推送新文档并滚到插入的开头。
-	a.pushWebDoc()
-	if first := strings.SplitN(strings.TrimSpace(text), "\n", 2)[0]; first != "" {
-		a.scrollToText(first)
-	}
+	// 追加到文档末尾，作为编辑器里的一步撤销；光标随之滚到插入处。
+	a.ed.AppendBlock(text)
+	a.docChanged()
 	a.notice("已插入文档")
 	a.invalidate()
 }

@@ -81,8 +81,7 @@ func TestAgentLoopEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.path = docPath
-	a.source = doc
-	a.refreshDoc()
+	a.loadDoc(doc)
 	a.ai = aiSettings{BaseURL: srv.URL, APIKey: "k", Model: "m", Tools: defaultAITools()}
 	a.aiInput = "总结一下这篇文档"
 	a.sendAI()
@@ -242,7 +241,7 @@ func approvalFixture(t *testing.T, secondRound func(toolContent string) string) 
 }
 
 // approvalApp 起一个带文档的 app，按给定权限预设发出会触发审批的请求。
-func approvalApp(t *testing.T, srv *httptest.Server, perm aiPerm) (*App, *ui.Tester) {
+func approvalApp(t *testing.T, srv *httptest.Server, perm aiPerm, setup ...func(*App)) (*App, *ui.Tester) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("MUSE_CONFIG_DIR", dir)
@@ -253,13 +252,15 @@ func approvalApp(t *testing.T, srv *httptest.Server, perm aiPerm) (*App, *ui.Tes
 	a := New()
 	a.root = dir
 	a.path = doc
-	a.source = "# 旧标题\n\n正文\n"
-	a.refreshDoc()
+	a.loadDoc("# 旧标题\n\n正文\n")
 	a.panel = panelAI
 	a.panelWidth = a.panelTargetWidth()
 	a.aiPerm = perm // 必须在 sendAI 前设好，循环会立刻读到
 	a.ai = aiSettings{BaseURL: srv.URL, Model: "m", Tools: defaultAITools()}
 	a.aiInput = "把标题改掉"
+	for _, fn := range setup {
+		fn(a) // 设置要在 sendAI 前定好：循环一开始就读它们
+	}
 	a.sendAI()
 	tt := ui.NewTester(a.View, 348, 800)
 	return a, tt
@@ -457,11 +458,9 @@ func TestAgentManageDisabled(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a, _ := approvalApp(t, srv, permAsk)
-	a.ai.Tools = aiTools{Browse: true, Edit: true, Manage: false}
-	if err := os.WriteFile(a.path, []byte("# 旧标题\n\n正文\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	a, _ := approvalApp(t, srv, permAsk, func(a *App) {
+		a.ai.Tools = aiTools{Browse: true, Edit: true, Manage: false}
+	})
 	waitIdle(t, a)
 
 	if _, err := os.Stat(a.path); err != nil {

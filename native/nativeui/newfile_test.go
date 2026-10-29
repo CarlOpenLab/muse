@@ -13,7 +13,6 @@ func TestNewFileToolbarCreatesAndOpens(t *testing.T) {
 	dir := t.TempDir()
 	a := New()
 	a.root = dir
-	a.refreshDoc()
 
 	tt := ui.NewTester(a.View, 1200, 800)
 	if err := tt.Click("新建文件"); err != nil {

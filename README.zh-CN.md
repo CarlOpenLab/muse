@@ -1,6 +1,6 @@
 # Muse
 
-**所写，即所见。** 原生优先的桌面 Markdown 编辑器，内置会用工具的写作 Agent——Go 外壳 + 内嵌 WYSIWYG 画布，没有 Electron。
+**所写，即所见。** 全原生的桌面 Markdown 编辑器，内置会用工具的写作 Agent——整个应用由 Go 绘制在 GPU 上，没有 WebView，没有 Electron。
 
 [![Release](https://img.shields.io/github/v/release/CarlOpenLab/muse?color=24292f)](https://github.com/CarlOpenLab/muse/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-24292f)](LICENSE)
@@ -10,17 +10,20 @@
 
 官网：**https://carlopenlab.github.io/muse/**
 
-基于 [MyGo](https://mygo.egoist.dev/) 构建，架构分两层：
-
-- **原生外壳，由 Go 绘制在 GPU 上**（Metal / Direct3D 11 / OpenGL）——窗口、图标栏、文件树、大纲、搜索与整个 AI Agent 面板。
-- **内嵌 WYSIWYG 画布**——Markdown 面是一个 Vue 3 + Milkdown（ProseMirror）页面，由 MyGo 自带的 WebView 元素承载，渲染与编辑同一份表示。它已构建进二进制（`go:embed`），因此仍是**一个 Go 二进制，没有 Electron，运行时不需要 Node**。WebView 不可用时，全原生块编辑器接管。
+基于 [MyGo](https://mygo.egoist.dev/) 构建。窗口、图标栏、文件树、大纲、搜索、AI Agent 面板，以及正文编辑器本身，全部由 Go 用 MyGo 的 `ui` 包绘制（Metal / Direct3D 11 / OpenGL），文本经系统排版引擎（Core Text / DirectWrite / Pango）排版。一个 Go 二进制，运行时不需要浏览器内核，也不需要 Node。
 
 ## 编辑器
 
-- **Typora 式原地编辑** — 画布即渲染结果：点击段落、标题、列表项、引用或表格单元格，直接在富文本上编辑；`#`、`**`、链接、围栏、表格线等标记统统隐去。`Tab`/`Shift+Tab` 缩进列表与行走表格单元格；`⌘B/I/U/E` 包裹强调与代码，`⌘K` 编辑链接，`⌘0–6` 切换标题级别。
-- **原生 Markdown 渲染** — 标题、表格、任务列表、引用、语法高亮代码、图片，块级/行内公式由 go-latex 排版。
-- **Mermaid 原生支持** — 流程图、时序图、状态图、饼图、类图与甘特图子集，与正文同一引擎排版。
-- **工作区面板** — 文件树、大纲跳转、全文搜索与 AI 助手共享一条侧栏，由图标栏切换；最近打开的文件在打开菜单里。
+编辑器（`native/mdedit`）是一整面可以直接书写的文档，行为对齐 Typora：
+
+- **所见即所得的整篇编辑** — 文档就是渲染结果：光标在段落、标题、列表、引用、表格、代码与公式之间连续移动，可以跨块选择、复制、删除。
+- **语法只在光标处显露** — `#`、列表符号、`>`、代码围栏、表格竖线这些块级标记永远隐藏；`**粗体**`、`` `代码` ``、`[链接](url)`、`$公式$`、`![图片](src)` 的标记只在光标进入时以浅灰色出现，离开即渲染。
+- **Markdown 即时生效** — 行首键入 `# `、`- `、`1. `、`- [ ] `、`> ` 立刻变成标题、列表、任务、引用；键入 ```` ``` ```` 生成带闭合围栏的代码块，`$$` 生成公式块，`| a | b |` 回车生成表格。
+- **Typora 式按键** — 回车在列表里续项、在空项上退出列表、在引用里续段；`Shift+Enter` 软换行；行首退格把标题降为正文、把列表项移出列表；`Tab`/`Shift+Tab` 缩进列表、在表格单元格间移动；`⌘B/I/U/E/K`、`⌘0–6`、`⌘⇧Q/[/]/K/M`、`⌘⌥T` 等格式快捷键；完整撤销/重做（AI 的修改同样可以撤销）。
+- **原生渲染** — 标题、任务列表、带语法高亮的代码（30+ 语言）、表格（对齐、增删行列）、图片（本地 / 远程 / 粘贴 / 拖入，自动存进 `assets/`）、go-latex 排版的块级与行内公式（与正文基线对齐）、脚注、YAML front matter、内联 HTML 格式标签。
+- **Mermaid 原生支持** — 流程图、时序图、状态图、饼图、类图与甘特图子集，光标离开时绘制成图。
+- **输入法** — 中文/日文输入法在光标处组字，候选窗跟随光标。
+- **工作区面板** — 文件树、跟随光标高亮的大纲、带替换的全文搜索与 AI 助手共享一条侧栏，由图标栏切换；非 Markdown 文本文件（`.json`、`.go`……）以带高亮的代码打开。
 
 ## 缪斯 Agent
 
@@ -45,25 +48,24 @@ go build -C native -o Muse .  # 构建二进制
 go test -C native ./...       # 测试
 ```
 
-需要 Go 1.27+。不需要 Node、pnpm、vite——画布已预构建并内嵌；只有想改画布本身时才需要动 `editor-web/`。
+需要 Go 1.27.3+。不需要 Node、pnpm、vite，也没有任何前端构建。
 
 ## 项目结构
 
 ```
 native/
 ├── main.go            原生入口
-├── nativeui/          窗口、图标栏、上下文面板、Agent、原生回退编辑器
-│   └── web/           内嵌画布构建产物（mygo://localhost 提供）
-├── mdoc/              Markdown 模型、渲染器、语法高亮、公式图片
+├── nativeui/          窗口、图标栏、上下文面板、Agent
+├── mdedit/            所见即所得 Markdown 编辑器：解析、排版、绘制、光标、输入法、撤销
+├── mdoc/              Markdown 模型与渲染器（AI 对话）、公式排版、Mermaid 图
 ├── doc/               文档类型注册
 ├── services/          原生 AI HTTP 客户端
 └── cmd/               辅助命令
-editor-web/            Vue 3 + Milkdown 画布源码（预构建进 native/nativeui/web/dist）
 ```
 
 ## 已知限制
 
-- 行内公式在段落、标题、列表项、引用与表格单元格中排版；较冷门的 TeX 命令可能回退为源码。
+- 公式由 go-latex 排版；较冷门的 TeX 命令可能回退为源码。
 - Mermaid 覆盖流程图、时序图、状态图、饼图、类图与甘特图子集；高级特性可能渲染为代码。
 - 对话记录最多保留最近 100 条。
 

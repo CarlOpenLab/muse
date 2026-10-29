@@ -147,50 +147,53 @@ func (g *seqGraph) height() float32 {
 
 func renderSequence(c *ui.Context, g *seqGraph) {
 	t := c.Theme()
-	ui.Box(c).FillWidth().Height(g.height()).Draw(func(p *ui.Painter, r ui.Rect) {
-		g.layout(r)
-		// Participant boxes and lifelines.
-		top := r.Y + 12
-		for _, part := range g.parts {
-			box := ui.Rect{X: part.x - part.w/2, Y: top, W: part.w, H: 30}
-			p.Fill(box, t.Surface, 6)
-			p.Stroke(box, t.Border, 6, 1)
-			sp := ui.Span{Text: part.label, Size: 12, Color: t.Text}
-			tw, th := p.MeasureText(box.W-12, sp)
-			p.RichText(box.X+(box.W-tw)/2, box.Y+(box.H-th)/2, box.W-12, sp)
-			// Dotted lifeline.
-			for y := box.Y + box.H + 6; y < r.Y+r.H-12; y += 7 {
-				p.Line(part.x, y, part.x, y+3, 1, t.Border)
-			}
+	ui.Box(c).FillWidth().Height(g.height()).Draw(func(p *ui.Painter, r ui.Rect) { g.draw(p, r, t) })
+}
+
+// draw paints the diagram in r.
+func (g *seqGraph) draw(p *ui.Painter, r ui.Rect, t *ui.Theme) {
+	g.layout(r)
+	// Participant boxes and lifelines.
+	top := r.Y + 12
+	for _, part := range g.parts {
+		box := ui.Rect{X: part.x - part.w/2, Y: top, W: part.w, H: 30}
+		p.Fill(box, t.Surface, 6)
+		p.Stroke(box, t.Border, 6, 1)
+		sp := ui.Span{Text: part.label, Size: 12, Color: t.Text}
+		tw, th := p.MeasureText(box.W-12, sp)
+		p.RichText(box.X+(box.W-tw)/2, box.Y+(box.H-th)/2, box.W-12, sp)
+		// Dotted lifeline.
+		for y := box.Y + box.H + 6; y < r.Y+r.H-12; y += 7 {
+			p.Line(part.x, y, part.x, y+3, 1, t.Border)
 		}
-		y := top + 54
-		for _, e := range g.events {
-			if e.kind == "note" {
-				a, b := g.byID[e.from], g.byID[e.to]
-				if a == nil || b == nil {
-					continue
-				}
-				x0, x1 := a.x, b.x
-				if x0 > x1 {
-					x0, x1 = x1, x0
-				}
-				box := ui.Rect{X: x0 - 40, Y: y, W: x1 - x0 + 80, H: 28}
-				p.Fill(box, t.Surface, 5)
-				p.Stroke(box, t.Border, 5, 1)
-				sp := ui.Span{Text: e.text, Size: 10.5, Color: t.Text}
-				tw, th := p.MeasureText(box.W-12, sp)
-				p.RichText(box.X+(box.W-tw)/2, box.Y+(box.H-th)/2, box.W-12, sp)
-				y += 34
-				continue
-			}
+	}
+	y := top + 54
+	for _, e := range g.events {
+		if e.kind == "note" {
 			a, b := g.byID[e.from], g.byID[e.to]
 			if a == nil || b == nil {
 				continue
 			}
-			drawSeqMessage(p, t, a.x, b.x, y, e.text, e.dashed)
-			y += 42
+			x0, x1 := a.x, b.x
+			if x0 > x1 {
+				x0, x1 = x1, x0
+			}
+			box := ui.Rect{X: x0 - 40, Y: y, W: x1 - x0 + 80, H: 28}
+			p.Fill(box, t.Surface, 5)
+			p.Stroke(box, t.Border, 5, 1)
+			sp := ui.Span{Text: e.text, Size: 10.5, Color: t.Text}
+			tw, th := p.MeasureText(box.W-12, sp)
+			p.RichText(box.X+(box.W-tw)/2, box.Y+(box.H-th)/2, box.W-12, sp)
+			y += 34
+			continue
 		}
-	})
+		a, b := g.byID[e.from], g.byID[e.to]
+		if a == nil || b == nil {
+			continue
+		}
+		drawSeqMessage(p, t, a.x, b.x, y, e.text, e.dashed)
+		y += 42
+	}
 }
 
 func (g *seqGraph) layout(r ui.Rect) {

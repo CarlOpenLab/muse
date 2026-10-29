@@ -1,6 +1,6 @@
 # Muse · 规划文档 v1
 
-> **2026-10 架构变更**：主壳已从 Electron 迁移到 MyGo（Go + 系统 WebView，见 `native/`），
+> **2026-10 架构变更**：主壳已从 Electron 迁移到 MyGo（见 `native/`）；2026-10-30 起正文编辑器也是全原生（`native/mdedit`），不再使用任何 WebView。
 > `electron/` 与 electron-builder 相关文件已删除。本文档中 Electron 的选型、目录与工具链描述
 > 保留为历史记录，最新结构以 [README.md](./README.md) 为准。
 

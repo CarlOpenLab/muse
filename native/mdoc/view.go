@@ -1,6 +1,7 @@
 package mdoc
 
 import (
+	"encoding/base64"
 	"html"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -728,4 +729,49 @@ func htmlAttr(tag, name string) string {
 		return ""
 	}
 	return rest[1 : end+1]
+}
+
+// LoadImage returns the bitmap of an image a document links to: a file
+// relative to baseDir, a data: URL, or a remote image, fetched once in the
+// background (nil until then; onLoad runs on another goroutine when it
+// lands). It returns nil for what cannot be read.
+func LoadImage(src, baseDir string, onLoad func()) *ui.Bitmap {
+	src = strings.TrimSpace(src)
+	switch {
+	case src == "":
+		return nil
+	case isRemoteImage(src):
+		return remoteBitmap(src, onLoad)
+	case strings.HasPrefix(src, "data:"):
+		return dataBitmap(src)
+	}
+	path := resolveImagePath(src, baseDir)
+	if path == "" {
+		return nil
+	}
+	return loadBitmap(path)
+}
+
+var dataImages sync.Map
+
+// dataBitmap decodes a base64 data: URL, as pasted images are kept.
+func dataBitmap(src string) *ui.Bitmap {
+	if v, ok := dataImages.Load(src); ok {
+		bmp, _ := v.(*ui.Bitmap)
+		return bmp
+	}
+	var bmp *ui.Bitmap
+	if comma := strings.IndexByte(src, ','); comma > 0 && strings.Contains(src[:comma], ";base64") {
+		if data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(src[comma+1:])); err == nil {
+			bmp, _ = ui.DecodeBitmap(data)
+		}
+	}
+	dataImages.Store(src, bmp)
+	return bmp
+}
+
+// HTMLOnlyImage reports the image of an HTML block that holds nothing but
+// one <img>, as READMEs center their logos, with its width and height.
+func HTMLOnlyImage(html string) (src, alt, title string, w, h float32, ok bool) {
+	return htmlOnlyImage(html)
 }

@@ -1,123 +1,105 @@
-# Muse WYSIWYG Migration
+# Muse WYSIWYG Editor (`native/mdedit`)
 
-## The current gap
+Muse edits Markdown as Typora does: the document is one surface the user
+writes on, rendered as it reads, with no WebView and no separate source
+mode. This note records how the editor is built; the code and its tests
+(`go test ./mdedit`) are the reference.
 
-Muse currently renders Markdown in read mode, but entering a block replaces it with a
-raw `TextArea` over the block source. That means editing shows `#`, `**`, `- `, `>`,
-link syntax and code fences, and the caret lives in source offsets rather than in the
-rendered text. This is source editing with a styled preview, not WYSIWYG.
+## The source is the only state
 
-The fix is an editor-kernel replacement, not more shortcuts.
+The editor keeps the Markdown string and nothing else that the user could
+lose: the caret, the selection, undo, the input method's composition and
+every command work on byte offsets of that string. Nothing is ever
+serialized from a model, so a file saves exactly as it was written, and an
+edit from outside (an AI tool, a reload) is one more edit of the same
+string — undoable like typing.
 
-## Architecture
+After each edit the source is parsed again with MyGo's CommonMark/GFM
+parser (`ui/markdown/parser`), which reparses only the blocks an edit
+touches and keeps the source range of every block and inline. Those ranges
+are what lets the editor hide syntax and still put every caret and every
+keystroke at an exact offset.
 
-1. **Visible-run model (`mdoc.InlineRun`)**
-   - Parse one inline source line into runs of visible text plus style
-     (bold/italic/code/strike/link/math).
-   - Each run carries the source byte range of its visible text, while the Markdown
-     markers are hidden.
-   - Plain runs carry the source range directly.
-   - This is the mapping layer between rendered text and stored Markdown.
+## Leaves
 
-2. **Rich inline editor**
-   - Build a focusable native control from `ui.TextLayout` + `ui.Painter`.
-   - It owns: visible text, run styles, caret/anchor (UTF-16 as TextLayout expects),
-     selection rects, input-to-source mapping.
-   - Keyboard: text input, IME, Backspace/Delete, arrows/Home/End, Shift selection,
-     Enter split, Cmd+A/C/X/V/Z, Cmd+B/I/U/E/K, plus the block-level shortcuts already
-     present.
-   - Clipboard and undo history live in the editor state.
-   - The caret and selection are drawn over the styled runs, never over marker text.
+`doc.go` turns the parse into a flat list of *leaves*, the units laid out
+one below another: paragraphs, headings, blocks of code, math and HTML,
+tables (whose cells are leaves of their own), rules, raw lines no block
+holds (link reference definitions, front matter) and the phantom (below).
+Each leaf carries the containers around it — quotations, list items,
+footnotes — which draw as chrome (bars, bullets, numbers, check boxes) and
+set the prefix a new line in them needs.
 
-3. **Block chrome**
-   - Heading levels style the inline editor; `#` markers never enter the editor.
-   - List bullets/numbers are drawn outside the editor; indentation lives in the block
-     model, not in the visible text.
-   - Quote bars are block chrome; `> ` markers are hidden.
-   - Task checkboxes are chrome; the editor sees only the task text.
+## Display and reveal
 
-4. **Special blocks**
-   - Code blocks: a code editor that preserves raw code and shows the language/fence as
-     chrome.
-   - Tables: per-cell rich editors; source pipes are chrome.
-   - Math: a math editor with live rendered preview; `$`/`$$` are chrome.
-   - Images: image block with caption/alt editing, no raw Markdown syntax.
+`display.go` builds a leaf's display: pieces of text, each standing for a
+range of the source.
 
-5. **Remove the source path**
-   - Delete the per-block `TextArea` source switch once the rich editor covers the block
-     kinds, and keep the document source only as persistence.
+- *Text* pieces are the source character for character.
+- *Atoms* stand for a range as a whole: a line break and the container
+  prefix after it, an escape or an entity, a formula or an image drawn as
+  an inline object.
+- *Decorations* stand for nothing, as a fence's backticks beside an info
+  string, or an input method's composition.
 
-## Phases and acceptance
+Block syntax is never a piece. Inline syntax — emphasis markers, code
+backticks, link brackets and destinations, `$`, `![]()`, formatting HTML
+tags — is a piece only while the caret is inside or at the edge of its
+construct; elsewhere it is skipped and the construct renders. Mapping a
+display offset back to the source picks the candidate nearest the caret's
+direction of travel, so arrows walk into revealed markers one character at
+a time, and a click lands next to the character it hit.
 
-- **Phase 0 — mapping foundation**
-  - `InlineRun` parser + source ranges + tests for bold/italic/code/strike/link/math.
-  - Acceptance: visible text and run ranges round-trip for plain and nested inline text.
+A heading's `#`, an item's `-` or a quotation's `>` typed alone, without
+the space after it, is *pending*: it shows as text, so typing `#hashtag`
+or `-1` never flashes a heading or a bullet.
 
-- **Phase 1 — paragraph/heading rich editing (done, first pass)**
-  - Rich inline editor for Paragraph and Heading.
-  - Markers hidden while editing; caret/selection drawn in rendered text.
-  - Implemented: typing, arrows/Home/End/Up/Down, Shift selection, Backspace/Delete,
-    undo, paste/copy/cut, Enter split, Cmd+B/I/U/E, Cmd+0–6 headings.
-  - Implemented (closeout): Cmd+K opens the link URL popover when the caret is
-    inside a link run, or turns the selection into a link; the URL edits in a
-    modal and commits through the run model (r.markdown() re-serializes).
-  - Implemented (closeout): rich auto-pair for ()[]{}""''`` (selection wraps,
-    collapsed inserts a pair with the caret inside, typing a closer before its
-    twin skips over; markdown markers stay literal), and Up/Down crossing into
-    the adjacent block at a block's first/last edge (same semantics as the
-    source editor: only at the absolute text boundary).
-  - Framework note: inline math in the rich editor is a Unicode typeset atom
-    (run.Display); MyGo's TextLayout has no inline-image runs, so true bitmap
-    typesetting inside rich text is blocked on the framework.
+## Layout and painting
 
-- **Phase 2 — list/quote chrome (done, first pass)**
-  - Bullets/numbers/quotes outside the editor; Enter continues/starts blocks.
-  - Implemented: hide `- `/`1.`/`> `, draw bullets/numbers/quote bars/task boxes,
-    Enter creates the next item/quote line, Tab/Shift+Tab nest and outdent.
-  - Verified (closeout): the task checkbox is clickable while the item is in
-    rich editing (toggles the run model, commit serializes [x]/[ ]), and
-    Enter on an ordered item increments its marker (nextListPrefix).
-  - Implemented (closeout): a list item with nested children no longer opens
-    the rich editor (its run model cannot round-trip the nested lines) — it
-    edits as multi-line source with Tab/Shift+Tab indent/outdent, and the
-    nested markers round-trip byte-exactly.
+`layout.go` shapes each leaf with `ui.ShapeRichTextWith` (formulas and
+images are inline objects: `Span.ObjectWidth/Height/Descent`), caches the
+views by their content, width, look and reveal state, and stacks the
+leaves with Typora-like margins. Tables size their columns from their
+cells' natural widths. `paint.go` draws only what `Painter.Visible`
+shows: panels, chrome, search matches, the selection, text, objects,
+Mermaid diagrams and the caret, which is as tall as the text rather than
+its leading.
 
-- **Phase 3 — tables/code/math/images (done, first pass)**
-  - Tables edit per cell without pipes; code hides fences and shows a language
-    badge; math hides `$$` and shows a live typeset preview above the TeX source;
-    images edit through alt/src/title fields while the image stays rendered.
-  - Inline math is now an atomic visible run (`x² + α`) while its TeX source is
-    preserved; partial deletion expands to the whole atom.
-  - Implemented (closeout): table row/column add/remove — right-click menu on
-    a rendered table (anchored to the edited cell) plus Cmd+Enter inserting a
-    row below the edited cell; the alignment row's colon style is mirrored for
-    new columns and the last column cannot be deleted.
-  - Implemented (closeout): HTML blocks edit as raw source (the click path no
-    longer skips them); image blocks gained a display-width stepper in the
-    image editor that persists an equivalent HTML img width attribute (mdoc
-    parses it back into ImgWidth; 重置 returns to the markdown form).
-  - Still pending: true image/TeX inline atoms (not Unicode — blocked on
-    TextLayout inline-image support). Canvas edge-drag for image resize would
-    additionally need hit-testing inside mdoc's view; the stepper covers the
-    capability.
+## Editing
 
-- **Phase 4 — cleanup (done, first pass)**
-  - Markdown source surfaces are gone for paragraphs, headings, lists, quotes,
-    tables, images, code and math; code/math keep their content text, not Markdown
-    markers. Table cells edit individually and the old whole-table source path is
-    disabled; Rule/HTML blocks no longer open a source surface.
-  - IME composition is previewed at the caret and commits through the normal text
-    input path; the editor no longer drops composed Chinese/Japanese text.
-  - Optional next steps: true inline-math image atoms (blocked on framework),
-    canvas edge-drag image resize (stepper delivered),
-    very long paragraph caret tuning.
+`edit.go` writes the Markdown that each structural key means, in the
+containers the caret is in:
 
-## Risks
+- Enter splits a paragraph, continues a list (incrementing numbers,
+  unchecked boxes for tasks) or a quotation, leaves a list or quotation on
+  an empty item, moves through table rows, and keeps indentation in code.
+- Backspace at a block's start turns a heading into a paragraph, takes an
+  item out of its list (or up a level), lifts a paragraph out of its
+  quotation, joins paragraphs, and removes an empty code or math block.
+- Tab and Shift+Tab nest and lift list items, walk table cells, indent
+  code.
+- ```` ``` ````, `~~~` and `$$` typed alone on a line open a block with its
+  closing fence at once; `| a | b |` + Enter makes a table; `|` in a cell
+  is escaped; brackets and quotes pair.
 
-- IME composition, bidi and multi-line selection need explicit tests.
-- Undo/redo across a rendered/source mapping is the hardest correctness area; keep the
-  mapping immutable per edit and rebuild only the affected runs.
-- Tables and code blocks are separate editors; they should share caret/selection
-  primitives but not force one generic control.
-- This is a multi-round rewrite. It will not be claimed done until the acceptance tests
-  for each phase pass.
+Markdown has no empty paragraphs, so the paragraph Enter opens is a
+*phantom*: an empty leaf in the editor's state, with the separators its
+first character brings into the source. Deleting a paragraph's last
+character turns it back into one, tidying the blank lines it leaves.
+
+`history.go` records changes as (offset, old, new) with the selections
+around them, coalescing typing a word at a time.
+
+## Input methods
+
+`ime.go` makes the editor a `ui.TextInputClient`: the composition is a
+virtual insertion at the caret, shown underlined in the caret's leaf, in
+UTF-16 units of the source with it; the commit goes in as typed text, one
+step of undo.
+
+## What is not done
+
+- Formulas are typeset by go-latex, which lays out a subset of TeX; Muse
+  composes the scripts it cannot (as `\int_0^1`) itself.
+- Resizing a very long document lays every leaf out again in one frame
+  (about 150 ms for 340 KB); typing in it costs a few milliseconds.
