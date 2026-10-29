@@ -28,26 +28,28 @@ func (e *Editor) units() []*leaf {
 }
 
 // unitIndex returns the index in units of the one holding the caret at
-// off, or -1.
+// off, or -1. The phantom owns its offset: a leaf may end or begin at it
+// too, but the caret there is the phantom's.
 func (e *Editor) unitIndex(us []*leaf, off int) int {
-	phantomAt := -1
+	if e.phantom != nil {
+		for i, u := range us {
+			if u.kind == kPhantom && off == u.start {
+				return i
+			}
+		}
+	}
 	for i, u := range us {
 		if u.kind == kPhantom {
-			if e.phantom != nil && off == u.start {
-				phantomAt = i
-			}
 			continue
 		}
 		if off >= leafLo(u) && off <= u.end {
 			if u.kind == kCode && u.fenced && off > u.infoEnd && off < u.start {
 				continue
 			}
-			if phantomAt < 0 {
-				return i
-			}
+			return i
 		}
 	}
-	return phantomAt
+	return -1
 }
 
 // tableOf returns the table leaf a cell is in.
@@ -235,23 +237,34 @@ func (e *Editor) step(off, dir int, word bool) int {
 		// From the start of the code to its fence's info string.
 		return u.infoEnd
 	}
-	if u.kind != kPhantom {
-		v := e.unitView(u, off)
-		if v.layout != nil && !v.empty {
-			if d, ok := v.disp.srcToDisp(off - u.lineStart); ok {
-				nd := d
-				if word {
-					nd = wordStep(v.disp.text, d, dir)
-				} else if dir < 0 {
-					nd = v.layout.PreviousBoundary(d)
-				} else {
-					nd = v.layout.NextBoundary(d)
-				}
-				if nd != d {
-					c := v.disp.dispToSrc(nd, dir > 0) + u.lineStart
-					if dir > 0 && c > off || dir < 0 && c < off {
-						return e.normalize(c, dir)
-					}
+	if u.kind == kPhantom {
+		// Out of the phantom: the edge of the neighbour it faces. That
+		// edge may be the phantom's own offset — the same source shown
+		// on the neighbour's line — so the phantom goes either way.
+		// With no neighbour the caret stays where it is.
+		for j := i + dir; j >= 0 && j < len(us); j += dir {
+			if s, ok := e.edgeStop(us[j], dir < 0); ok {
+				e.dropPhantom()
+				return s
+			}
+		}
+		return off
+	}
+	v := e.unitView(u, off)
+	if v.layout != nil && !v.empty {
+		if d, ok := v.disp.srcToDisp(off - u.lineStart); ok {
+			nd := d
+			if word {
+				nd = wordStep(v.disp.text, d, dir)
+			} else if dir < 0 {
+				nd = v.layout.PreviousBoundary(d)
+			} else {
+				nd = v.layout.NextBoundary(d)
+			}
+			if nd != d {
+				c := v.disp.dispToSrc(nd, dir > 0) + u.lineStart
+				if dir > 0 && c > off || dir < 0 && c < off {
+					return e.normalize(c, dir)
 				}
 			}
 		}
@@ -624,20 +637,7 @@ func (e *Editor) hitTest(x, y float32) int {
 	if len(e.leaves) == 0 {
 		return 0
 	}
-	li := 0
-	for k, l := range e.leaves {
-		if y >= l.y {
-			li = k
-		}
-	}
-	// Between two leaves, the nearer.
-	if li+1 < len(e.leaves) {
-		l, n := e.leaves[li], e.leaves[li+1]
-		if y > l.y+l.h && n.y-y < y-(l.y+l.h) {
-			li++
-		}
-	}
-	l := e.leaves[li]
+	l := e.leafAtPoint(y)
 	if l.kind == kTable {
 		var best *leaf
 		bestD := float32(1 << 30)
@@ -658,6 +658,36 @@ func (e *Editor) hitTest(x, y float32) int {
 		// The label of the language: to the info string.
 	}
 	return e.hitUnit(l, v, x, y)
+}
+
+// leafAtPoint returns the leaf the point's y is on: the last one starting
+// above it, or the nearer of two when the point falls between them.
+func (e *Editor) leafAtPoint(y float32) *leaf {
+	li := 0
+	for k, l := range e.leaves {
+		if y >= l.y {
+			li = k
+		}
+	}
+	// Between two leaves, the nearer.
+	if li+1 < len(e.leaves) {
+		l, n := e.leaves[li], e.leaves[li+1]
+		if y > l.y+l.h && n.y-y < y-(l.y+l.h) {
+			li++
+		}
+	}
+	return e.leaves[li]
+}
+
+// setCaretAtPoint moves the caret to the offset a pointer at y hit. The
+// phantom stays only when the point is on the phantom's own line: the leaf
+// before it ends at the phantom's offset too, and a click at that line's
+// end means that leaf, not an empty paragraph below.
+func (e *Editor) setCaretAtPoint(off int, y float32, extend bool) {
+	if e.phantom != nil && off == e.phantom.at && e.leafAtPoint(y).kind != kPhantom {
+		e.dropPhantom()
+	}
+	e.setCaret(off, extend)
 }
 
 // lineEdges returns the offsets of the start and end of the visual line

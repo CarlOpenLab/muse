@@ -176,6 +176,94 @@ func TestHeadingEnterAtStartInsertsAbove(t *testing.T) {
 	h.want("intro\n\n# Title")
 }
 
+func TestEnterAtEndPutsCaretOnTheNewLine(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		off  int
+	}{
+		{"paragraph", "Hello world", 11},
+		{"quote", "> Quoted line", 13},
+		{"heading", "# A Heading", 11},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, tc.src)
+			before, ok := h.e.caretRect(tc.off)
+			if !ok {
+				t.Fatal("no caret before Enter")
+			}
+			h.caretAt(tc.off)
+			h.key(0, ui.KeyEnter)
+			if h.e.phantom == nil {
+				t.Fatal("no phantom after Enter at the end")
+			}
+			r, ok := h.e.caretRect(h.e.caret)
+			if !ok {
+				t.Fatal("no caret in the phantom")
+			}
+			if r.Y <= before.Y {
+				t.Fatalf("caret at %.2f did not move below the line at %.2f", r.Y, before.Y)
+			}
+		})
+	}
+}
+
+func TestArrowsLeavePhantom(t *testing.T) {
+	h := newHarness(t, "Hello world")
+	h.caretAt(11)
+	h.key(0, ui.KeyEnter)
+	h.key(0, ui.KeyLeft)
+	if h.e.phantom != nil {
+		t.Fatal("Left kept the phantom")
+	}
+	if h.e.caret != 11 {
+		t.Fatalf("caret = %d, want 11", h.e.caret)
+	}
+	if r, _ := h.e.caretRect(h.e.caret); r.Y > h.e.leaves[0].y+h.e.leaves[0].h {
+		t.Fatalf("caret at %.2f is not on the line above", r.Y)
+	}
+
+	// Right at the end of the document stays in the phantom.
+	h = newHarness(t, "Hello world")
+	h.caretAt(11)
+	h.key(0, ui.KeyEnter)
+	h.key(0, ui.KeyRight)
+	if h.e.phantom == nil {
+		t.Fatal("Right dropped the phantom at the end")
+	}
+
+	// Up enters the line above.
+	h = newHarness(t, "Hello world")
+	h.caretAt(11)
+	h.key(0, ui.KeyEnter)
+	h.key(0, ui.KeyUp)
+	if h.e.phantom != nil {
+		t.Fatal("Up kept the phantom")
+	}
+	if r, _ := h.e.caretRect(h.e.caret); r.Y > h.e.leaves[0].y+h.e.leaves[0].h {
+		t.Fatalf("caret at %.2f is not on the line above", r.Y)
+	}
+}
+
+func TestClickKeepsThePhantomOnlyOnItsLine(t *testing.T) {
+	h := newHarness(t, "Hello world")
+	h.caretAt(11)
+	h.key(0, ui.KeyEnter)
+	para := h.e.leaves[0]
+	h.e.setCaretAtPoint(11, para.y+para.h/2, false)
+	if h.e.phantom != nil {
+		t.Fatal("a click at the line's end kept the phantom")
+	}
+	h = newHarness(t, "Hello world")
+	h.caretAt(11)
+	h.key(0, ui.KeyEnter)
+	ph := h.e.leaves[1]
+	h.e.setCaretAtPoint(11, ph.y+1, false)
+	if h.e.phantom == nil {
+		t.Fatal("a click on the phantom's line dropped it")
+	}
+}
+
 func TestTaskEnterContinuesTasks(t *testing.T) {
 	h := newHarness(t, "- [ ] one")
 	h.caretAt(len("- [ ] one"))

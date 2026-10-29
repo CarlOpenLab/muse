@@ -306,7 +306,9 @@ func (e *Editor) page(down bool, extend bool) {
 		y = r.Y + r.H/2 + h
 	}
 	off := e.hitTest(e.goalX, y)
-	e.setCaretKeepGoal(off, extend)
+	g := e.goalX
+	e.setCaretAtPoint(off, y, extend)
+	e.goalX, e.hasGoal = g, true
 	if down {
 		e.scroll.Y += h
 	} else {
@@ -364,7 +366,7 @@ func (e *Editor) press(ev ui.InputEvent) bool {
 		e.dragUnit, e.dragFrom = 1, [2]int{a, z}
 	default:
 		extend := ev.Mods&ui.Shift != 0
-		e.setCaret(off, extend)
+		e.setCaretAtPoint(off, y, extend)
 		e.dragUnit, e.dragFrom = 0, [2]int{e.anchor, e.anchor}
 	}
 	e.frozen, e.frozenAt = true, e.caret

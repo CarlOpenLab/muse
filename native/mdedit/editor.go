@@ -259,11 +259,15 @@ func leafLo(l *leaf) int {
 // phantom when it is in it, else the leaf whose content holds off, else
 // -1.
 func (e *Editor) leafIndex(off int) int {
-	for i, l := range e.leaves {
-		if l.kind == kPhantom {
-			if e.phantom != nil && off == l.start {
+	if e.phantom != nil {
+		for i, l := range e.leaves {
+			if l.kind == kPhantom && off == l.start {
 				return i
 			}
+		}
+	}
+	for i, l := range e.leaves {
+		if l.kind == kPhantom {
 			continue
 		}
 		if off >= leafLo(l) && off <= l.end {
