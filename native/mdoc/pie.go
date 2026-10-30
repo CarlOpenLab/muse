@@ -66,6 +66,14 @@ var piePalette = []string{
 	"#e5679b", "#6aa84f", "#5aa9e6", "#d97757",
 }
 
+// pieWidth is the least width the chart draws well at: the pie at its
+// largest radius, the gap beside it, and the legend's labels and
+// percentages.
+const pieWidth = 540
+
+// width returns the least width the chart draws well at.
+func (g *pieChart) width() float32 { return pieWidth }
+
 func renderPie(c *ui.Context, g *pieChart) {
 	t := c.Theme()
 	ui.Box(c).FillWidth().Height(286).Draw(func(p *ui.Painter, r ui.Rect) { g.draw(p, r, t) })

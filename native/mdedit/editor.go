@@ -119,14 +119,16 @@ type Editor struct {
 	// The pointer: a drag selecting by characters, words or blocks, from
 	// the range it started on; the syntax shown is frozen meanwhile, so
 	// that the text does not move under it.
-	dragging   bool
-	dragUnit   int
-	dragFrom   [2]int
-	frozen     bool
-	frozenAt   int
-	pointerX   float32
-	pointerY   float32
-	hoverLink  string
+	dragging  bool
+	dragUnit  int
+	dragFrom  [2]int
+	frozen    bool
+	frozenAt  int
+	pointerX  float32
+	pointerY  float32
+	hoverLink string
+	// diagDrag is a diagram's scroll bar being dragged, if one is.
+	diagDrag   *diagDrag
 	services   ui.Services
 	lastChange time.Time
 
@@ -149,6 +151,14 @@ type Editor struct {
 
 // Range is a range of the source, in bytes.
 type Range struct{ Start, End int }
+
+// diagDrag is the dragging of a diagram's scroll bar: the leaf it belongs
+// to, the pointer's x as the drag began, and the scroll offset then.
+type diagDrag struct {
+	leaf  *leaf
+	start float32
+	from  float32
+}
 
 // phantom is an empty paragraph the caret is in: Markdown has no empty
 // paragraphs, so it is not in the source until text is typed in it, which

@@ -38,7 +38,13 @@ func (e *Editor) input(ev ui.InputEvent) bool {
 		return e.press(ev)
 	case ui.InputPointerMove:
 		return e.drag(ev)
+	case ui.InputScroll:
+		return e.scrollDiagram(ev)
 	case ui.InputPointerUp:
+		if e.diagDrag != nil {
+			e.diagDrag = nil
+			return true
+		}
 		if e.dragging {
 			e.dragging = false
 			if e.frozen {
@@ -328,6 +334,10 @@ func (e *Editor) press(ev ui.InputEvent) bool {
 	}
 	e.layoutIfNeeded()
 	x, y := ev.X, ev.Y
+	if l, v, box, contentW, ok := e.diagramBarAt(x, y); ok {
+		e.pressDiagramBar(l, v, box, contentW, x, y)
+		return true
+	}
 	if it, ok := e.taskBoxAt(x, y); ok {
 		e.toggleTaskAt(it)
 		return true
@@ -376,11 +386,19 @@ func (e *Editor) press(ev ui.InputEvent) bool {
 	return true
 }
 
-// drag extends the selection to the pointer, by the unit the press chose.
+// drag extends the selection to the pointer, by the unit the press chose,
+// or drags a diagram's scroll bar.
 func (e *Editor) drag(ev ui.InputEvent) bool {
 	e.pointerX, e.pointerY = ev.X, ev.Y
+	if e.diagDrag != nil {
+		if ev.Button != 0 {
+			return false
+		}
+		e.dragDiagramBar(ev.X)
+		return true
+	}
 	if !e.dragging || ev.Button != 0 {
-		e.hover(ev.X, ev.Y, ev.Mods)
+		e.hover(ev.X, ev.Y)
 		return false
 	}
 	e.dragTo(ev.X, ev.Y)
@@ -436,19 +454,110 @@ func (e *Editor) autoScroll() bool {
 }
 
 // hover sets the pointer's shape for where it rests: a hand over what a
-// click acts on (a check box, a code block's language, a link with Cmd
-// held), an I-beam over the text.
-func (e *Editor) hover(x, y float32, mods ui.Modifiers) {
+// click acts on (a check box, a code block's language, a link), the
+// default over a diagram's scroll bar, an I-beam over the text.
+func (e *Editor) hover(x, y float32) {
+	e.pointerX, e.pointerY = x, y
 	cursor := ui.CursorText
-	if _, ok := e.taskBoxAt(x, y); ok || e.codeLabelAt(x, y) != nil {
+	if _, _, _, _, ok := e.diagramBarAt(x, y); ok {
+		cursor = ui.CursorDefault
+	} else if _, ok := e.taskBoxAt(x, y); ok || e.codeLabelAt(x, y) != nil {
 		cursor = ui.CursorPointer
-	} else if mods&ui.Cmd != 0 && e.linkAt(e.hitTest(x, y)) != "" {
+	} else if e.linkAt(e.hitTest(x, y)) != "" {
 		cursor = ui.CursorPointer
 	}
 	if cursor != e.cursor {
 		e.cursor = cursor
 		e.invalidate()
 	}
+}
+
+// diagramBarAt returns the diagram leaf whose scroll bar is at x, y, when
+// the diagram is wider than its column.
+func (e *Editor) diagramBarAt(x, y float32) (*leaf, *leafView, ui.Rect, float32, bool) {
+	for _, l := range e.leaves {
+		v := l.view
+		if v == nil || v.diagram == nil {
+			continue
+		}
+		box, contentW := e.diagramBox(l, v, 0, 0)
+		if contentW <= box.W {
+			continue
+		}
+		if track, _ := diagramBarRects(box, contentW, v.diagX); track.Contains(x, y) {
+			return l, v, box, contentW, true
+		}
+	}
+	return nil, nil, ui.Rect{}, 0, false
+}
+
+// diagramAt returns the diagram leaf whose box is at x, y, when the
+// diagram is wider than its column.
+func (e *Editor) diagramAt(x, y float32) (*leaf, *leafView, ui.Rect, float32, bool) {
+	for _, l := range e.leaves {
+		v := l.view
+		if v == nil || v.diagram == nil {
+			continue
+		}
+		box, contentW := e.diagramBox(l, v, 0, 0)
+		if contentW > box.W && box.Contains(x, y) {
+			return l, v, box, contentW, true
+		}
+	}
+	return nil, nil, ui.Rect{}, 0, false
+}
+
+// pressDiagramBar starts dragging a diagram's scroll bar, putting the
+// thumb under the pointer first when the press missed it.
+func (e *Editor) pressDiagramBar(l *leaf, v *leafView, box ui.Rect, contentW float32, x, y float32) {
+	track, thumb := diagramBarRects(box, contentW, v.diagX)
+	if !thumb.Contains(x, y) {
+		if travel := track.W - thumb.W; travel > 0 {
+			at := min(max((x-track.X-thumb.W/2)/travel, 0), 1)
+			v.diagX = at * (contentW - box.W)
+		}
+	}
+	e.diagDrag = &diagDrag{leaf: l, start: x, from: v.diagX}
+	e.invalidate()
+}
+
+// dragDiagramBar scrolls the diagram whose bar is being dragged to x.
+func (e *Editor) dragDiagramBar(x float32) {
+	d := e.diagDrag
+	if d == nil || d.leaf.view == nil || d.leaf.view.diagram == nil {
+		return
+	}
+	v := d.leaf.view
+	box, contentW := e.diagramBox(d.leaf, v, 0, 0)
+	maxOff := contentW - box.W
+	if maxOff <= 0 {
+		return
+	}
+	track, thumb := diagramBarRects(box, contentW, v.diagX)
+	if travel := track.W - thumb.W; travel > 0 {
+		v.diagX = min(max(d.from+(x-d.start)*maxOff/travel, 0), maxOff)
+	}
+	e.invalidate()
+}
+
+// scrollDiagram scrolls a diagram sideways when the wheel, a swipe or
+// Shift+wheel is over one wider than its column. It reports whether it
+// took the scroll; one it leaves scrolls the document.
+func (e *Editor) scrollDiagram(ev ui.InputEvent) bool {
+	_, v, box, contentW, ok := e.diagramAt(ev.X, ev.Y)
+	if !ok {
+		return false
+	}
+	dx := ev.DX
+	if dx == 0 && ev.Mods&ui.Shift != 0 {
+		dx = ev.DY
+	}
+	if dx == 0 {
+		return false
+	}
+	v.diagX = min(max(v.diagX+dx, 0), contentW-box.W)
+	e.invalidate()
+	return true
 }
 
 // taskBoxAt returns the item whose check box is at x, y.

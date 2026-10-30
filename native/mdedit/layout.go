@@ -199,8 +199,10 @@ type leafView struct {
 	natural float32
 	// font is the text's, which the caret is as tall as.
 	font ui.Font
-	// diagram is a Mermaid diagram drawn instead of its code.
+	// diagram is a Mermaid diagram drawn instead of its code; diagX is how
+	// far it is scrolled sideways when it is wider than the column.
 	diagram *mdoc.Diagram
+	diagX   float32
 	used    uint64
 }
 

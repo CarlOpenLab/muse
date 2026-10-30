@@ -191,9 +191,64 @@ func (g *mermaidGraph) height() float32 {
 		}
 	}
 	if g.horizontal() {
-		return float32(maxLevel+1)*68 + 20
+		// Sideways, each rank is a column of nodes stacked 52 DIPs apart:
+		// the tallest one sets the height, with room for a back edge
+		// routed below.
+		perRank := map[int]int{}
+		tallest := 0
+		for _, n := range g.nodes {
+			perRank[n.level]++
+			tallest = max(tallest, perRank[n.level])
+		}
+		return float32(tallest)*52 + 40
 	}
 	return float32(maxLevel+1)*88 + 20
+}
+
+// width returns the least width the graph draws well at: the widest rank
+// of a top-down graph, or a sideways graph's ranks and their gaps, plus
+// room for labels and the edges routed outside.
+func (g *mermaidGraph) width() float32 {
+	rows := map[int][]*mermaidNode{}
+	maxLevel := 0
+	for _, n := range g.nodes {
+		rows[n.level] = append(rows[n.level], n)
+		if n.level > maxLevel {
+			maxLevel = n.level
+		}
+	}
+	// Back edges route 26 beyond the nodes, and rank margins add 16 a side.
+	const margin = 42
+	if g.horizontal() {
+		total := float32(32)
+		ranks := 0
+		for l := 0; l <= maxLevel; l++ {
+			colW := float32(0)
+			for _, n := range rows[l] {
+				colW = maxF(colW, g.nodeWidth(n))
+			}
+			if colW > 0 {
+				total += colW
+				ranks++
+			}
+		}
+		if ranks > 1 {
+			total += float32(ranks-1) * 58
+		}
+		return total + margin
+	}
+	widest := float32(0)
+	for l := 0; l <= maxLevel; l++ {
+		total := float32(0)
+		for i, n := range rows[l] {
+			total += g.nodeWidth(n)
+			if i > 0 {
+				total += 24
+			}
+		}
+		widest = maxF(widest, total)
+	}
+	return widest + 2*12 + margin
 }
 
 func renderMermaid(c *ui.Context, g *mermaidGraph, s rstyle) {

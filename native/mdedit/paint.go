@@ -118,14 +118,67 @@ func (e *Editor) paintUnit(p *ui.Painter, u *leaf, ox, oy float32, a, z int) {
 		e.paintObject(p, v.block, ui.Rect{X: x + v.bx, Y: y + v.by, W: v.block.w, H: v.block.h})
 	}
 	if v.diagram != nil {
-		pad := e.lk.size * codePadY
-		v.diagram.Draw(p, ui.Rect{X: x, Y: y + pad, W: u.w, H: u.h - 2*pad}, p.Theme())
+		e.paintDiagram(p, u, v, ox, oy)
 	}
 	if v.label != "" && !v.reveal && v.panel {
 		sp := ui.Span{Text: v.label, Size: e.lk.size * 0.7, Color: e.lk.muted.Alpha(0.75)}
 		w, _ := p.MeasureText(0, sp)
 		p.RichText(x+u.w-w-e.lk.size*0.6, y+e.lk.size*0.35, 0, sp)
 	}
+}
+
+// diagramBox returns the box a diagram leaf draws in: the leaf's box
+// without the code padding, at the origin ox, oy, and the diagram's
+// natural width.
+func (e *Editor) diagramBox(l *leaf, v *leafView, ox, oy float32) (ui.Rect, float32) {
+	pad := e.lk.size * codePadY
+	box := ui.Rect{X: ox + l.x, Y: oy + l.y + pad, W: l.w, H: max(l.h-2*pad, 1)}
+	return box, v.diagram.Width()
+}
+
+// paintDiagram draws a diagram in its leaf, clipped to the column and
+// scrolled sideways when it is wider than the column, with a scroll bar
+// under it.
+func (e *Editor) paintDiagram(p *ui.Painter, u *leaf, v *leafView, ox, oy float32) {
+	box, contentW := e.diagramBox(u, v, ox, oy)
+	off := float32(0)
+	if contentW > box.W {
+		off = min(max(v.diagX, 0), contentW-box.W)
+	}
+	p.Clip(box, 6, func() {
+		v.diagram.Draw(p, ui.Rect{X: box.X - off, Y: box.Y, W: max(contentW, box.W), H: box.H}, p.Theme())
+	})
+	if contentW > box.W {
+		track, thumb := diagramBarRects(box, contentW, off)
+		hot := track.Contains(e.pointerX, e.pointerY)
+		e.paintDiagramBar(p, track, thumb, hot || e.diagDrag != nil && e.diagDrag.leaf == u)
+	}
+}
+
+// diagramBarRects returns the track and the thumb of a diagram's scroll
+// bar under box, for a diagram contentW wide scrolled by off.
+func diagramBarRects(box ui.Rect, contentW, off float32) (track, thumb ui.Rect) {
+	const barH = 5
+	track = ui.Rect{X: box.X + 2, Y: box.Y + box.H + 2, W: max(box.W-4, 1), H: barH}
+	frac := box.W / contentW
+	tw := min(max(track.W*frac, 28), track.W)
+	at := float32(0)
+	if maxOff := contentW - box.W; maxOff > 0 {
+		at = min(max(off/maxOff, 0), 1)
+	}
+	thumb = ui.Rect{X: track.X + (track.W-tw)*at, Y: track.Y, W: tw, H: track.H}
+	return track, thumb
+}
+
+// paintDiagramBar draws a diagram's scroll bar: a faint track, and a thumb
+// showing how much of the diagram shows.
+func (e *Editor) paintDiagramBar(p *ui.Painter, track, thumb ui.Rect, hot bool) {
+	col := p.Theme().Scrollbar
+	if hot {
+		col = e.lk.accent.Alpha(0.7)
+	}
+	p.Fill(track, e.lk.border.Alpha(0.16), 2.5)
+	p.Fill(thumb, col, 2.5)
 }
 
 // fillRange fills the part of the source range [a, z) that shows in a

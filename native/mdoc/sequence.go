@@ -145,6 +145,13 @@ func (g *seqGraph) height() float32 {
 	return 84 + float32(len(g.events))*42 + 24
 }
 
+// width returns the least width the participants fit in side by side
+// (70 DIPs each, as layout narrows them to), with room for notes that
+// reach past the outermost ones.
+func (g *seqGraph) width() float32 {
+	return float32(max(len(g.parts), 1))*70 + 80
+}
+
 func renderSequence(c *ui.Context, g *seqGraph) {
 	t := c.Theme()
 	ui.Box(c).FillWidth().Height(g.height()).Draw(func(p *ui.Painter, r ui.Rect) { g.draw(p, r, t) })

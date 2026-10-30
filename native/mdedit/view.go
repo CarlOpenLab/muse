@@ -90,9 +90,13 @@ func (e *Editor) View(c *ui.Context) ui.Element {
 		if label == "" {
 			label = "文档"
 		}
+		// Cursor comes after HandleTextInput, which sets the text cursor
+		// itself: the shape set last is the one the window shows, and the
+		// editor changes it as the pointer moves over links and boxes.
 		el := ui.Box(c).FillWidth().Height(h).Focusable().FocusRing(false).Bind(&e.handle).
-			Cursor(e.cursor).Role(ui.RoleTextField).Label(label).
-			HandleTextInput(e).HandleInput(e.input).Draw(e.paint).ContextMenu(e.menu)
+			Role(ui.RoleTextField).Label(label).
+			HandleTextInput(e).Cursor(e.cursor).
+			HandleInput(e.input).Draw(e.paint).ContextMenu(e.menu)
 		if files := el.DroppedFiles(); len(files) > 0 {
 			if x, y, ok := el.PointerPosition(); ok {
 				e.setCaret(e.hitTest(x, y), false)

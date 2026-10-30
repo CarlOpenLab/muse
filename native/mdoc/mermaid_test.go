@@ -35,3 +35,43 @@ func TestViewRendersMermaid(t *testing.T) {
 		t.Logf("texts = %v", tt.Texts())
 	}
 }
+
+// TestHorizontalDiagramFitsItsColumns checks that a sideways graph is tall
+// enough for the rank with the most nodes, which stack in one column.
+func TestHorizontalDiagramFitsItsColumns(t *testing.T) {
+	d, ok := ParseDiagram("graph LR\nA --> B1\nA --> B2\nA --> B3\nA --> B4\nA --> B5\nA --> B6\n")
+	if !ok {
+		t.Fatal("fan-out graph did not parse")
+	}
+	// Each node is 36 tall on a 52 stride: the sixth ends at 296.
+	if h := d.Height(0); h < 296 {
+		t.Fatalf("height = %v, want at least 296", h)
+	}
+}
+
+// TestDiagramWidth checks the least width each kind of diagram reports, as
+// the editor uses it to tell that a diagram overflows its column.
+func TestDiagramWidth(t *testing.T) {
+	cases := []struct {
+		name string
+		code string
+		min  float32
+	}{
+		{"flowchart", "graph LR\nA[一] --> B[二]\n", 200},
+		{"wide flowchart", "graph LR\nA --> B\nB --> C\nC --> D\nD --> E\nE --> F\nF --> G\nG --> H\n", 800},
+		{"state", "stateDiagram\n[*] --> A\nA --> B\n", 140},
+		{"sequence", "sequenceDiagram\nAlice->>Bob: Hi\n", 200},
+		{"class", "classDiagram\nclass A\nclass B\nA --> B\n", 200},
+		{"pie", "pie title Pets\n\"Dogs\": 3\n", 400},
+		{"gantt", "gantt\ntitle Plan\nsection Work\nTask :a1, 2024-01-01, 3d\n", 250},
+	}
+	for _, c := range cases {
+		d, ok := ParseDiagram(c.code)
+		if !ok {
+			t.Fatalf("%s did not parse", c.name)
+		}
+		if w := d.Width(); w < c.min {
+			t.Fatalf("%s width = %v, want at least %v", c.name, w, c.min)
+		}
+	}
+}

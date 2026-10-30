@@ -246,6 +246,12 @@ func (g *ganttChart) height() float32 {
 	return h + 20
 }
 
+// width returns the least width the chart draws well at: the task labels'
+// column and the shortest timeline draw keeps between the date ticks.
+func (g *ganttChart) width() float32 {
+	return 160 + 120 + 20
+}
+
 func renderGantt(c *ui.Context, g *ganttChart) {
 	t := c.Theme()
 	ui.Box(c).FillWidth().Height(g.height()).Draw(func(p *ui.Painter, r ui.Rect) { g.draw(p, r, t) })

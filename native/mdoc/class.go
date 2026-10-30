@@ -247,6 +247,29 @@ func (g *classGraph) height() float32 {
 	return h
 }
 
+// width returns the least width the widest rank draws at, with room for a
+// cycle's edge routed around the right.
+func (g *classGraph) width() float32 {
+	maxLevel := len(g.rowH) - 1
+	widest := float32(0)
+	for l := 0; l <= maxLevel; l++ {
+		total := float32(0)
+		n := 0
+		for _, c := range g.classes {
+			if c.level != l {
+				continue
+			}
+			if n > 0 {
+				total += 30
+			}
+			total += c.w
+			n++
+		}
+		widest = maxF(widest, total)
+	}
+	return widest + 32 + 52
+}
+
 func renderClass(c *ui.Context, g *classGraph, s rstyle) {
 	t := c.Theme()
 	ui.Box(c).FillWidth().Height(g.height()).Draw(func(p *ui.Painter, r ui.Rect) { g.draw(p, r, t) })
