@@ -54,9 +54,12 @@ type object struct {
 
 // istyle is the inline style a run of text is in.
 type istyle struct {
-	bold, italic, strike, code, link, under, mark, sup, sub, kbd bool
-	marker                                                       bool
-	muted                                                        bool
+	bold, italic, strike, code, mono, link, under, mark, sup, sub, kbd bool
+	marker                                                             bool
+	muted                                                              bool
+	// color and bg are the text's and its background's, as HTML sets
+	// them; zero for the look's.
+	color, bg ui.Color
 }
 
 // builder makes the pieces of a leaf's display.
@@ -89,6 +92,10 @@ type builder struct {
 	alone, revealedAny bool
 	// fontSize is the size of the leaf's text.
 	fontSize float32
+	// starts are the offsets of the lines of the leaf's block, where a
+	// line break inside an inline ends; cell tells a table's cell.
+	starts []int
+	cell   bool
 }
 
 type htmlTag struct {
@@ -176,20 +183,54 @@ func (b *builder) spanAtom(s, e int, text string, sp ui.Span) {
 }
 
 // textRun adds source text from s to e as it is.
-func (b *builder) textRun(s, e int, st istyle) {
-	if e <= s {
-		return
-	}
-	b.add(piece{kind: pText, s0: s - b.base, s1: e - b.base, text: b.src[s:e], span: b.span(st)})
-}
+func (b *builder) textRun(s, e int, st istyle) { b.lineRun(s, e, b.span(st), false) }
 
 // marker adds syntax shown because the caret is at it.
 func (b *builder) marker(s, e int, st istyle) {
-	if e <= s {
-		return
-	}
 	st.marker = true
-	b.add(piece{kind: pText, s0: s - b.base, s1: e - b.base, text: b.src[s:e], span: b.span(st), marker: true})
+	b.lineRun(s, e, b.span(st), true)
+}
+
+// lineRun adds source text from s to e in sp. A line ending in it, as in
+// code or a link's destination written over two lines, shows as a line
+// break standing for the prefix of the next line too, which in a
+// quotation or a list is not text.
+func (b *builder) lineRun(s, e int, sp ui.Span, marker bool) {
+	for s < e {
+		nl := strings.IndexByte(b.src[s:e], '\n')
+		if nl < 0 {
+			b.add(piece{kind: pText, s0: s - b.base, s1: e - b.base, text: b.src[s:e], span: sp, marker: marker})
+			return
+		}
+		nl += s
+		t := nl
+		if t > s && b.src[t-1] == '\r' {
+			t--
+		}
+		if t > s {
+			b.add(piece{kind: pText, s0: s - b.base, s1: t - b.base, text: b.src[s:t], span: sp, marker: marker})
+		}
+		next := b.lineContent(nl, e)
+		b.add(piece{kind: pAtom, s0: t - b.base, s1: next - b.base, text: "\n", span: sp})
+		s = next
+	}
+}
+
+// lineContent returns where the text of the line after the line ending at
+// nl starts, no further than limit: after the prefixes of the containers
+// the block is in and the spaces before the text.
+func (b *builder) lineContent(nl, limit int) int {
+	at := nl + 1
+	for _, s := range b.starts {
+		if s > nl {
+			at = s
+			break
+		}
+	}
+	for at < limit && (b.src[at] == ' ' || b.src[at] == '\t') {
+		at++
+	}
+	return min(at, limit)
 }
 
 // atom adds display text standing for the source from s to e as a whole.
@@ -239,15 +280,25 @@ func (b *builder) inlines(ins []parser.Inline, from, to int, st istyle) {
 }
 
 func (b *builder) walk(ins []parser.Inline, i, end int, st istyle) {
+	marks := highlights(b.src, ins, i, end)
+	// outer is whether the text was marked before the highlight it is in.
+	outer := false
 	for i < end {
 		in := &ins[i]
 		b.gap(in.Start, st)
 		next := max(in.Next, i+1)
 		switch in.Kind {
 		case parser.Text:
-			b.text_(in.Start, in.End, st)
+			st = b.text_(in.Start, in.End, st, marks, &outer)
 		case parser.SoftBreak, parser.LineBreak:
-			b.atom(in.Start, in.End, "\n", st, nil)
+			// The break stands for the spaces before the next line's text
+			// too, which the parser skips.
+			end := in.End
+			for end < len(b.src) && (b.src[end] == ' ' || b.src[end] == '\t') {
+				end++
+			}
+			b.atom(in.Start, end, "\n", st, nil)
+			b.pos = end
 		case parser.Code:
 			b.codeSpan(in, st)
 		case parser.Emphasis, parser.Strong, parser.Strikethrough:
@@ -288,11 +339,33 @@ func children(ins []parser.Inline, i int, from int) (int, int) {
 
 // text_ adds a Text inline's source, with its escapes and character
 // references as the characters they stand for, unless the caret is at
-// them.
-func (b *builder) text_(s, e int, st istyle) {
+// them, and its ==s of highlight among marks hidden, unless the caret is
+// in what they mark. It returns the style after it, marked after an ==
+// that opens; outer keeps whether it was marked before.
+func (b *builder) text_(s, e int, st istyle, marks []hlMark, outer *bool) istyle {
 	src := b.src
 	run := s
+	m := 0
+	for m < len(marks) && marks[m].at < s {
+		m++
+	}
 	for p := s; p < e; {
+		if m < len(marks) && marks[m].at == p {
+			b.textRun(run, p, st)
+			if mk := marks[m]; b.revealed(mk.from, mk.to) {
+				b.marker(p, p+2, st)
+			}
+			if marks[m].open {
+				*outer = st.mark
+				st.mark = true
+			} else {
+				st.mark = *outer
+			}
+			p += 2
+			run = p
+			m++
+			continue
+		}
 		c := src[p]
 		if c == '\\' && p+1 < e && isASCIIPunct(src[p+1]) {
 			b.textRun(run, p, st)
@@ -322,6 +395,7 @@ func (b *builder) text_(s, e int, st istyle) {
 		p++
 	}
 	b.textRun(run, e, st)
+	return st
 }
 
 // wrapped adds emphasis, strong emphasis or strikethrough: its markers
@@ -363,14 +437,10 @@ func (b *builder) link(ins []parser.Inline, i int, st istyle) {
 	cs, ce := children(ins, i, in.Start)
 	inner := st
 	inner.link = true
-	if cs == in.Start {
+	if i+1 >= in.Next || i+1 >= len(ins) {
 		// A link without text shows its source, as there is nothing else
 		// to click or to see.
 		b.marker(in.Start, in.End, st)
-		return
-	}
-	if in.Auto && cs == in.Start && ce == in.End {
-		b.walk(ins, i+1, in.Next, inner)
 		return
 	}
 	rev := b.revealed(in.Start, in.End)
@@ -378,8 +448,14 @@ func (b *builder) link(ins []parser.Inline, i int, st istyle) {
 		b.marker(in.Start, cs, st)
 	}
 	b.pos = cs
-	b.walk(ins, i+1, in.Next, inner)
-	b.gap(ce, inner)
+	if in.Auto {
+		// An address, between angle brackets or not, shows as written:
+		// it has no escapes.
+		b.textRun(cs, ce, inner)
+	} else {
+		b.walk(ins, i+1, in.Next, inner)
+		b.gap(ce, inner)
+	}
 	if rev {
 		b.marker(ce, in.End, st)
 	}
@@ -407,6 +483,16 @@ func (b *builder) codeSpan(in *parser.Inline, st istyle) {
 	if ce == cs {
 		b.marker(in.Start, in.End, st)
 		return
+	}
+	for b.cell {
+		// In a table's cell, \| is the pipe it stands for, in code too.
+		k := strings.Index(b.src[cs:ce], `\|`)
+		if k < 0 {
+			break
+		}
+		b.textRun(cs, cs+k, inner)
+		b.atom(cs+k, cs+k+2, "|", inner, nil)
+		cs += k + 2
 	}
 	b.textRun(cs, ce, inner)
 }
@@ -439,7 +525,7 @@ func (b *builder) math(in *parser.Inline, st istyle) {
 // image adds an image: drawn, and its source too while the caret is at it.
 func (b *builder) image(ins []parser.Inline, i int, st istyle) {
 	in := &ins[i]
-	obj := b.e.imageObject(in.Dest, parser.PlainText(ins[i+1:max(in.Next, i+1)]), b.width, b.alone)
+	obj := b.e.imageObject(in.Dest, b.e.plainText(ins[i+1:max(in.Next, i+1)]), b.width, b.alone)
 	if !b.revealed(in.Start, in.End) {
 		b.atom(in.Start, in.End, "", st, obj)
 		return
@@ -477,6 +563,10 @@ func (b *builder) footnoteRef(in *parser.Inline, st istyle) {
 // <b>, are hidden, unless the caret is at them, and style the text up to
 // their closing tags; others show as written.
 func (b *builder) htmlInline(in *parser.Inline, st istyle) istyle {
+	if src, alt, sz, ok := imgTag(in.Text); ok {
+		b.htmlImage(in, src, alt, sz, st)
+		return st
+	}
 	name, closing, ok := htmlTagName(in.Text)
 	if !ok {
 		b.marker(in.Start, in.End, st)
@@ -507,27 +597,20 @@ func (b *builder) htmlInline(in *parser.Inline, st istyle) istyle {
 		return st
 	}
 	b.htmlTags = append(b.htmlTags, htmlTag{name: name, prev: st})
-	switch name {
-	case "b", "strong":
-		st.bold = true
-	case "i", "em":
-		st.italic = true
-	case "u", "ins":
-		st.under = true
-	case "s", "del", "strike":
-		st.strike = true
-	case "mark":
-		st.mark = true
-	case "sup":
-		st.sup = true
-	case "sub":
-		st.sub = true
-	case "kbd":
-		st.kbd = true
-	case "code":
-		st.code = true
+	return htmlTagStyle(name, in.Text, st)
+}
+
+// htmlImage adds an <img> within text: drawn at the size it asks for, and
+// its tag too while the caret is at it.
+func (b *builder) htmlImage(in *parser.Inline, src, alt string, sz imgSize, st istyle) {
+	obj := b.e.sizedImage(src, alt, sz, b.width, false)
+	if !b.revealed(in.Start, in.End) {
+		b.atom(in.Start, in.End, "", st, obj)
+		return
 	}
-	return st
+	b.revealedAny = true
+	b.marker(in.Start, in.End, st)
+	b.deco(in.End, "", b.span(st), obj)
 }
 
 // htmlTagName reads the name of a tag of formatting, and whether it
@@ -547,7 +630,7 @@ func htmlTagName(tag string) (name string, closing, ok bool) {
 		t = t[:i]
 	}
 	switch t {
-	case "b", "strong", "i", "em", "u", "ins", "s", "del", "strike", "mark", "sup", "sub", "kbd", "code", "br":
+	case "b", "strong", "i", "em", "u", "ins", "s", "del", "strike", "mark", "sup", "sub", "kbd", "code", "br", "span", "font":
 		return t, closing, true
 	}
 	return "", false, false
@@ -712,4 +795,38 @@ func utf16ByteOffset(s string, u int) int {
 		}
 	}
 	return len(s)
+}
+
+// plainText returns the text of inlines, as parser.PlainText does, with
+// the characters mdoc.CJKFriendly swapped taken back: a Text inline that
+// is the parsed source as it is reads the editor's source instead.
+func (e *Editor) plainText(ins []parser.Inline) string {
+	parsed := e.doc.Source()
+	marks := allHighlights(e.src, ins, 0, len(ins))
+	var b strings.Builder
+	for k := range ins {
+		switch in := &ins[k]; in.Kind {
+		case parser.Text:
+			if in.End <= len(parsed) && in.End <= len(e.src) && in.Text == parsed[in.Start:in.End] {
+				// The text as written, but for its ==s of highlight.
+				at := in.Start
+				for _, m := range marks {
+					if m.at >= in.Start && m.at < in.End {
+						b.WriteString(e.src[at:m.at])
+						at = m.at + 2
+					}
+				}
+				b.WriteString(e.src[at:in.End])
+			} else {
+				b.WriteString(in.Text)
+			}
+		case parser.Code, parser.HTML, parser.Math:
+			b.WriteString(in.Text)
+		case parser.SoftBreak, parser.LineBreak:
+			b.WriteByte(' ')
+		case parser.FootnoteRef:
+			b.WriteString("[^" + in.Text + "]")
+		}
+	}
+	return b.String()
 }

@@ -38,13 +38,8 @@ func (e *Editor) inlineAround(kind parser.InlineKind, a, z int) (parser.Inline, 
 // format of kind away from it.
 func (e *Editor) ToggleInline(kind parser.InlineKind, open, close string) {
 	e.layoutIfNeeded()
-	if e.phantom != nil {
-		e.typeText(open + close)
-		e.setCaret(e.caret-len(close), false)
-		return
-	}
 	a, z := e.selection()
-	if in, ok := e.inlineAround(kind, a, z); ok {
+	if in, ok := e.inlineAround(kind, a, z); ok && e.phantom == nil {
 		// Unwrap: take the inline's markers away.
 		ol, cl := markerLens(e.src, in, open, close)
 		e.begin(stepEdit)
@@ -57,6 +52,19 @@ func (e *Editor) ToggleInline(kind parser.InlineKind, open, close string) {
 		}
 		return
 	}
+	e.wrapInline(open, close)
+}
+
+// wrapInline puts the selection between the markers of a format, or on a
+// caret, the word at it, or else types them with the caret between them.
+func (e *Editor) wrapInline(open, close string) {
+	e.layoutIfNeeded()
+	if e.phantom != nil {
+		e.typeText(open + close)
+		e.setCaret(e.caret-len(close), false)
+		return
+	}
+	a, z := e.selection()
 	if a == z {
 		wa, wz := e.wordRangeAt(a)
 		if wa < wz && wa <= a && a <= wz && strings.TrimSpace(e.src[wa:wz]) != "" && isWordRune(firstRune(e.src[wa:wz])) {

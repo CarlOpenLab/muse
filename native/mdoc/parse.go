@@ -1,6 +1,7 @@
 package mdoc
 
 import (
+	"html"
 	"strconv"
 	"strings"
 
@@ -20,7 +21,9 @@ var parser = goldmark.New(goldmark.WithExtensions(extension.GFM))
 // is what makes the same code path usable for plain .txt files.
 func Parse(src string) *Doc {
 	b := []byte(src)
-	root := parser.Parser().Parse(text.NewReader(b))
+	// Emphasis beside CJK punctuation reads as Typora reads it; the text
+	// comes from the source itself (see CJKFriendly).
+	root := parser.Parser().Parse(text.NewReader([]byte(CJKFriendly(src))))
 	doc := &Doc{Source: src, Blocks: parseBlocks(root, b)}
 	return doc
 }
@@ -296,7 +299,11 @@ func parseInlines(n ast.Node, src []byte, st style) []Span {
 		for c := node.FirstChild(); c != nil; c = c.NextSibling() {
 			switch v := c.(type) {
 			case *ast.Text:
-				out = appendSpan(out, Span{Text: string(v.Segment.Value(src)),
+				t := string(v.Segment.Value(src))
+				if !v.IsRaw() {
+					t = unescape(t)
+				}
+				out = appendSpan(out, Span{Text: t,
 					Bold: st.bold, Italic: st.italic, Code: st.code, Strike: st.strike, Link: st.link})
 				if v.SoftLineBreak() {
 					out = appendSpan(out, Span{Text: "\n", Bold: st.bold, Italic: st.italic, Link: st.link})
@@ -452,6 +459,45 @@ func nodeText(n ast.Node, src []byte) string {
 		return ast.WalkContinue, nil
 	})
 	return string(b)
+}
+
+// unescape resolves the backslash escapes and the character references of
+// text, which goldmark leaves in its segments for its renderer to resolve.
+func unescape(s string) string {
+	if !strings.ContainsAny(s, `\&`) {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\\' && i+1 < len(s) && isASCIIPunct(s[i+1]) {
+			b.WriteByte(s[i+1])
+			i++
+			continue
+		}
+		if c == '&' {
+			if j := strings.IndexByte(s[i:], ';'); j > 1 && j <= 32 && isRefName(s[i+1:i+j]) {
+				if r := html.UnescapeString(s[i : i+j+1]); r != s[i:i+j+1] {
+					b.WriteString(r)
+					i += j
+					continue
+				}
+			}
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+// isRefName reports whether s can be what a character reference holds
+// between & and ;: a name, or # and a number.
+func isRefName(s string) bool {
+	for _, c := range []byte(strings.TrimPrefix(s, "#")) {
+		if !(c >= '0' && c <= '9' || c|0x20 >= 'a' && c|0x20 <= 'z') {
+			return false
+		}
+	}
+	return true
 }
 
 // linesText is the raw text of a node's lines (code blocks, HTML blocks).

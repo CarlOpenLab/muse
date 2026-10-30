@@ -237,6 +237,112 @@ func maskFrontMatter(src string, end int) string {
 	return string(b)
 }
 
+// bracketMath returns src with the [ of a \[ swapped for a letter where
+// the parser would take it for the start of display math, as LaTeX writes
+// it, but it reads as a bracket escaped, as CommonMark writes one: a \[
+// with text after it at the start of a line and no \] on the line, which
+// would make a block of math of the rest of the document, and a \[…\]
+// holding no TeX, as \[1\] or \[注\]. Its result depends on each line
+// alone, and is as long as src.
+func bracketMath(src string) string {
+	var b []byte
+	for ls := 0; ls < len(src); {
+		le := len(src)
+		if i := strings.IndexByte(src[ls:], '\n'); i >= 0 {
+			le = ls + i
+		}
+		line := src[ls:le]
+		for i := strings.Index(line, `\[`); i >= 0; i = nextBracket(line, i) {
+			if escapedAt(line, i) {
+				continue
+			}
+			rest := line[i+2:]
+			end := strings.Index(rest, `\]`)
+			math := true
+			switch {
+			case end >= 0:
+				math = texLike(rest[:end])
+			case blockLead(line[:i]) && strings.TrimSpace(rest) != "":
+				math = texLike(rest)
+			}
+			if !math {
+				if b == nil {
+					b = []byte(src)
+				}
+				b[ls+i+1] = 'x'
+			}
+		}
+		ls = le + 1
+	}
+	if b == nil {
+		return src
+	}
+	return string(b)
+}
+
+// nextBracket returns the offset of the next \[ in line after the one at
+// i, or -1.
+func nextBracket(line string, i int) int {
+	if j := strings.Index(line[i+2:], `\[`); j >= 0 {
+		return i + 2 + j
+	}
+	return -1
+}
+
+// escapedAt reports whether the character at i is escaped by a backslash.
+func escapedAt(s string, i int) bool {
+	n := 0
+	for i-n-1 >= 0 && s[i-n-1] == '\\' {
+		n++
+	}
+	return n%2 == 1
+}
+
+// blockLead reports whether s, the start of a line, is nothing but the
+// markers of containers: spaces, quotation markers, and list items'
+// bullets and numbers.
+func blockLead(s string) bool {
+	for i := 0; i < len(s); {
+		switch c := s[i]; {
+		case c == ' ' || c == '\t' || c == '>':
+			i++
+		case c == '-' || c == '*' || c == '+':
+			if i+1 >= len(s) || s[i+1] != ' ' && s[i+1] != '\t' {
+				return false
+			}
+			i += 2
+		case c >= '0' && c <= '9':
+			j := i
+			for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+				j++
+			}
+			if j-i > 9 || j+1 >= len(s) || s[j] != '.' && s[j] != ')' || s[j+1] != ' ' && s[j+1] != '\t' {
+				return false
+			}
+			i = j + 2
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// texLike reports whether s reads as TeX rather than words: it holds a
+// command, as \frac, a script, a brace or an operator.
+func texLike(s string) bool {
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; c {
+		case '^', '_', '{', '}', '=', '+', '<', '>', '|':
+			return true
+		case '\\':
+			if i+1 < len(s) && (s[i+1]|0x20 >= 'a' && s[i+1]|0x20 <= 'z') {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // buildLeaves turns the parse of src into the leaves the editor lays out,
 // in document order.
 func buildLeaves(src string, d *parser.Document, fm int) []*leaf {
@@ -325,9 +431,10 @@ func appendCont(conts []cont, c cont) []cont {
 	return out
 }
 
-// markFirst records that the first of leaves opens the container at depth.
+// markFirst records that the first of leaves opens the container at depth,
+// unless the leaf is outside it: a marker still being typed.
 func markFirst(leaves []*leaf, depth int) {
-	if len(leaves) > 0 {
+	if len(leaves) > 0 && depth < len(leaves[0].conts) {
 		leaves[0].firstOf = append(leaves[0].firstOf, depth)
 	}
 }
@@ -370,7 +477,10 @@ func headingLeaf(src string, d *parser.Document, c int, conts []cont) *leaf {
 		}
 		l.start = p
 		if ins := d.Inlines(c); len(ins) > 0 {
-			l.end = paraEnd(src, max(b.End, p))
+			l.end = max(b.End, p)
+			if !closingHashes(src[l.end:lineEndAt(src, l.end)]) {
+				l.end = paraEnd(src, l.end)
+			}
 		} else {
 			l.end = max(p, lineEndAt(src, p))
 		}
@@ -383,6 +493,13 @@ func headingLeaf(src string, d *parser.Document, c int, conts []cont) *leaf {
 	l.setext = true
 	l.start, l.end = b.Start, b.End
 	return l
+}
+
+// closingHashes reports whether the rest of a heading's line after its
+// text is a closing sequence of #s, which the text does not run into.
+func closingHashes(rest string) bool {
+	t := strings.TrimSpace(rest)
+	return t != "" && strings.Trim(t, "#") == "" && (rest[0] == ' ' || rest[0] == '\t')
 }
 
 // codeLeaf makes the leaf of a fenced or indented block of code: its
@@ -425,6 +542,10 @@ func linesLeaf(src string, d *parser.Document, c int, kind leafKind, conts []con
 	n := d.LineCount(c)
 	for k := 0; k < n; k++ {
 		text, off := d.Line(c, k)
+		// The parser's line is of the source it was given, which may have
+		// characters swapped (see Editor.parserSource): the line is the
+		// source's.
+		text = src[off : off+len(sourceLine(d.Source(), text, off))]
 		l.lines = append(l.lines, line{off: off, text: strings.TrimSuffix(text, "\r")})
 	}
 	if kind == kMath || (kind == kCode && b.Fenced) {
@@ -447,6 +568,25 @@ func linesLeaf(src string, d *parser.Document, c int, kind leafKind, conts []con
 	l.end = last.off + len(last.text)
 	return l
 }
+
+// sourceLine returns the source of a line the parser gives as text from
+// off. A tab that the indentation of a container took part of leaves the
+// rest of its width as spaces before the text, which are not in the
+// source: they are left out, so that the line is the source's bytes.
+func sourceLine(src, text string, off int) string {
+	for p := 0; p < tabStop && p <= len(text); p++ {
+		if p > 0 && text[p-1] != ' ' {
+			break
+		}
+		if e := off + len(text) - p; e <= len(src) && src[off:e] == text[p:] {
+			return text[p:]
+		}
+	}
+	return src[off:min(off+len(text), lineEndAt(src, off))]
+}
+
+// tabStop is the width of a tab, in columns.
+const tabStop = 4
 
 // spanEnd returns where the source of block c ends: the end of its last
 // line, past what the parser's End leaves out (a table's last pipe, a
@@ -538,8 +678,10 @@ func emptyItemLeaf(src string, ib *parser.Block, conts []cont, ct cont) *leaf {
 	}
 	l := &leaf{kind: kPara, id: -1, lineStart: lineStartAt(src, ib.Start), conts: appendCont(conts, ct)}
 	if p >= len(src) || src[p] == '\n' || src[p] == '\r' {
-		// "-" alone: a marker still being typed.
+		// "-" alone: a marker still being typed, which shows as text,
+		// outside the item it would make.
 		l.pending = true
+		l.conts = slices.Clone(conts)
 		l.start, l.end = ib.Start, p
 		l.syntaxStart = ib.Start
 		return l
@@ -571,8 +713,10 @@ func emptyLeaf(src string, b *parser.Block, conts []cont, ct cont) *leaf {
 	}
 	l := &leaf{kind: kPara, id: -1, lineStart: lineStartAt(src, b.Start), conts: appendCont(conts, ct)}
 	if ct.kind == cQuote && p == b.Start+1 {
-		// ">" alone: still being typed.
+		// ">" alone: still being typed, and shown as text outside the
+		// quotation it would make.
 		l.pending = true
+		l.conts = slices.Clone(conts)
 		l.start, l.end = b.Start, p
 		l.syntaxStart = b.Start
 		return l

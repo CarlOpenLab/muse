@@ -9,6 +9,8 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown/parser"
+
+	"muse/mdoc"
 )
 
 // Options configure an editor. The app sets them before building the
@@ -65,6 +67,9 @@ type Editor struct {
 	doc    *parser.Document
 	fm     int
 	leaves []*leaf
+	// unmasked and masked are the last source given to parserSource and
+	// what it made of it.
+	unmasked, masked string
 	// rev counts changes of the source; parsed is the rev leaves reflect.
 	rev, parsed uint64
 
@@ -216,13 +221,40 @@ func (e *Editor) sync() {
 		return
 	}
 	e.fm = frontMatterEnd(e.src)
-	e.doc.Set(maskFrontMatter(e.src, e.fm))
+	e.doc.Set(e.parserSource(maskFrontMatter(e.src, e.fm)))
 	e.leaves = buildLeaves(e.src, e.doc, e.fm)
 	if p := e.phantom; p != nil {
 		e.leaves = insertPhantom(e.leaves, p)
 	}
 	e.parsed = e.rev
 }
+
+// parserSource returns src as the parser reads it: emphasis beside CJK
+// punctuation as Typora reads it (see mdoc.CJKFriendly), and brackets
+// escaped as brackets (see bracketMath). What they swap on a line depends
+// on the line alone, so only the lines that changed since the last call
+// are read again.
+func (e *Editor) parserSource(src string) string {
+	old, masked := e.unmasked, e.masked
+	p := 0
+	for p < len(old) && p < len(src) && old[p] == src[p] {
+		p++
+	}
+	if p == len(old) && p == len(src) {
+		return masked
+	}
+	s := 0
+	for s < len(old)-p && s < len(src)-p && old[len(old)-1-s] == src[len(src)-1-s] {
+		s++
+	}
+	ls, le := lineStartAt(src, p), lineEndAt(src, len(src)-s)
+	e.unmasked = src
+	e.masked = masked[:ls] + parserText(src[ls:le]) + masked[len(old)-(len(src)-le):]
+	return e.masked
+}
+
+// parserText returns whole lines of the source as the parser reads them.
+func parserText(lines string) string { return mdoc.CJKFriendly(bracketMath(lines)) }
 
 // insertPhantom puts the phantom's leaf among the leaves, by its offset.
 func insertPhantom(leaves []*leaf, p *phantom) []*leaf {
@@ -450,7 +482,7 @@ func (e *Editor) Headings() []Heading {
 		if l.kind != kHeading || l.pending {
 			continue
 		}
-		text := strings.TrimSpace(parser.PlainText(e.doc.Inlines(l.id)))
+		text := strings.TrimSpace(e.plainText(e.doc.Inlines(l.id)))
 		out = append(out, Heading{Level: l.level, Text: text, Offset: l.start})
 	}
 	return out

@@ -258,6 +258,8 @@ func (e *Editor) shortcut(key ui.Key, shift, alt bool) bool {
 		e.ToggleCode()
 	case key == ui.KeyX && shift:
 		e.ToggleStrike()
+	case key == ui.KeyH && shift:
+		e.ToggleHighlight()
 	case key == ui.KeyK && !shift:
 		e.InsertLink()
 	case key == ui.KeyD && !shift:
@@ -601,6 +603,9 @@ func (e *Editor) menu(m *ui.Menu) {
 		}
 		if m.Item("行内代码").Shortcut(ui.Cmd, ui.KeyE).Chosen() {
 			e.ToggleCode()
+		}
+		if m.Item("高亮").Shortcut(ui.Cmd|ui.Shift, ui.KeyH).Chosen() {
+			e.ToggleHighlight()
 		}
 		if m.Item("链接").Shortcut(ui.Cmd, ui.KeyK).Chosen() {
 			e.InsertLink()

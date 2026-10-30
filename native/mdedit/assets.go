@@ -78,26 +78,47 @@ func (e *Editor) htmlImageObject(html string, width float32) *object {
 	if !ok {
 		return nil
 	}
-	obj := e.imageObject(src, alt, width, true)
-	if obj.bmp != nil && (iw > 0 || ih > 0) {
-		bw, bh := obj.bmp.Size()
-		fw, fh := float32(bw), float32(bh)
-		switch {
-		case iw > 0 && ih > 0:
-			fw, fh = iw, ih
-		case iw > 0:
-			fh = fh * iw / fw
-			fw = iw
-		default:
-			fw = fw * ih / fh
-			fh = ih
+	sz := imgSize{w: iw, h: ih}
+	if i := strings.Index(strings.ToLower(html), "<img"); i >= 0 {
+		if j := strings.IndexByte(html[i:], '>'); j >= 0 {
+			if _, _, s, ok := imgTag(html[i : i+j+1]); ok {
+				sz = s
+			}
 		}
-		if width > 0 && fw > width {
-			fh = fh * width / fw
-			fw = width
-		}
-		obj.w, obj.h = fw, fh
 	}
+	return e.sizedImage(src, alt, sz, width, true)
+}
+
+// sizedImage returns the image at dest at the size an <img> asks for, by
+// its width and height or a zoom, scaled down to the width.
+func (e *Editor) sizedImage(dest, alt string, sz imgSize, width float32, alone bool) *object {
+	obj := e.imageObject(dest, alt, width, alone)
+	if obj.bmp == nil || sz == (imgSize{}) {
+		return obj
+	}
+	bw, bh := obj.bmp.Size()
+	fw, fh := float32(bw), float32(bh)
+	if fw <= 0 || fh <= 0 {
+		return obj
+	}
+	switch {
+	case sz.w > 0 && sz.h > 0:
+		fw, fh = sz.w, sz.h
+	case sz.w > 0:
+		fh = fh * sz.w / fw
+		fw = sz.w
+	case sz.h > 0:
+		fw = fw * sz.h / fh
+		fh = sz.h
+	}
+	if sz.zoom > 0 {
+		fw, fh = fw*sz.zoom, fh*sz.zoom
+	}
+	if width > 0 && fw > width {
+		fh = fh * width / fw
+		fw = width
+	}
+	obj.w, obj.h = fw, fh
 	return obj
 }
 

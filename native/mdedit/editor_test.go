@@ -187,6 +187,40 @@ func TestEnterAtEndMakesPhantom(t *testing.T) {
 	h.want("one\n\nx\n\ntwo\n")
 }
 
+func TestRepeatedEnterKeepsBlankLines(t *testing.T) {
+	h := newHarness(t, "one\n\ntwo\n")
+	h.caretAt(3)
+	h.key(0, ui.KeyEnter)
+	h.key(0, ui.KeyEnter)
+	h.key(0, ui.KeyEnter)
+	h.want("one\n\n\n\ntwo\n")
+	if h.e.phantom == nil {
+		t.Fatal("left the empty paragraph")
+	}
+	h.typ("x")
+	h.want("one\n\n\n\nx\n\ntwo\n")
+	// The text comes back first, then each blank line on its own.
+	h.key(ui.Cmd, ui.KeyZ)
+	h.want("one\n\n\n\ntwo\n")
+	if h.e.phantom == nil || h.e.caret != 5 {
+		t.Fatalf("undo of the text: caret %d, phantom %+v", h.e.caret, h.e.phantom)
+	}
+	h.key(ui.Cmd, ui.KeyZ)
+	h.want("one\n\n\ntwo\n")
+	if h.e.phantom == nil || h.e.caret != 4 {
+		t.Fatalf("undo of a blank line: caret %d, phantom %+v", h.e.caret, h.e.phantom)
+	}
+}
+
+func TestRepeatedEnterAboveAParagraph(t *testing.T) {
+	h := newHarness(t, "one\n")
+	h.caretAt(0)
+	h.key(0, ui.KeyEnter)
+	h.key(0, ui.KeyEnter)
+	h.typ("x")
+	h.want("x\n\n\none\n")
+}
+
 func TestListEnter(t *testing.T) {
 	h := newHarness(t, "- a")
 	h.caretAt(3)

@@ -230,6 +230,7 @@ func (a *App) formatMenu(click func(func()) func(*mygo.MenuItem, *mygo.Window)) 
 		{Label: "下划线", Click: click(a.editorAction((*mdedit.Editor).ToggleUnderline))},
 		{Label: "删除线", Click: click(a.editorAction((*mdedit.Editor).ToggleStrike))},
 		{Label: "行内代码", Click: click(a.editorAction((*mdedit.Editor).ToggleCode))},
+		{Label: "高亮", Click: click(a.editorAction((*mdedit.Editor).ToggleHighlight))},
 		mygo.Separator(),
 		{Label: "链接", Click: click(a.editorAction((*mdedit.Editor).InsertLink))},
 	}

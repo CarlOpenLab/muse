@@ -127,6 +127,16 @@ func (lk *look) span(st istyle, size float32) ui.Span {
 		s.Background = lk.codeBg
 		s.Radius = 3
 	}
+	if st.mono {
+		s.Font = lk.mono
+		s.Size = size * 0.9
+	}
+	if st.color.A != 0 {
+		s.Color = st.color
+	}
+	if st.bg.A != 0 {
+		s.Background = st.bg
+	}
 	if st.sup || st.sub {
 		s.Size = size * 0.75
 		s.BaselineShift = size * 0.35
@@ -353,6 +363,7 @@ func (e *Editor) textView(l *leaf, width float32, at int, withCompose, header bo
 	default:
 		ins := e.doc.Inlines(l.id)
 		b.alone = aloneImage(ins, e.src)
+		b.starts, b.cell = e.lineStarts(l.id), l.table != nil
 		b.inlines(ins, l.start, l.end, st)
 	}
 	b.ensure(l.start)
@@ -391,6 +402,20 @@ func shapeDisplay(d *display, f ui.Font, shape ui.TextShape) (*ui.TextLayout, bo
 		spans = append(spans, sp)
 	}
 	return ui.ShapeRichTextWith(spans, f, shape), false
+}
+
+// lineStarts returns the offsets of the lines of block id's text, when it
+// has more than one.
+func (e *Editor) lineStarts(id int) []int {
+	n := e.doc.LineCount(id)
+	if n < 2 {
+		return nil
+	}
+	out := make([]int, n)
+	for k := range out {
+		_, out[k] = e.doc.Line(id, k)
+	}
+	return out
 }
 
 // aloneImage reports whether a paragraph's inlines are one image and
@@ -553,7 +578,30 @@ func (e *Editor) htmlView(l *leaf, width float32, at int, withCompose bool) *lea
 		v.h += obj.h + gap
 		return v
 	}
+	if at < 0 {
+		if v := e.htmlTextView(l, width); v != nil {
+			return v
+		}
+	}
 	return e.linesView(l, width, at, withCompose, false)
+}
+
+// htmlTextView lays a block of HTML out as the HTML reads, or returns nil
+// when it holds nothing to draw, as a closing tag alone does.
+func (e *Editor) htmlTextView(l *leaf, width float32) *leafView {
+	f := e.textFont(l)
+	b := e.newBuilder(l, -1, false, f.Size, width)
+	htmlBlockDisplay(b, l)
+	if b.text.Len() == 0 {
+		return nil
+	}
+	b.finish(l.end)
+	b.ensure(l.start)
+	v := &leafView{disp: b.display()}
+	v.layout, v.empty = shapeDisplay(&v.disp, f, ui.TextShape{Width: width})
+	v.font = f
+	_, v.h = v.layout.Size()
+	return v
 }
 
 // linesView lays out a leaf's lines as they are, in the code font: in a

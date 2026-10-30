@@ -581,7 +581,20 @@ func (e *Editor) enter(shift bool) {
 				np.post = "\n\n"
 			}
 			e.setPhantom(&np)
+			return
 		}
+		// Enter in an empty paragraph adds a blank line: Markdown has no
+		// empty paragraphs, so the extra Enters are kept as the blank
+		// lines they are, and typing in the paragraph writes them there.
+		e.begin(stepEdit)
+		e.replace(p.at, p.at, "\n")
+		np := *p
+		if !np.before {
+			np.at++
+		}
+		e.phantom = &np
+		e.phantomStays = true
+		e.commit(np.at, np.at)
 		return
 	}
 	off := e.caret

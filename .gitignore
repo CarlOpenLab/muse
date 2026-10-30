@@ -16,6 +16,7 @@ native/embed/dist/
 native/Muse
 native/Muse.exe
 native/build/
+native/.mygo/
 
 # Legacy Electron build output
 out/
