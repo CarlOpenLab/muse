@@ -13,8 +13,10 @@ import (
 )
 
 // parser is shared: goldmark's parser is safe for concurrent use and holds
-// no per-call state.
-var parser = goldmark.New(goldmark.WithExtensions(extension.GFM))
+// no per-call state. Footnotes are how Typora writes a note's references;
+// without the extension [^1]: … parses as a link definition and its text
+// disappears from the model.
+var parser = goldmark.New(goldmark.WithExtensions(extension.GFM, extension.Footnote))
 
 // Parse parses Markdown source into a document. It never fails: anything
 // the parser cannot place is kept as a paragraph so no text is lost, which
@@ -76,6 +78,8 @@ func parseBlock(n ast.Node, src []byte) (Block, bool) {
 		return Block{Kind: HTML, Text: html}, true
 	case *east.Table:
 		return parseTable(v, src), true
+	case *east.FootnoteList:
+		return parseFootnoteList(v, src), true
 	}
 	// Unknown block: keep its text so nothing is lost.
 	if t := nodeText(n, src); t != "" {
@@ -98,6 +102,32 @@ func parseList(n *ast.List, src []byte) Block {
 			num++
 		} else {
 			item.Marker = "•"
+		}
+		b.Items = append(b.Items, item)
+	}
+	return b
+}
+
+// parseFootnoteList maps footnote definitions to a list: each footnote is
+// an item marked [n], its first paragraph the lead-in text and any further
+// blocks its children. The shallow model has no footnote kind, and this
+// keeps every definition readable in plain text and in the view.
+func parseFootnoteList(n *east.FootnoteList, src []byte) Block {
+	b := Block{Kind: List}
+	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		fn, ok := c.(*east.Footnote)
+		if !ok {
+			continue
+		}
+		item := Item{Marker: "[" + strconv.Itoa(fn.Index) + "]"}
+		for d := fn.FirstChild(); d != nil; d = d.NextSibling() {
+			if _, ok := d.(*ast.Paragraph); ok && len(item.Inlines) == 0 {
+				item.Inlines = parseInlines(d, src, style{})
+				continue
+			}
+			if blk, ok := parseBlock(d, src); ok {
+				item.Children = append(item.Children, blk)
+			}
 		}
 		b.Items = append(b.Items, item)
 	}
@@ -325,12 +355,27 @@ func parseInlines(n ast.Node, src []byte, st style) []Span {
 					ns.italic = true
 				}
 				walk(v, ns)
+			case *east.Strikethrough:
+				ns := st
+				ns.strike = true
+				walk(v, ns)
+			case *east.FootnoteLink:
+				// The marker replaces the reference syntax; its definition
+				// follows as a footnote item.
+				out = appendSpan(out, Span{Text: "[" + strconv.Itoa(v.Index) + "]",
+					Bold: st.bold, Italic: st.italic, Link: st.link})
 			case *ast.Link:
 				ns := st
 				ns.link = string(v.Destination)
 				walk(v, ns)
 			case *ast.AutoLink:
-				out = appendSpan(out, Span{Text: string(v.Label(src)), Link: string(v.URL(src)),
+				link := string(v.URL(src))
+				// The parser leaves the mailto: prefix to the renderer;
+				// the model carries the link target itself.
+				if v.AutoLinkType == ast.AutoLinkEmail && !strings.HasPrefix(strings.ToLower(link), "mailto:") {
+					link = "mailto:" + link
+				}
+				out = appendSpan(out, Span{Text: string(v.Label(src)), Link: link,
 					Bold: st.bold, Italic: st.italic})
 			case *ast.Image:
 				out = appendSpan(out, Span{Text: "🖼 " + nodeText(v, src), Italic: true, Link: string(v.Destination)})

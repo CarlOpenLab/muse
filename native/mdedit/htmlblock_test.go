@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -111,5 +112,44 @@ func TestHTMLBlockShowsItsSourceAtTheCaret(t *testing.T) {
 	h.caretAt(0) // at the tag
 	if got := htmlLeaf(t, h.e).view.disp.text; got != "<div>\n文字\n</div>" {
 		t.Fatalf("at the tag it shows %q", got)
+	}
+}
+
+// closingLeaf returns the editor's HTML leaf that holds a closing tag on
+// its own: a block of its own when a blank line separates the tag from the
+// block it closes, as CommonMark reads it.
+func closingLeaf(t *testing.T, e *Editor) *leaf {
+	t.Helper()
+	for _, l := range e.leaves {
+		if l.kind == kHTML && strings.HasPrefix(strings.TrimSpace(e.src[l.start:l.end]), "</") {
+			return l
+		}
+	}
+	t.Fatal("no closing tag block")
+	return nil
+}
+
+func TestHTMLBlockAloneClosingTag(t *testing.T) {
+	const src = "<details>\n文字\n\n</details>\n\n后文\n"
+	e := shownEditor(t, src)
+	l := closingLeaf(t, e)
+	if got := styledText(e, l.view.disp); got != "" {
+		t.Fatalf("away from the caret the closing tag shows %q", got)
+	}
+	// It is not left as a gap in the document.
+	if l.view.layout != nil || l.view.h != 0 || l.h != 0 {
+		t.Fatalf("the closing tag takes %.0f points", l.h)
+	}
+
+	// The caret can still reach it, and then it shows its source.
+	h := newHarness(t, src)
+	l = closingLeaf(t, h.e)
+	h.caretAt(l.start + 1)
+	l = closingLeaf(t, h.e)
+	if got := styledText(h.e, l.view.disp); got != "</details>" {
+		t.Fatalf("at the caret the closing tag shows %q", got)
+	}
+	if l.h == 0 {
+		t.Fatal("at the caret the closing tag takes no room")
 	}
 }

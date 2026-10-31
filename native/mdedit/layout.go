@@ -584,6 +584,10 @@ func (e *Editor) htmlView(l *leaf, width float32, at int, withCompose bool) *lea
 		if v := e.htmlTextView(l, width); v != nil {
 			return v
 		}
+		// A block that reads as nothing, as a closing tag on a line of its
+		// own does, draws nothing while the caret is elsewhere. Its source
+		// shows as soon as the caret enters it, through linesView below.
+		return &leafView{}
 	}
 	return e.linesView(l, width, at, withCompose, false)
 }
@@ -717,7 +721,18 @@ func (e *Editor) layoutDoc(x, width float32) {
 		ind := e.indentOf(l.conts)
 		l.x = x + ind
 		l.w = max(width-ind, 60)
+		// Everything but a table is laid out before the spacing, so that a
+		// block that draws nothing takes no room.
+		if l.kind != kTable {
+			l.view = e.view(l, l.w, false, parser.AlignNone)
+			l.h = l.view.h
+		}
 		top, bottom := e.margins(l)
+		if l.kind == kHTML && l.h == 0 {
+			// A block of HTML that reads as nothing, as a closing tag on a
+			// line of its own does, leaves no gap where it sits.
+			top, bottom = 0, 0
+		}
 		if prev == nil {
 			top = 0
 		} else if tightAfter(prev, l) {
@@ -725,12 +740,8 @@ func (e *Editor) layoutDoc(x, width float32) {
 		}
 		y += max(top, prevBottom)
 		l.y = y
-		switch l.kind {
-		case kTable:
+		if l.kind == kTable {
 			e.layoutTable(l)
-		default:
-			l.view = e.view(l, l.w, false, parser.AlignNone)
-			l.h = l.view.h
 		}
 		y += l.h
 		prevBottom = bottom

@@ -128,7 +128,11 @@ type App struct {
 	recents []recentEntry
 	// dirMu 守住 dirs/isDir 两个树缓存：children 在渲染帧里跑，而
 	// 打开文件夹的 goroutine 也写它们，headless 下这两者真的并发。
-	dirMu        sync.Mutex
+	dirMu sync.Mutex
+	// mainMu 在 headless 下把 onMain 和渲染帧串起来：没有窗口事件循环
+	// 时 onMain 就地执行，后台 Agent 会与测试的帧同时改编辑器和 AI
+	// 状态；有窗口时 onMain 本来就在帧的线程上，锁空转。
+	mainMu       sync.Mutex
 	root         string
 	dirs         map[string][]string
 	isDir        map[string]bool
@@ -234,6 +238,8 @@ func New() *App {
 // View
 
 func (a *App) View(c *ui.Context) {
+	a.mainMu.Lock()
+	defer a.mainMu.Unlock()
 	a.applyTheme(c)
 	row := ui.Row(c).Fill()
 	if c.Vibrancy() {
@@ -1024,6 +1030,10 @@ func (a *App) startBusy() {
 // the main loop, so calling one from a click callback deadlocks the window.
 func (a *App) onMain(fn func()) {
 	if a.win == nil {
+		// Headless: there is no event loop to post to, so the caller is a
+		// background goroutine. Serialize with the frame it would race.
+		a.mainMu.Lock()
+		defer a.mainMu.Unlock()
 		fn()
 		return
 	}

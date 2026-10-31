@@ -1,16 +1,7 @@
-node_modules/
-app/dist/
-.vite/
 *.log
 .DS_Store
 Untitled*.md
 未命名*.md
-
-# AI agent 纯逻辑单测的临时编译产物（app/tsconfig.agent-test.json）
-app/.tmp-agent-test/
-
-# 前端构建产物（vite → native/embed/dist，go:embed 内嵌进单二进制）
-native/embed/dist/
 
 # MyGo 构建产物
 native/Muse
@@ -18,7 +9,7 @@ native/Muse.exe
 native/build/
 native/.mygo/
 
-# Legacy Electron build output
+# 构建输出
 out/
 native/muse
 native/Muse.exe~
