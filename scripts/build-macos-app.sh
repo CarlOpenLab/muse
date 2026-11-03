@@ -75,11 +75,20 @@ PLIST
 
 echo "✅ .app bundle 创建完成: $APP"
 
-# ── 3. Ad-hoc 签名（让 Gatekeeper 至少知道这是一个签名过的应用）──────────────
+# ── 3. 签名 ──────────────────────────────────────────────────────────────
 
-# 没有 Apple Developer ID 时做 ad-hoc 签名
-# 有证书时可以在 CI 里用 Developer ID Application 证书替换这步
-codesign --force --deep --sign - "$APP" 2>/dev/null || true
+# 用固定证书签名后 designated requirement 才能跨版本保持不变，macOS 的
+# TCC 授权（文件与文件夹、屏幕录制、辅助功能）才会在升级后继续有效。
+# ad-hoc 签名的 DR 是 cdhash，每次构建都变，用户每次升级都要重新授权。
+SIGN_IDENTITY="${MACOS_SIGNING_IDENTITY:-}"
+if [ -n "$SIGN_IDENTITY" ]; then
+  echo "签名身份: $SIGN_IDENTITY"
+  codesign --force --deep --sign "$SIGN_IDENTITY" "$APP"
+else
+  echo "⚠️  未设置 MACOS_SIGNING_IDENTITY，退回 ad-hoc 签名："
+  echo "    用户每次升级都会被要求重新授权。"
+  codesign --force --deep --sign - "$APP" 2>/dev/null || true
+fi
 
 # ── 4. 生成 DMG ───────────────────────────────────────────────────────────
 

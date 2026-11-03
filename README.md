@@ -43,10 +43,15 @@ Privacy: agent tools are sandboxed to the workspace root; API keys and chat hist
 Grab a build from [Releases](https://github.com/CarlOpenLab/muse/releases/latest) (Windows / macOS / Linux), or from source:
 
 ```bash
-go run -C native .            # run
-go build -C native -o Muse .  # build a binary
+sh scripts/dev.sh             # run (signed, so macOS keeps permission grants)
+sh scripts/build.sh           # build a binary, signed with the same identity
 go test -C native ./...       # tests
 ```
+
+The scripts sign with the first `Apple Development` identity in your keychain
+(override with `MACOS_SIGNING_IDENTITY`), so macOS permission grants survive
+rebuilds. On Windows, use `go run -C native .` / `go build -C native -o Muse .`
+directly.
 
 Requires Go 1.27.3+. No Node, no pnpm, no vite — there is no frontend build at all.
 
