@@ -106,6 +106,102 @@ func TestDiagramBarShowsOnlyOnOverflow(t *testing.T) {
 	}
 }
 
+// TestDiagramPans checks that a rendered diagram is dragged sideways with
+// the pointer, not only with its bar, and that a press without a drag
+// leaves the source alone.
+func TestDiagramPans(t *testing.T) {
+	h, l := diagramHarness(t)
+	v := l.view
+	box, contentW := h.e.diagramBox(l, v, 0, 0)
+	if contentW <= box.W {
+		t.Fatalf("diagram width %v does not overflow the column %v", contentW, box.W)
+	}
+	caret := h.e.caret
+	x, y := box.X+box.W/2, box.Y+box.H/2
+
+	h.tt.Move(x, y)
+	if h.e.cursor != ui.CursorGrab {
+		t.Fatalf("the pointer over a diagram is %v, want the grab shape", h.e.cursor)
+	}
+	h.tt.Press(x, y)
+	h.frame()
+	if h.e.diagPan == nil {
+		t.Fatal("pressing the diagram did not start a pan")
+	}
+	if h.e.caret != caret {
+		t.Fatal("pressing the diagram moved the caret into its source")
+	}
+	h.tt.Move(x-120, y)
+	h.frame()
+	if v.diagX <= 0 {
+		t.Fatalf("dragging left did not pan the diagram: %v", v.diagX)
+	}
+	// Dragging past the start clamps at the first column.
+	h.tt.Move(x+400, y)
+	h.frame()
+	if v.diagX != 0 {
+		t.Fatalf("dragging right left the diagram at %v, want its start", v.diagX)
+	}
+	// A little more than the whole content travels puts the end in view.
+	h.tt.Move(x-2*contentW, y)
+	h.frame()
+	if v.diagX != contentW-box.W {
+		t.Fatalf("dragging left left the diagram at %v, want its end %v", v.diagX, contentW-box.W)
+	}
+	h.tt.Release(x-2*contentW, y)
+	h.frame()
+	if h.e.diagPan != nil {
+		t.Fatal("letting go did not end the pan")
+	}
+	if h.e.caret != caret {
+		t.Fatal("panning moved the caret into the diagram")
+	}
+}
+
+// TestDiagramToggleSource checks that the control in a diagram's corner
+// shows its Mermaid source, and brings the diagram back.
+func TestDiagramToggleSource(t *testing.T) {
+	h, l := diagramHarness(t)
+	size := h.e.lk.size
+	x := l.x + l.w - size*0.6 - 1
+	y := l.y + size*0.7
+	if got := h.e.diagramToggleAt(x, y); got != l {
+		t.Fatal("the source control is not in the diagram's corner")
+	}
+	h.tt.Move(x, y)
+	if h.e.cursor != ui.CursorPointer {
+		t.Fatalf("the pointer over the source control is %v, want a hand", h.e.cursor)
+	}
+
+	h.tt.ClickAt(x, y)
+	h.frame()
+	if h.e.leafAt(h.e.caret) != l {
+		t.Fatal("the source control did not put the caret in the block")
+	}
+	if l.view == nil || l.view.diagram != nil {
+		t.Fatal("the block still draws its diagram after showing the source")
+	}
+
+	// With the source showing, the same control brings the diagram back
+	// and takes the caret out of the block.
+	x = l.x + l.w - size*0.6 - 1
+	y = l.y + size*0.7
+	if got := h.e.diagramToggleAt(x, y); got != l {
+		t.Fatal("the diagram control is not in the source block's corner")
+	}
+	h.tt.ClickAt(x, y)
+	for i := 0; i < 2; i++ {
+		h.frame()
+	}
+	if h.e.leafAt(h.e.caret) == l {
+		t.Fatal("the diagram control left the caret in the block's source")
+	}
+	l = h.e.leaves[0]
+	if l.view == nil || l.view.diagram == nil {
+		t.Fatal("the diagram did not come back")
+	}
+}
+
 // TestDiagramKeepsItsScroll proves the sideways scroll belongs to the
 // view: editing another block leaves it alone.
 func TestDiagramKeepsItsScroll(t *testing.T) {

@@ -123,10 +123,36 @@ func (e *Editor) paintUnit(p *ui.Painter, u *leaf, ox, oy float32, a, z int) {
 		e.paintDiagram(p, u, v, ox, oy)
 	}
 	if v.label != "" && !v.reveal && v.panel {
-		sp := ui.Span{Text: v.label, Size: e.lk.size * 0.7, Color: e.lk.muted.Alpha(0.75)}
+		size := e.lk.size
+		sp := ui.Span{Text: v.label, Size: size * 0.7, Color: e.lk.muted.Alpha(0.75)}
 		w, _ := p.MeasureText(0, sp)
-		p.RichText(x+u.w-w-e.lk.size*0.6, y+e.lk.size*0.35, 0, sp)
+		lx := x + u.w - w - size*0.6
+		p.RichText(lx, y+size*0.35, 0, sp)
+		if isMermaid(u) {
+			e.paintDiagramToggle(p, u, lx, y)
+		}
 	}
+}
+
+// paintDiagramToggle draws the control at a Mermaid block's corner that
+// shows its source, or brings its diagram back, a faint pill under it
+// while the pointer is there.
+func (e *Editor) paintDiagramToggle(p *ui.Painter, l *leaf, labelX, top float32) {
+	action := "源码"
+	if l.view != nil && l.view.diagram == nil {
+		action = "图表"
+	}
+	size := e.lk.size * 0.7
+	sp := ui.Span{Text: action, Size: size, Color: e.lk.accent}
+	w, h := p.MeasureText(0, sp)
+	x := labelX - w - e.lk.size*0.8
+	y := top + e.lk.size*0.35
+	hot := e.pointerY >= l.y && e.pointerY <= l.y+e.lk.size*1.4 &&
+		e.pointerX >= l.x && e.pointerX <= l.x+l.w
+	if hot {
+		p.Fill(ui.Rect{X: x - 4, Y: y - 2, W: w + 8, H: h + 4}, e.lk.accent.Alpha(0.12), 4)
+	}
+	p.RichText(x, y, 0, sp)
 }
 
 // diagramBox returns the box a diagram leaf draws in: the leaf's box

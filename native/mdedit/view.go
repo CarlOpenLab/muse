@@ -139,6 +139,18 @@ func (e *Editor) View(c *ui.Context) ui.Element {
 	if e.autoScroll() {
 		c.After(16 * time.Millisecond)
 	}
+	// The rail floats over the document's right edge, and follows the pointer
+	// there as an overlay does.
+	e.railView(c, b)
+	if e.railAnim {
+		// The lens and the preview are on their way to somewhere: frames
+		// move them, as CSS transitions would.
+		c.After(16 * time.Millisecond)
+	} else if e.railHover >= 0 {
+		// The pointer's leaving the rail makes no event here: ask for a
+		// frame, so the hover and its preview clear once it has gone.
+		c.After(80 * time.Millisecond)
+	}
 	if e.focused {
 		phase := c.Now().Sub(e.blinkStart)
 		if phase < 30*time.Second {
@@ -162,8 +174,13 @@ func (e *Editor) scrollIntoView() {
 		e.hasScrollTo = false
 		e.wantReveal = false
 		if r, ok := e.caretRect(e.scrollTo); ok {
-			e.scroll.Y = max(r.Y-e.lk.size*2, 0)
+			if e.scrollCenter {
+				e.scroll.Y = min(max(r.Y-(e.viewH-r.H)/2, 0), max(e.docH-e.viewH, 0))
+			} else {
+				e.scroll.Y = max(r.Y-e.lk.size*2, 0)
+			}
 		}
+		e.scrollCenter = false
 		return
 	}
 	if !e.wantReveal {

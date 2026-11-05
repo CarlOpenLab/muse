@@ -205,6 +205,35 @@ func (g *mermaidGraph) height() float32 {
 	return float32(maxLevel+1)*88 + 20
 }
 
+// edgeLabelWidth estimates how wide an edge's label draws at the labels'
+// font: wide runes, as CJK's, take the font's size, narrow ones about six
+// tenths of it. The layout uses it to keep the labels clear of the nodes.
+func edgeLabelWidth(label string) float32 {
+	w := float32(0)
+	for _, r := range label {
+		if r >= 0x2E80 {
+			w += 10.5
+		} else {
+			w += 6
+		}
+	}
+	return w
+}
+
+// rankGap returns the room between the columns of level l and the next:
+// enough for the widest label crossing it, and never less than the plain
+// gap.
+func (g *mermaidGraph) rankGap(l int) float32 {
+	gap := float32(58)
+	for _, e := range g.edges {
+		if e.label == "" || e.from.level != l || e.to.level != l+1 {
+			continue
+		}
+		gap = maxF(gap, edgeLabelWidth(e.label)+16)
+	}
+	return gap
+}
+
 // width returns the least width the graph draws well at: the widest rank
 // of a top-down graph, or a sideways graph's ranks and their gaps, plus
 // room for labels and the edges routed outside.
@@ -221,19 +250,20 @@ func (g *mermaidGraph) width() float32 {
 	const margin = 42
 	if g.horizontal() {
 		total := float32(32)
-		ranks := 0
+		prev := -1
 		for l := 0; l <= maxLevel; l++ {
 			colW := float32(0)
 			for _, n := range rows[l] {
 				colW = maxF(colW, g.nodeWidth(n))
 			}
-			if colW > 0 {
-				total += colW
-				ranks++
+			if colW == 0 {
+				continue
 			}
-		}
-		if ranks > 1 {
-			total += float32(ranks-1) * 58
+			if prev >= 0 {
+				total += g.rankGap(prev)
+			}
+			total += colW
+			prev = l
 		}
 		return total + margin
 	}
@@ -292,12 +322,15 @@ func (g *mermaidGraph) layout(r ui.Rect) {
 		}
 	}
 	if g.horizontal() {
-		colGap := float32(58)
 		x := r.X + 16
+		prev := -1
 		for l := 0; l <= maxLevel; l++ {
 			col := rows[l]
 			if len(col) == 0 {
 				continue
+			}
+			if prev >= 0 {
+				x += g.rankGap(prev)
 			}
 			colW := float32(0)
 			for _, n := range col {
@@ -310,7 +343,8 @@ func (g *mermaidGraph) layout(r ui.Rect) {
 				w := g.nodeWidth(n)
 				n.rect = ui.Rect{X: x + (colW-w)/2, Y: startY + float32(i)*52, W: w, H: 36}
 			}
-			x += colW + colGap
+			x += colW
+			prev = l
 		}
 		return
 	}

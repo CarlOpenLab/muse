@@ -488,6 +488,11 @@ func (e *Editor) codeFont() ui.Font {
 	return ui.Font{Family: e.lk.mono, Size: e.lk.size * 0.875, LineHeight: 1.6}
 }
 
+// isMermaid reports whether l is a fenced block of Mermaid.
+func isMermaid(l *leaf) bool {
+	return l.kind == kCode && l.fenced && strings.EqualFold(l.lang, "mermaid")
+}
+
 // codeView lays out a block of code: its lines, highlighted, in a panel,
 // with its fence's info string above them while the caret is there.
 func (e *Editor) codeView(l *leaf, width float32, at int, withCompose bool) *leafView {
@@ -557,7 +562,7 @@ func (e *Editor) codeView(l *leaf, width float32, at int, withCompose bool) *lea
 	v.font = f
 	_, th := v.layout.Size()
 	v.h = th + 2*padY
-	if !caretIn && strings.EqualFold(l.lang, "mermaid") {
+	if !caretIn && isMermaid(l) {
 		if d, ok := mdoc.ParseDiagram(e.codeText(l)); ok {
 			v.diagram = &d
 			v.h = d.Height(width) + 2*padY
@@ -767,11 +772,20 @@ func (e *Editor) layoutDoc(x, width float32, virtual bool) {
 	}
 	e.estW, e.estSize, e.estLH = width, e.lk.size, e.lk.lh
 	lk, assets := e.lk.key(), e.assetGen.Load()
+	// The rail's ticks are the headings of this parse, in order: a heading
+	// still being typed is no heading yet, and has no tick until it is.
+	rebuildRail := e.railRev != e.rev
+	if rebuildRail {
+		e.railLeaves = e.railLeaves[:0]
+	}
 	y := e.padTop
 	var prev *leaf
 	prevBottom := float32(0)
 	s := e.lk.size
 	for _, l := range e.leaves {
+		if rebuildRail && l.kind == kHeading && !l.pending {
+			e.railLeaves = append(e.railLeaves, l)
+		}
 		ind := e.indentOf(l.conts)
 		l.x = x + ind
 		l.w = max(width-ind, 60)
@@ -830,6 +844,34 @@ func (e *Editor) layoutDoc(x, width float32, virtual bool) {
 	// gives the scroll bar its range: every leaf that comes into view is
 	// shaped, and takes its exact height.
 	e.docH = y + e.padBottom
+	if rebuildRail {
+		e.railRev = e.rev
+		// The preview tells a heading's text and the first lines of its
+		// section: the paragraph right after it, if one comes before the
+		// next heading.
+		e.railNext = e.railNext[:0]
+		at := 0
+		for _, h := range e.railLeaves {
+			for at < len(e.leaves) && e.leaves[at] != h {
+				at++
+			}
+			var next *leaf
+			for k := at + 1; k < len(e.leaves); k++ {
+				l := e.leaves[k]
+				if l.kind == kPhantom || l.kind == kRule {
+					continue
+				}
+				if l.kind == kPara {
+					next = l
+				}
+				break
+			}
+			e.railNext = append(e.railNext, next)
+		}
+		if e.railHover >= len(e.railLeaves) {
+			e.railHover = -1
+		}
+	}
 }
 
 // estimateHeight returns the height to give a leaf that is not shaped.

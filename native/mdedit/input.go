@@ -41,6 +41,10 @@ func (e *Editor) input(ev ui.InputEvent) bool {
 	case ui.InputScroll:
 		return e.scrollDiagram(ev)
 	case ui.InputPointerUp:
+		if e.diagPan != nil {
+			e.diagPan = nil
+			return true
+		}
 		if e.diagDrag != nil {
 			e.diagDrag = nil
 			return true
@@ -342,8 +346,21 @@ func (e *Editor) press(ev ui.InputEvent) bool {
 		e.toggleTaskAt(it)
 		return true
 	}
+	if l := e.diagramToggleAt(x, y); l != nil {
+		e.toggleDiagramSource(l)
+		return true
+	}
 	if l := e.codeLabelAt(x, y); l != nil {
 		e.setCaret(l.infoEnd, false)
+		return true
+	}
+	// A diagram is an object of its own: dragging it pans it, and a press
+	// without a drag leaves the source alone. Its corner control is the way
+	// in to edit it.
+	if l, _, ok := e.diagramBodyAt(x, y); ok {
+		e.diagPan = &diagPan{leaf: l, start: x, from: l.view.diagX}
+		e.cursor = ui.CursorGrabbing
+		e.invalidate()
 		return true
 	}
 	off := e.hitTest(x, y)
@@ -390,6 +407,14 @@ func (e *Editor) press(ev ui.InputEvent) bool {
 // or drags a diagram's scroll bar.
 func (e *Editor) drag(ev ui.InputEvent) bool {
 	e.pointerX, e.pointerY = ev.X, ev.Y
+	if e.diagPan != nil {
+		if ev.Button != 0 {
+			e.diagPan = nil
+			return false
+		}
+		e.dragDiagramPan(ev.X)
+		return true
+	}
 	if e.diagDrag != nil {
 		if ev.Button != 0 {
 			return false
@@ -454,15 +479,18 @@ func (e *Editor) autoScroll() bool {
 }
 
 // hover sets the pointer's shape for where it rests: a hand over what a
-// click acts on (a check box, a code block's language, a link), the
-// default over a diagram's scroll bar, an I-beam over the text.
+// click acts on (a check box, a code block's language, a link, a
+// diagram's source control), the grab shape over a diagram, the default
+// over its scroll bar, an I-beam over the text.
 func (e *Editor) hover(x, y float32) {
 	e.pointerX, e.pointerY = x, y
 	cursor := ui.CursorText
 	if _, _, _, _, ok := e.diagramBarAt(x, y); ok {
 		cursor = ui.CursorDefault
-	} else if _, ok := e.taskBoxAt(x, y); ok || e.codeLabelAt(x, y) != nil {
+	} else if _, ok := e.taskBoxAt(x, y); ok || e.diagramToggleAt(x, y) != nil || e.codeLabelAt(x, y) != nil {
 		cursor = ui.CursorPointer
+	} else if _, _, ok := e.diagramBodyAt(x, y); ok {
+		cursor = ui.CursorGrab
 	} else if e.linkAt(e.hitTest(x, y)) != "" {
 		cursor = ui.CursorPointer
 	}
@@ -505,6 +533,69 @@ func (e *Editor) diagramAt(x, y float32) (*leaf, *leafView, ui.Rect, float32, bo
 		}
 	}
 	return nil, nil, ui.Rect{}, 0, false
+}
+
+// diagramBodyAt returns the diagram leaf whose drawn body is at x, y,
+// whether it overflows its column or not: a press there pans it.
+func (e *Editor) diagramBodyAt(x, y float32) (*leaf, *leafView, bool) {
+	for _, l := range e.leaves {
+		v := l.view
+		if v == nil || v.diagram == nil {
+			continue
+		}
+		if box, _ := e.diagramBox(l, v, 0, 0); box.Contains(x, y) {
+			return l, v, true
+		}
+	}
+	return nil, nil, false
+}
+
+// diagramToggleAt returns the Mermaid block whose corner control is at x,
+// y: the one that shows its source, or its diagram again.
+func (e *Editor) diagramToggleAt(x, y float32) *leaf {
+	for _, l := range e.leaves {
+		if !isMermaid(l) || l.view == nil || l.view.reveal {
+			continue
+		}
+		if y >= l.y && y <= l.y+e.lk.size*1.4 && x >= l.x+l.w-e.lk.size*6 && x <= l.x+l.w {
+			return l
+		}
+	}
+	return nil
+}
+
+// toggleDiagramSource shows a Mermaid block's source, the caret at its
+// first line, or takes the source away and brings the diagram back.
+func (e *Editor) toggleDiagramSource(l *leaf) {
+	if l.view != nil && l.view.diagram != nil {
+		e.setCaret(l.start, false)
+		e.Focus()
+		return
+	}
+	// The caret leaves the block for the first stop after it; at the
+	// document's end, the end itself, past the closing fence.
+	off := len(e.src)
+	for _, n := range e.leaves {
+		if n != l && leafLo(n) > l.end {
+			off = leafLo(n)
+			break
+		}
+	}
+	e.setCaret(off, false)
+	e.Focus()
+}
+
+// dragDiagramPan pans the diagram whose body is being dragged to x.
+func (e *Editor) dragDiagramPan(x float32) {
+	d := e.diagPan
+	if d == nil || d.leaf.view == nil || d.leaf.view.diagram == nil {
+		return
+	}
+	v := d.leaf.view
+	box, contentW := e.diagramBox(d.leaf, v, 0, 0)
+	maxOff := max(contentW-box.W, 0)
+	v.diagX = min(max(d.from-(x-d.start), 0), maxOff)
+	e.invalidate()
 }
 
 // pressDiagramBar starts dragging a diagram's scroll bar, putting the

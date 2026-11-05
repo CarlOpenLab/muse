@@ -49,6 +49,23 @@ func TestHorizontalDiagramFitsItsColumns(t *testing.T) {
 	}
 }
 
+// TestHorizontalDiagramMakesRoomForLabels checks that a labelled edge of a
+// sideways graph has room between its columns: the label sits in the gap
+// rather than over the nodes around it.
+func TestHorizontalDiagramMakesRoomForLabels(t *testing.T) {
+	const label = "执行 submit() 且门禁失败"
+	g, ok := parseMermaid("graph LR\nA[开始] -->|" + label + "| B[结束]\n")
+	if !ok {
+		t.Fatal("the graph did not parse")
+	}
+	g.layout(ui.Rect{X: 0, Y: 0, W: g.width(), H: g.height()})
+	a, b := g.byID["A"].rect, g.byID["B"].rect
+	gap := b.X - (a.X + a.W)
+	if want := edgeLabelWidth(label); gap < want {
+		t.Fatalf("the gap between the columns is %.1f, want at least the label's %.1f", gap, want)
+	}
+}
+
 // TestDiagramWidth checks the least width each kind of diagram reports, as
 // the editor uses it to tell that a diagram overflows its column.
 func TestDiagramWidth(t *testing.T) {

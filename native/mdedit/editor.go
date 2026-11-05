@@ -141,9 +141,10 @@ type Editor struct {
 	// wantReveal scrolls the caret into view at the next frame.
 	wantReveal bool
 	// scrollTo, when set, scrolls an offset to the top of the view at the
-	// next frame.
-	scrollTo    int
-	hasScrollTo bool
+	// next frame; scrollCenter centers it there instead, as the rail does.
+	scrollTo     int
+	hasScrollTo  bool
+	scrollCenter bool
 
 	// The pointer: a drag selecting by characters, words or blocks, from
 	// the range it started on; the syntax shown is frozen meanwhile, so
@@ -156,8 +157,10 @@ type Editor struct {
 	pointerX  float32
 	pointerY  float32
 	hoverLink string
-	// diagDrag is a diagram's scroll bar being dragged, if one is.
+	// diagDrag is a diagram's scroll bar being dragged, if one is; diagPan
+	// is the pointer dragging a rendered diagram itself sideways.
 	diagDrag   *diagDrag
+	diagPan    *diagPan
 	services   ui.Services
 	lastChange time.Time
 
@@ -180,6 +183,31 @@ type Editor struct {
 	// built again when the source changes (see units).
 	unitList []*leaf
 	unitRev  uint64
+
+	// The navigation rail: the headings of the parse, in order, and the
+	// first block of each one's section for the preview; railRev is the rev
+	// they were collected at. railHover is the tick the pointer is on (-1
+	// none) and railActive the one the view is in; railRect is the rail's
+	// box and railYs its ticks' centers as the last frame drew them.
+	// railScales are the ticks' widths, animated toward their distances
+	// from the highlighted tick, and railCardY the preview's center,
+	// animated the same way; railCardOn says whether it shows.
+	railLeaves  []*leaf
+	railNext    []*leaf
+	railRev     uint64
+	railHover   int
+	railActive  int
+	railRect    ui.Rect
+	railYs      []float32
+	railPitch   float32
+	railScales  []float32
+	railAnim    bool
+	railCardY   float32
+	railCardOn  bool
+	railText    string
+	railDesc    string
+	railTextRev uint64
+	railTextIdx int
 }
 
 // Range is a range of the source, in bytes.
@@ -200,6 +228,14 @@ type diagDrag struct {
 	from  float32
 }
 
+// diagPan is the dragging of a rendered diagram itself: the leaf, the
+// pointer's x as the drag began, and the scroll offset then.
+type diagPan struct {
+	leaf  *leaf
+	start float32
+	from  float32
+}
+
 // phantom is an empty paragraph the caret is in: Markdown has no empty
 // paragraphs, so it is not in the source until text is typed in it, which
 // goes in at at with pre before it and post after it.
@@ -214,7 +250,8 @@ type phantom struct {
 
 // New returns an editor of src.
 func New(src string, opts Options) *Editor {
-	e := &Editor{opts: opts, views: map[viewKey]*leafView{}, current: -1, cursor: ui.CursorText}
+	e := &Editor{opts: opts, views: map[viewKey]*leafView{}, current: -1, cursor: ui.CursorText,
+		railHover: -1, railActive: -1}
 	// The window's theme comes with the first frame; until then, the light
 	// one, so that a document opened before it lays out.
 	e.setLook(ui.LightTheme())
@@ -254,6 +291,8 @@ func (e *Editor) SetSource(src string) {
 	e.highlights, e.current = nil, -1
 	e.scroll.Y = 0
 	e.hasGoal = false
+	e.railHover = -1
+	e.railCardOn = false
 	e.sync()
 	if strings.TrimSpace(src) == "" {
 		e.phantom = &phantom{at: len(src)}
@@ -554,7 +593,17 @@ func (e *Editor) ScrollToOffset(off int) {
 	e.dropPhantom()
 	off = e.normalize(max(0, min(off, len(e.src))), 1)
 	e.anchor, e.caret = off, off
-	e.scrollTo, e.hasScrollTo = off, true
+	e.scrollTo, e.hasScrollTo, e.scrollCenter = off, true, false
+	e.invalidate()
+}
+
+// scrollToOffsetCentered scrolls off to the middle of the view, as the
+// rail's ticks do.
+func (e *Editor) scrollToOffsetCentered(off int) {
+	e.dropPhantom()
+	off = e.normalize(max(0, min(off, len(e.src))), 1)
+	e.anchor, e.caret = off, off
+	e.scrollTo, e.hasScrollTo, e.scrollCenter = off, true, true
 	e.invalidate()
 }
 
