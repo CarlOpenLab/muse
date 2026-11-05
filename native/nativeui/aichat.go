@@ -273,7 +273,6 @@ func (a *App) aiToolPart(c *ui.Context, p *chatPart) {
 func (a *App) aiApprovalCard(c *ui.Context, p *chatPart) {
 	t := c.Theme()
 	tool := p.Tool
-	label := toolLabel(tool.Name)
 	target := toolTarget(tool.Args)
 
 	title := "请求修改文档"
@@ -302,7 +301,7 @@ func (a *App) aiApprovalCard(c *ui.Context, p *chatPart) {
 		if desc := toolDescription(tool); desc != "" {
 			ui.Text(c, desc).FontSize(10).TextColor(t.TextMuted).Wrap().LineHeight(1.5)
 		}
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).FillWidth().Wrap().Children(func() {
 			allow := ui.ButtonBase(c).Height(24).Padding(0, 11).Radius(7).
 				Label("同意修改").Description("同意修改")
 			allow.Background(t.Accent)
@@ -333,8 +332,6 @@ func (a *App) aiApprovalCard(c *ui.Context, p *chatPart) {
 			deny.Children(func() {
 				ui.Text(c, "拒绝").FontSize(10.5).TextColor(t.TextMuted)
 			})
-			ui.Text(c, label).FontSize(10).TextColor(t.TextMuted).Grow(1).
-				SingleLine().Ellipsis("…")
 		})
 	})
 }
