@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#4237C6"/>
+
+  <!-- written line, under the nib -->
+  <path d="M280 840C420 858 612 848 792 804" fill="none" stroke="#FDDA34" stroke-width="26" stroke-linecap="round"/>
+
+  <g transform="rotate(35 512 512)">
+    <!-- barrel -->
+    <path d="M422 640V295Q422 196 512 196Q602 196 602 295V640Z" fill="#F8F6F5" stroke="#121212" stroke-width="44"/>
+
+    <!-- clip -->
+    <rect x="602" y="258" width="36" height="220" rx="18" fill="#FDDA34" stroke="#121212" stroke-width="14"/>
+
+    <!-- long, narrow fountain-pen nib -->
+    <path d="M432 648C414 648 406 660 409 676C424 770 464 850 512 914C560 850 600 770 615 676C618 660 610 648 592 648Z"
+          fill="#FDDA34" stroke="#121212" stroke-width="24" stroke-linejoin="round"/>
+    <rect x="509" y="756" width="6" height="146" rx="3" fill="#121212"/>
+
+    <!-- face -->
+    <g fill="#121212">
+      <circle cx="466" cy="350" r="30"/>
+      <circle cx="558" cy="356" r="27"/>
+    </g>
+    <g fill="#F8F6F5">
+      <circle cx="455" cy="339" r="9"/>
+      <circle cx="548" cy="345" r="8"/>
+    </g>
+    <path d="M470 450C488 478 532 478 558 440C560 484 530 504 502 496C482 490 470 472 470 450Z" fill="#121212"/>
+  </g>
+</svg>

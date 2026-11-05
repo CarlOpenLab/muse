@@ -4,18 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Muse — 所写，即所见。原生 Markdown 编辑器 + 写作 Agent</title>
-  <meta name="description" content="Muse 是一款原生优先的桌面 Markdown 编辑器：Go 绘制外壳，内嵌 Milkdown 所见即所得画布，没有 Electron。面板里住着一位会用工具的写作 Agent——读你的工作区，改稿之前先征得你的同意。">
+  <meta name="description" content="Muse 是一款全原生的桌面 Markdown 编辑器：Go 直接绘制窗口、面板和 Markdown 画布，没有 WebView，没有 Electron。面板里住着一位会用工具的写作 Agent——读你的工作区，改稿之前先征得你的同意。">
   <meta property="og:title" content="Muse — 所写，即所见。">
-  <meta property="og:description" content="原生优先的 Markdown 编辑器 + 会用工具的写作 Agent：Go 外壳、内嵌 WYSIWYG 画布、13 个文档工具、工具审批卡、权限三档。">
-  <meta property="og:image" content="assets/img/og.jpg">
+  <meta property="og:description" content="全原生 Markdown 编辑器 + 会用工具的写作 Agent：Go 直接绘制窗口与画布、13 个文档工具、工具审批卡、权限三档。">
+  <meta property="og:image" content="https://carlopenlab.github.io/muse/assets/img/og.jpg?v=20261105">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Muse 应用图标与字标">
+  <meta property="og:url" content="https://carlopenlab.github.io/muse/">
   <meta property="og:type" content="website">
   <meta name="theme-color" content="#1a1a1a">
-  <link rel="icon" type="image/png" href="assets/img/favicon.png">
+  <link rel="canonical" href="https://carlopenlab.github.io/muse/">
+  <link rel="icon" type="image/png" href="assets/img/favicon.png?v=20261105">
   <link rel="preload" href="assets/fonts/spacegrotesk-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/jetbrainsmono-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/css/main.css?v=20261026p">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Muse","operatingSystem":"Windows, macOS, Linux","applicationCategory":"TextEditor","description":"原生优先的桌面 Markdown 编辑器：Go 绘制外壳，内嵌 Milkdown 画布，内置会用工具的写作 Agent。","offers":{"@type":"Offer","price":"0"},"author":{"@type":"Organization","name":"CarlOpenLab"}}
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Muse","operatingSystem":"Windows, macOS, Linux","applicationCategory":"TextEditor","description":"全原生的桌面 Markdown 编辑器：Go 绘制窗口、面板与 Markdown 画布，内置会用工具的写作 Agent。","offers":{"@type":"Offer","price":"0"},"author":{"@type":"Organization","name":"CarlOpenLab"}}
   </script>
 </head>
 <body>
@@ -50,7 +55,7 @@
   <header class="nav" id="nav">
     <div class="nav__inner">
       <a class="nav__brand" href="#top">
-        <img src="assets/img/favicon.png" alt="" width="24" height="24">
+        <img src="assets/img/favicon.png?v=20261105" alt="" width="24" height="24">
         <span class="nav__wordmark">Muse</span>
       </a>
       <nav class="nav__links" aria-label="章节">
@@ -84,8 +89,8 @@
           <span class="reveal">即<em class="serif">所见</em>。</span>
         </h1>
         <p class="hero__lede reveal">
-          原生优先的 Markdown 编辑器——外壳由 Go 直接绘制在 GPU 上，
-          画布是内嵌的 Milkdown 所见即所得页面，没有 Electron，一个二进制。
+          全原生的 Markdown 编辑器——从窗口、面板到画布都由 Go 直接绘制在 GPU 上，
+          没有 WebView，没有 Electron，一个二进制。
           现在，它的面板里住着一位
           <strong>会用工具的写作 Agent</strong>：读你的工作区，改稿之前，先征得你的同意。
         </p>
@@ -164,7 +169,7 @@
       </div>
 
       <div class="container hero__facts mono reveal">
-        <span>0 Electron</span><i></i><span>1 个二进制 · 画布内嵌</span><i></i><span>3 种 GPU 后端</span><i></i><span>13 个 Agent 工具</span>
+        <span>0 Electron</span><i></i><span>1 个二进制 · 全原生画布</span><i></i><span>3 种 GPU 后端</span><i></i><span>13 个 Agent 工具</span>
       </div>
     </section>
 
@@ -255,11 +260,11 @@
       <div class="container">
         <header class="section__head">
           <span class="eyebrow reveal">02 — 原生</span>
-          <h2 class="section__title reveal">外壳原生，<em class="serif">画布</em>内嵌</h2>
+          <h2 class="section__title reveal">外壳原生，<em class="serif">画布</em>也原生</h2>
           <p class="section__lede reveal">
-            外壳（窗口、图标栏、面板与整个 AI Agent）由 MyGo 绘制在 GPU 上（Metal /
-            Direct3D 11 / OpenGL）；Markdown 画布是内嵌的 Vue 3 + Milkdown 页面——渲染与编辑同一份
-            表示，已构建进二进制。WebView 不可用时，全原生块编辑器接管。
+            从窗口、图标栏、面板到 Markdown 画布与整个 AI Agent，全部由 MyGo 绘制在
+            GPU 上（Metal / Direct3D 11 / OpenGL）。Markdown 源码是编辑器的唯一状态：块级语法
+            从不显形，行内标记只在光标旁露出；没有 WebView，也没有前端运行时。
           </p>
         </header>
 
@@ -450,7 +455,7 @@
   <footer class="footer">
     <div class="container footer__inner">
       <div class="footer__brand">
-        <img src="assets/img/favicon.png" alt="" width="20" height="20">
+        <img src="assets/img/favicon.png?v=20261105" alt="" width="20" height="20">
         <span>所写，即所见。</span>
       </div>
       <nav class="footer__links" aria-label="页脚">

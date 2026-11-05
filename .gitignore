@@ -11,5 +11,6 @@ native/.mygo/
 
 # 构建输出
 out/
+dist/
 native/muse
 native/Muse.exe~

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="wingTop" x1="220" y1="600" x2="850" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3FA1F9"/>
+      <stop offset="1" stop-color="#1865EE"/>
+    </linearGradient>
+    <linearGradient id="wingBottom" x1="500" y1="620" x2="760" y2="860" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#AC46EA"/>
+      <stop offset="1" stop-color="#4237C6"/>
+    </linearGradient>
+    <clipPath id="topClip"><path d="M880 180L140 620L540 644Z"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="#121212"/>
+  <path d="M880 180L140 620L540 644Z" fill="url(#wingTop)"/>
+  <path d="M880 180L540 644L740 860Z" fill="url(#wingBottom)"/>
+  <path d="M880 180L540 644L592 700Z" fill="#4237C6" opacity=".85"/>
+  <g clip-path="url(#topClip)" fill="#F8F6F5">
+    <rect x="250" y="552" width="210" height="26" rx="13" transform="rotate(-23 355 565)"/>
+    <rect x="318" y="612" width="150" height="26" rx="13" transform="rotate(-23 393 625)"/>
+  </g>
+  <path d="M250 760C204 786 172 810 148 838" fill="none" stroke="#3FA1F9" stroke-width="22" stroke-linecap="round" opacity=".7"/>
+</svg>

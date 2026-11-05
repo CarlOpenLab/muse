@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bg" cx="44%" cy="34%" r="82%">
+      <stop offset="0" stop-color="#4C41D6"/>
+      <stop offset=".58" stop-color="#4237C6"/>
+      <stop offset="1" stop-color="#3A2FB2"/>
+    </radialGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <g transform="rotate(-5 512 512)">
+    <ellipse cx="512" cy="900" rx="175" ry="22" fill="#1D105D" opacity=".35" filter="url(#soft)"/>
+
+    <!-- a page, pointed like a nib -->
+    <path d="M320 170H704Q744 170 744 210V560C744 600 718 626 690 650C660 676 632 700 610 730C578 772 548 842 512 890C476 842 446 772 414 730C392 700 364 676 334 650C306 626 280 600 280 560V210Q280 170 320 170Z"
+          fill="#F8F6F5" stroke="#121212" stroke-width="44" stroke-linejoin="round"/>
+
+    <!-- gold dog-ear -->
+    <path d="M604 170L744 310H604Z" fill="#FDDA34" stroke="#121212" stroke-width="18" stroke-linejoin="round"/>
+
+    <!-- face -->
+    <g fill="#121212">
+      <circle cx="426" cy="378" r="36"/>
+      <path d="M568 380Q602 344 636 380" fill="none" stroke="#121212" stroke-width="28" stroke-linecap="round"/>
+    </g>
+    <circle cx="412" cy="364" r="11" fill="#F8F6F5"/>
+    <path d="M466 484C492 514 540 516 566 484" fill="none" stroke="#121212" stroke-width="26" stroke-linecap="round"/>
+  </g>
+</svg>
