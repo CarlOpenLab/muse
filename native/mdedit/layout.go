@@ -319,7 +319,10 @@ func (e *Editor) viewAt(l *leaf, width float32, header bool, align parser.Align,
 	if reveal >= 0 {
 		at = reveal + l.lineStart
 	}
-	withCompose := e.compose != "" && at == e.caret
+	// Leaves can meet at the caret: a heading and the empty paragraph Enter
+	// opens after it end and start at the same offset. Only the unit the
+	// caret is in shows the composition, just as only it shows the caret.
+	withCompose := e.compose != "" && at == e.caret && e.unitAt(e.caret) == l
 	if withCompose {
 		k.compose, k.composeAt = e.compose, e.caret-l.lineStart
 	}
