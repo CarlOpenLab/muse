@@ -16,15 +16,24 @@ import (
 // unit is a part of the document the caret moves through: a leaf, or a
 // cell of a table.
 func (e *Editor) units() []*leaf {
-	out := make([]*leaf, 0, len(e.leaves))
+	if e.unitRev == e.rev && e.unitList != nil {
+		return e.unitList
+	}
+	out := e.unitList[:0]
+	if cap(out) < len(e.leaves) {
+		out = make([]*leaf, 0, len(e.leaves))
+	}
 	for _, l := range e.leaves {
 		if l.kind == kTable {
-			out = append(out, l.tab.cells()...)
+			for _, row := range l.tab.rows {
+				out = append(out, row...)
+			}
 			continue
 		}
 		out = append(out, l)
 	}
-	return out
+	e.unitList, e.unitRev = out, e.rev
+	return e.unitList
 }
 
 // unitIndex returns the index in units of the one holding the caret at

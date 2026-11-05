@@ -67,9 +67,27 @@ type Editor struct {
 	doc    *parser.Document
 	fm     int
 	leaves []*leaf
-	// unmasked and masked are the last source given to parserSource and
-	// what it made of it.
-	unmasked, masked string
+	// arena holds the leaves of the parse before and the one being built:
+	// a leaf the edit did not change keeps its view, so the leaves of the
+	// parse before have to stay whole while the next is built.
+	arena    [2]leafArena
+	arenaCur int
+	// leafSrc is the source the leaves were built from, which an edit has
+	// usually moved on from by the time they are compared with the next.
+	leafSrc string
+	// mask is the source as the parser reads it: as long as src, with
+	// front matter blanked and the characters beside CJK punctuation
+	// swapped where emphasis needs it. Each edit advances it in place, so
+	// the whole document is not copied again for every key.
+	mask []byte
+	// docSrc is the source the parser and mask hold; empty when the parser
+	// must be given the whole source again.
+	docSrc string
+	// pending is the one source edit not yet given to the parser;
+	// pendingMulti says a committed step changed more than one range, which
+	// has to be replayed from the whole source.
+	pending      *pendingEdit
+	pendingMulti bool
 	// rev counts changes of the source; parsed is the rev leaves reflect.
 	rev, parsed uint64
 
@@ -103,6 +121,17 @@ type Editor struct {
 	padTop       float32
 	padBottom    float32
 	docH         float32
+	// viewTop and viewBottom bound what the last frame showed, in the
+	// content's coordinates: a large document shapes only the leaves near
+	// them (see layoutDoc). They are the top of the document until a frame
+	// has given them a size.
+	viewTop, viewBottom float32
+	// estW, estSize and estLH are the width and text size the heights of
+	// the leaves that are not shaped were last estimated at. A layout at
+	// another width or size measures them again: their text wraps
+	// differently, and what is below them would sit where the old look put
+	// it.
+	estW, estSize, estLH float32
 
 	scroll       ui.ScrollState
 	scrollHandle ui.Handle
@@ -147,10 +176,21 @@ type Editor struct {
 	u16ix        u16Index
 	laidKey      laid
 	leavesLaid   bool
+	// unitList is the leaves and table cells the caret moves through,
+	// built again when the source changes (see units).
+	unitList []*leaf
+	unitRev  uint64
 }
 
 // Range is a range of the source, in bytes.
 type Range struct{ Start, End int }
+
+// pendingEdit is a change of the source not yet given to the parser: the
+// bytes from to were replaced by text.
+type pendingEdit struct {
+	from, to int
+	text     string
+}
 
 // diagDrag is the dragging of a diagram's scroll bar: the leaf it belongs
 // to, the pointer's x as the drag began, and the scroll offset then.
@@ -187,6 +227,8 @@ func (e *Editor) SetOptions(opts Options) {
 	if opts.Code != e.opts.Code {
 		e.rev++
 		e.parsed = 0
+		e.mask, e.docSrc = nil, ""
+		e.pending, e.pendingMulti = nil, false
 	}
 	e.opts = opts
 }
@@ -203,6 +245,8 @@ func (e *Editor) SetSource(src string) {
 	e.src = src
 	e.doc = parser.New(exts)
 	e.rev++
+	e.mask, e.docSrc = nil, ""
+	e.pending, e.pendingMulti = nil, false
 	e.anchor, e.caret = 0, 0
 	e.phantom = nil
 	e.compose, e.composing = "", false
@@ -226,41 +270,91 @@ func (e *Editor) sync() {
 	}
 	if e.opts.Code != "" {
 		e.fm = 0
-		e.leaves = []*leaf{codeDocLeaf(e.src, e.opts.Code)}
+		e.arenaCur ^= 1
+		a := &e.arena[e.arenaCur]
+		a.reset()
+		e.leaves = []*leaf{codeDocLeaf(a, e.src, e.opts.Code)}
+		e.leafSrc = e.src
 		e.parsed = e.rev
+		e.mask, e.docSrc = nil, ""
+		e.pending, e.pendingMulti = nil, false
 		return
 	}
-	e.fm = frontMatterEnd(e.src)
-	e.doc.Set(e.parserSource(maskFrontMatter(e.src, e.fm)))
-	e.leaves = buildLeaves(e.src, e.doc, e.fm)
+	fm := frontMatterEnd(e.src)
+	if e.docSrc != e.src {
+		// One edit can go straight to the parser; anything else, including
+		// a change that may have added or removed front matter, rebuilds
+		// the masked source and gives it whole.
+		if e.pending == nil || e.pendingMulti || fm != e.fm || !e.applyPending() {
+			e.parseAll(fm)
+		}
+	}
+	e.fm = fm
+	e.pending, e.pendingMulti = nil, false
+	old := e.leaves
+	e.arenaCur ^= 1
+	e.leaves = buildLeaves(e.src, e.doc, e.fm, &e.arena[e.arenaCur])
 	if p := e.phantom; p != nil {
 		e.leaves = insertPhantom(e.leaves, p)
 	}
+	carryViews(e.leafSrc, e.src, old, e.leaves)
+	e.leafSrc = e.src
 	e.parsed = e.rev
 }
 
-// parserSource returns src as the parser reads it: emphasis beside CJK
-// punctuation as Typora reads it (see mdoc.CJKFriendly), and brackets
-// escaped as brackets (see bracketMath). What they swap on a line depends
-// on the line alone, so only the lines that changed since the last call
-// are read again.
-func (e *Editor) parserSource(src string) string {
-	old, masked := e.unmasked, e.masked
-	p := 0
-	for p < len(old) && p < len(src) && old[p] == src[p] {
-		p++
+// carryViews gives the leaves of the new parse the views of the leaves of
+// the parse before where the two show the same thing. Without it a
+// document laid out after every keystroke would look up the view of every
+// leaf, hashing all of its text to find it.
+func carryViews(oldSrc, src string, old, next []*leaf) {
+	if len(old) != len(next) {
+		return
 	}
-	if p == len(old) && p == len(src) {
-		return masked
+	for i, l := range next {
+		o := old[i]
+		if !sameLeaf(o, l) || !sameText(oldSrc, src, o, l) {
+			continue
+		}
+		l.view, l.vp, l.geom = o.view, o.vp, o.geom
+		// The height is an estimate until the leaf is shaped again: it is
+		// what the leaf took where it was last laid out.
+		l.h = o.h
+		if l.tab == nil {
+			continue
+		}
+		for r, row := range l.tab.rows {
+			for c, cell := range row {
+				oc := o.tab.rows[r][c]
+				cell.view, cell.vp = oc.view, oc.vp
+			}
+		}
 	}
-	s := 0
-	for s < len(old)-p && s < len(src)-p && old[len(old)-1-s] == src[len(src)-1-s] {
-		s++
+}
+
+// applyPending gives the parser the one edit since the last parse, and
+// advances the mask with it. It reports whether the edit was applied
+// incrementally; false means the whole source has to be read again.
+func (e *Editor) applyPending() bool {
+	p := e.pending
+	next, from, to, repl, ok := editMask(e.mask, e.src, p.from, p.to, e.fm)
+	if !ok {
+		return false
 	}
-	ls, le := lineStartAt(src, p), lineEndAt(src, len(src)-s)
-	e.unmasked = src
-	e.masked = masked[:ls] + parserText(src[ls:le]) + masked[len(old)-(len(src)-le):]
-	return e.masked
+	e.mask = next
+	e.doc.Edit(from, to, repl)
+	e.docSrc = e.src
+	return true
+}
+
+// parseAll gives the parser the whole source and rebuilds the mask with
+// it. This is the path of opening a document, undo, and edits that cannot
+// be described as one range.
+func (e *Editor) parseAll(fm int) {
+	masked := parserText(maskFrontMatter(e.src, fm))
+	e.fm = fm
+	e.mask = []byte(masked)
+	e.doc.Set(masked)
+	e.docSrc = e.src
 }
 
 // parserText returns whole lines of the source as the parser reads them.

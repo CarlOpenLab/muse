@@ -19,13 +19,29 @@ type laid struct {
 	assets     uint64
 	phantom    *phantom
 	focused    bool
-	frame      uint64
+	// scrollY and viewH are part of the layout of a virtualized document
+	// only: the leaves it shapes are the ones its viewport shows, so both a
+	// scroll and a window made taller or shorter ask for another layout.
+	// A document laid out whole keeps exact positions, and neither moves a
+	// leaf.
+	scrollY float32
+	viewH   float32
 }
 
 // layoutIfNeeded lays the document out again when what it shows changed:
 // the source, the caret, the width, the look.
 func (e *Editor) layoutIfNeeded() {
 	e.sync()
+	// The viewport is what the layout shapes around. Both the key below and
+	// the layout pass read it from the scroll position of this moment, so
+	// that a scroll made during a frame is laid out for where it landed,
+	// not where it was when the frame began.
+	if e.viewH > 0 {
+		// A screen above and below what shows, so that a scroll does not
+		// have to shape the leaves it brings in on the frame it shows them.
+		e.viewTop, e.viewBottom = e.scroll.Y-e.viewH, e.scroll.Y+2*e.viewH
+	}
+	virtual := e.virtualLayout()
 	k := laid{
 		rev:     e.rev,
 		caret:   e.caret,
@@ -38,6 +54,9 @@ func (e *Editor) layoutIfNeeded() {
 		phantom: e.phantom,
 		focused: e.focused,
 	}
+	if virtual {
+		k.scrollY, k.viewH = e.scroll.Y, e.viewH
+	}
 	if k == e.laidKey && e.leavesLaid {
 		return
 	}
@@ -46,8 +65,21 @@ func (e *Editor) layoutIfNeeded() {
 	if e.colW <= 0 {
 		e.colW = 720
 	}
-	e.layoutDoc(e.colX, e.colW)
+	e.layoutDoc(e.colX, e.colW, virtual)
 }
+
+// virtualLayout reports whether the layout shapes only the leaves near
+// the viewport. A small document is laid out whole: its layout is cheap,
+// and exact positions make it simpler. A large one would pay for shaping
+// every leaf of text it does not show, on the first frame as much as on
+// any other.
+func (e *Editor) virtualLayout() bool {
+	return len(e.leaves) >= virtualLayoutMin
+}
+
+// virtualLayoutMin is the number of leaves from which a layout is
+// virtualized.
+const virtualLayoutMin = 1000
 
 // View builds the editor: a scroll view of the document as one surface
 // the user writes on.

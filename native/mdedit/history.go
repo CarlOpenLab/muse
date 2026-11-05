@@ -59,6 +59,14 @@ func (e *Editor) replace(from, to int, text string) {
 	}
 	e.src = e.src[:from] + text + e.src[to:]
 	e.rev++
+	// Keep the parser's edit. A step that changes more than one range
+	// cannot be given to the parser as one edit, so it will be parsed from
+	// the whole source when the step commits.
+	if e.pending == nil {
+		e.pending = &pendingEdit{from: from, to: to, text: text}
+	} else {
+		e.pendingMulti = true
+	}
 	if e.hist.open == nil {
 		e.begin(stepEdit)
 	}
@@ -202,6 +210,9 @@ func (e *Editor) restore(sel [2]int, ph *phantom) {
 	e.rev++
 	e.phantom = ph
 	e.parsed = 0
+	// Undo and redo replaced the source as a whole: any edit kept for the
+	// parser describes a source that no longer holds.
+	e.pending, e.pendingMulti = nil, false
 	e.sync()
 	e.anchor = max(0, min(sel[0], len(e.src)))
 	e.caret = max(0, min(sel[1], len(e.src)))

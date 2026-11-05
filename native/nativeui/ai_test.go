@@ -713,3 +713,24 @@ func TestAgentToolsSettingsToggles(t *testing.T) {
 		t.Fatal("再次翻转应恢复开启")
 	}
 }
+
+// TestAIMdBlocksCache checks that a Markdown part drawn again with the
+// same text is not parsed again, and that another text is.
+func TestAIMdBlocksCache(t *testing.T) {
+	a := &App{}
+	first := a.aiMdBlocks("**hello**")
+	if len(first) == 0 {
+		t.Fatal("no blocks parsed")
+	}
+	again := a.aiMdBlocks("**hello**")
+	if len(again) == 0 || &again[0] != &first[0] {
+		t.Fatal("the same text was parsed again")
+	}
+	other := a.aiMdBlocks("**bye**")
+	if len(other) == 0 || &other[0] == &first[0] {
+		t.Fatal("another text reused the blocks of the first")
+	}
+	if a.aiMdNext != 2 {
+		t.Fatalf("aiMdNext = %d, want 2 parses", a.aiMdNext)
+	}
+}

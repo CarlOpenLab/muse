@@ -61,8 +61,10 @@ func (e *Editor) paint(p *ui.Painter, r ui.Rect) {
 		switch l.kind {
 		case kTable:
 			e.paintTable(p, l, ox, oy, t)
-			for _, cell := range l.tab.cells() {
-				e.paintUnit(p, cell, ox, oy, a, z)
+			for _, row := range l.tab.rows {
+				for _, cell := range row {
+					e.paintUnit(p, cell, ox, oy, a, z)
+				}
 			}
 		default:
 			e.paintUnit(p, l, ox, oy, a, z)

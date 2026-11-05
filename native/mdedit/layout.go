@@ -1,6 +1,7 @@
 package mdedit
 
 import (
+	"math"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -222,6 +223,31 @@ type viewKey struct {
 	align     parser.Align
 }
 
+// viewParams is what a view depends on besides the leaf's text. A leaf
+// keeps its view while these stay equal and its content does not change
+// (see sameLeaf), which is what makes laying out an edited document cost
+// nothing for the leaves the edit did not touch.
+type viewParams struct {
+	kind      leafKind
+	level     int
+	flags     uint8
+	width     float32
+	reveal    int
+	compose   string
+	composeAt int
+	look      lookKey
+	assets    uint64
+	align     parser.Align
+}
+
+func (k *viewKey) params() viewParams {
+	return viewParams{
+		kind: k.kind, level: k.level, flags: k.flags, width: k.width,
+		reveal: k.reveal, compose: k.compose, composeAt: k.composeAt,
+		look: k.look, assets: k.assets, align: k.align,
+	}
+}
+
 const (
 	fPending uint8 = 1 << iota
 	fSetext
@@ -262,15 +288,23 @@ func (e *Editor) revealAt(l *leaf) int {
 }
 
 // view returns the leaf's view at width, as it shows with the caret where
-// it is.
+// it is. The view is kept on the leaf: the leaf the next layout sees with
+// the same content and parameters keeps it (see sameLeaf).
 func (e *Editor) view(l *leaf, width float32, header bool, align parser.Align) *leafView {
-	return e.viewWith(l, width, header, align, e.revealAt(l))
+	return e.viewAt(l, width, header, align, e.revealAt(l), true)
 }
 
 // viewWith returns the leaf's view at width as it shows with the caret at
 // reveal (relative to the leaf's first line; -1 for elsewhere), from the
-// cache when it has it.
+// cache when it has it. It does not keep the view on the leaf: it may be a
+// view for a caret the leaf does not have (see unitView).
 func (e *Editor) viewWith(l *leaf, width float32, header bool, align parser.Align, reveal int) *leafView {
+	return e.viewAt(l, width, header, align, reveal, false)
+}
+
+// viewAt returns the leaf's view, and keeps it on the leaf when settle is
+// set.
+func (e *Editor) viewAt(l *leaf, width float32, header bool, align parser.Align, reveal int, settle bool) *leafView {
 	k := viewKey{
 		kind:   l.kind,
 		level:  l.level,
@@ -289,16 +323,20 @@ func (e *Editor) viewWith(l *leaf, width float32, header bool, align parser.Alig
 	if withCompose {
 		k.compose, k.composeAt = e.compose, e.caret-l.lineStart
 	}
-	end := l.end
-	if l.kind == kRule {
-		end = max(end, l.lineStart)
+	p := k.params()
+	// The leaf's own view is the one it had the last time it was laid out:
+	// a leaf the edit did not change keeps it, and its text is not hashed
+	// again for the cache below.
+	if settle && l.view != nil && l.vp == p {
+		l.view.used = e.frame
+		return l.view
 	}
-	k.text = e.src[l.lineStart:max(end, l.lineStart)]
-	if l.kind == kCode || l.kind == kMath {
-		k.text = e.src[l.lineStart:max(l.end, lineEndAt(e.src, l.lineStart))]
-	}
+	k.text = viewText(e.src, l)
 	if v, ok := e.views[k]; ok {
 		v.used = e.frame
+		if settle {
+			l.view, l.vp = v, p
+		}
 		return v
 	}
 	var v *leafView
@@ -317,6 +355,9 @@ func (e *Editor) viewWith(l *leaf, width float32, header bool, align parser.Alig
 		v = e.textView(l, width, at, withCompose, header, align)
 	}
 	v.used = e.frame
+	if settle {
+		l.view, l.vp = v, p
+	}
 	e.views[k] = v
 	return v
 }
@@ -712,42 +753,153 @@ func tightAfter(prev, l *leaf) bool {
 }
 
 // layoutDoc lays the leaves out one below the other, in the content
-// column of the element, from x to x+width.
-func (e *Editor) layoutDoc(x, width float32) {
+// column of the element, from x to x+width. When virtual is set it shapes
+// only the leaves near the viewport and the one the caret is in, giving
+// the rest an estimated height: the text of a large document is not
+// shaped off screen, where nobody reads it.
+func (e *Editor) layoutDoc(x, width float32, virtual bool) {
+	if virtual && (width != e.estW || e.lk.size != e.estSize || e.lk.lh != e.estLH) {
+		// The heights below were estimated for another width or text size,
+		// where the text wrapped another way: measure them again.
+		for _, l := range e.leaves {
+			l.h = 0
+		}
+	}
+	e.estW, e.estSize, e.estLH = width, e.lk.size, e.lk.lh
+	lk, assets := e.lk.key(), e.assetGen.Load()
 	y := e.padTop
 	var prev *leaf
 	prevBottom := float32(0)
+	s := e.lk.size
 	for _, l := range e.leaves {
 		ind := e.indentOf(l.conts)
 		l.x = x + ind
 		l.w = max(width-ind, 60)
-		// Everything but a table is laid out before the spacing, so that a
-		// block that draws nothing takes no room.
-		if l.kind != kTable {
+		top, bottom := e.margins(l)
+		tight := prev != nil && tightAfter(prev, l)
+		if prev == nil {
+			top = 0
+		} else if tight {
+			top = s * 0.2
+		}
+		// The height this leaf is expected to take, until it is shaped:
+		// the one it had where it was last laid out, or an estimate.
+		est := l.h
+		if l.view != nil && l.vp.width == l.w && l.vp.look == lk && l.vp.assets == assets {
+			est = l.view.h
+		}
+		if est <= 0 {
+			est = e.estimateHeight(l, l.w)
+		}
+		at := y + max(top, prevBottom)
+		// A leaf near the viewport is shaped, and so is the one the caret
+		// is in, wherever that is: the caret has to be drawn on the frame
+		// it moves. Everything else keeps its estimate.
+		show := !virtual ||
+			at <= e.viewBottom+s && at+max(est, s) >= e.viewTop ||
+			e.caret >= leafLo(l) && e.caret <= l.end
+		switch {
+		case l.kind == kTable:
+			// The cells are laid out below, once the table has its y.
+			l.h = est
+		case show:
 			l.view = e.view(l, l.w, false, parser.AlignNone)
 			l.h = l.view.h
+		default:
+			l.h = est
 		}
-		top, bottom := e.margins(l)
 		if l.kind == kHTML && l.h == 0 {
 			// A block of HTML that reads as nothing, as a closing tag on a
 			// line of its own does, leaves no gap where it sits.
 			top, bottom = 0, 0
 		}
-		if prev == nil {
-			top = 0
-		} else if tightAfter(prev, l) {
-			top, prevBottom = e.lk.size*0.2, 0
+		if tight {
+			prevBottom = 0
 		}
 		y += max(top, prevBottom)
 		l.y = y
-		if l.kind == kTable {
+		if l.kind == kTable && show {
 			e.layoutTable(l)
 		}
 		y += l.h
 		prevBottom = bottom
 		prev = l
 	}
+	// In a virtual layout the height below the viewport is made of
+	// estimates, so the document's height is approximate too. It only
+	// gives the scroll bar its range: every leaf that comes into view is
+	// shaped, and takes its exact height.
 	e.docH = y + e.padBottom
+}
+
+// estimateHeight returns the height to give a leaf that is not shaped.
+// The blocks whose lines are known are nearly exact; text is estimated
+// from the bytes it takes at the column's width. Long lines wrap, which
+// the count of lines alone would miss, and an underestimate would leave
+// a leaf that reaches into the viewport unshaped: its text would draw
+// nothing where it starts above the viewport and ends inside it. The
+// estimate is therefore on the generous side.
+func (e *Editor) estimateHeight(l *leaf, width float32) float32 {
+	s := e.lk.size
+	switch l.kind {
+	case kCode, kMath, kHTML:
+		h := e.linesEstimate(l, width, s)
+		if l.kind != kHTML && !l.whole {
+			h += 2 * s * codePadY
+		}
+		return h
+	case kRaw:
+		return e.linesEstimate(l, width, s)
+	case kTable:
+		return e.tableEstimate(l, width, s)
+	case kRule:
+		return s * 1.2
+	}
+	line := s * e.lk.lh
+	if l.kind == kHeading {
+		line = s * 1.35
+	}
+	// About as many bytes as a line of mixed text takes at this width.
+	perLine := max(width/s*1.8, 8)
+	lines := float32(math.Ceil(float64(len(viewText(e.src, l))) / float64(perLine)))
+	return max(lines, 1) * line
+}
+
+// linesEstimate returns the height of a leaf of lines as they are, in the
+// code font, counting the lines their length wraps them to.
+func (e *Editor) linesEstimate(l *leaf, width, s float32) float32 {
+	if !l.whole {
+		width = max(width-2*s*codePadX, 40)
+	}
+	// A monospaced character takes about 0.6 of the code font's size.
+	perLine := max(width/(s*0.875*0.6), 8)
+	total := 0
+	for _, ln := range l.lines {
+		total += len(ln.text)
+	}
+	visual := max(len(l.lines), int(math.Ceil(float64(total)/float64(perLine))))
+	return float32(max(visual, 1)) * s * 0.875 * 1.6
+}
+
+// tableEstimate returns the height of a table that is not laid out: its
+// rows as tall as the cell that wraps the most, its columns guessed to be
+// of the same width.
+func (e *Editor) tableEstimate(l *leaf, width, s float32) float32 {
+	t := l.tab
+	cols := max(t.cols(), 1)
+	cellW := max(width/float32(cols)-2*s*cellPadX, 10)
+	// Mixed text takes about half a font size a character.
+	perLine := max(cellW/(s*0.5), 4)
+	line := s * e.lk.lh
+	total := float32(0)
+	for _, row := range t.rows {
+		lines := 1.0
+		for _, cell := range row {
+			lines = max(lines, math.Ceil(float64(max(cell.end-cell.start, 0))/float64(perLine)))
+		}
+		total += float32(lines)*line + 2*s*cellPadY
+	}
+	return max(total, line)
 }
 
 // layoutTable lays a table out: its columns as wide as their widest
@@ -757,40 +909,48 @@ func (e *Editor) layoutTable(l *leaf) {
 	t := l.tab
 	cols := t.cols()
 	padX, padY := e.lk.size*cellPadX, e.lk.size*cellPadY
-	natural := make([]float32, cols)
-	for r, row := range t.rows {
-		for c, cell := range row {
-			v := e.view(cell, 0, r == 0, alignAt(t.align, c))
-			natural[c] = max(natural[c], v.natural+2*padX+2)
+	g := l.geom
+	if g == nil || g.boxW != l.w || len(g.colW) != cols {
+		natural := make([]float32, cols)
+		for r, row := range t.rows {
+			for c, cell := range row {
+				v := e.view(cell, 0, r == 0, alignAt(t.align, c))
+				natural[c] = max(natural[c], v.natural+2*padX+2)
+			}
 		}
-	}
-	total := float32(0)
-	minW := e.lk.size * 3
-	for c := range natural {
-		natural[c] = max(natural[c], minW)
-		total += natural[c]
-	}
-	widths := natural
-	if total > l.w {
-		// Narrow the columns in proportion, none below the narrowest.
-		widths = make([]float32, cols)
-		room := l.w
+		total := float32(0)
+		minW := e.lk.size * 3
 		for c := range natural {
-			widths[c] = max(natural[c]*room/total, minW)
+			natural[c] = max(natural[c], minW)
+			total += natural[c]
 		}
+		widths := natural
+		if total > l.w {
+			// Narrow the columns in proportion, none below the narrowest.
+			widths = make([]float32, cols)
+			room := l.w
+			for c := range natural {
+				widths[c] = max(natural[c]*room/total, minW)
+			}
+		}
+		g = &tableGeom{colX: make([]float32, cols+1), colW: widths, boxW: l.w}
+		for c := range widths {
+			g.colX[c+1] = g.colX[c] + widths[c]
+		}
+		l.geom = g
 	}
-	g := &tableGeom{colX: make([]float32, cols+1), colW: widths}
-	for c := range widths {
-		g.colX[c+1] = g.colX[c] + widths[c]
+	if cap(g.rowY) < len(t.rows)+1 {
+		g.rowY = make([]float32, len(t.rows)+1)
+	} else {
+		g.rowY = g.rowY[:len(t.rows)+1]
 	}
-	g.rowY = make([]float32, len(t.rows)+1)
 	for r, row := range t.rows {
 		h := e.lk.size * e.lk.lh
 		for c, cell := range row {
 			if c >= cols {
 				break
 			}
-			v := e.view(cell, max(widths[c]-2*padX, 10), r == 0, alignAt(t.align, c))
+			v := e.view(cell, max(g.colW[c]-2*padX, 10), r == 0, alignAt(t.align, c))
 			cell.view = v
 			h = max(h, v.h)
 		}
@@ -802,20 +962,23 @@ func (e *Editor) layoutTable(l *leaf) {
 			}
 			cell.x = l.x + g.colX[c] + padX
 			cell.y = l.y + g.rowY[r] + padY
-			cell.w = max(widths[c]-2*padX, 10)
+			cell.w = max(g.colW[c]-2*padX, 10)
 			cell.h = cell.view.h
 		}
 	}
 	g.w = g.colX[cols]
-	l.geom = g
 	l.h = g.rowY[len(t.rows)]
 }
 
 // tableGeom is where a table's columns and rows are, relative to its box.
+// boxW is the table's width when the columns were measured: a table laid
+// out again at the same width keeps its columns, and only a table whose
+// cells changed is measured anew.
 type tableGeom struct {
 	colX, colW []float32
 	rowY       []float32
 	w          float32
+	boxW       float32
 }
 
 func alignAt(a []parser.Align, c int) parser.Align {

@@ -131,8 +131,10 @@ type leaf struct {
 	// Where the last layout put the leaf, in the editor's content.
 	x, y, w, h float32
 	// view is the leaf as displayed and laid out (see leafView), geom a
-	// table's grid, and table the table a cell is in.
+	// table's grid, and table the table a cell is in. vp is what the view
+	// was made for besides the leaf's own content.
 	view  *leafView
+	vp    viewParams
 	geom  *tableGeom
 	table *leaf
 }
@@ -343,35 +345,182 @@ func texLike(s string) bool {
 	return false
 }
 
+// leafArena reuses the leaves of the last parse. A document of a few
+// thousand blocks would otherwise allocate a leaf, its containers and its
+// lines on every keystroke; the arena keeps their memory and fills it
+// again, so editing costs no allocations for the leaves it does not
+// change.
+type leafArena struct {
+	leaves []*leaf
+	n      int
+}
+
+// reset makes the arena empty, keeping the leaves to fill again. The
+// lines and containers go first: they hold slices of the source, and a
+// source no leaf holds can be freed even while its leaves are kept for
+// their views.
+func (a *leafArena) reset() {
+	for _, l := range a.leaves[:a.n] {
+		clear(l.conts)
+		clear(l.lines)
+		l.conts, l.lines = l.conts[:0], l.lines[:0]
+	}
+	a.n = 0
+}
+
+// get returns an empty leaf. The slices the leaf had keep their room;
+// everything else is cleared, so a stale view or table cannot leak into
+// the new parse.
+func (a *leafArena) get() *leaf {
+	if a.n == len(a.leaves) {
+		a.leaves = append(a.leaves, new(leaf))
+	}
+	l := a.leaves[a.n]
+	a.n++
+	conts, lines, firstOf := l.conts[:0], l.lines[:0], l.firstOf[:0]
+	*l = leaf{}
+	l.conts, l.lines, l.firstOf = conts, lines, firstOf
+	return l
+}
+
+// setConts fills l's containers with conts, reusing the room it has.
+func setConts(l *leaf, conts []cont) []cont {
+	l.conts = append(l.conts[:0], conts...)
+	return l.conts
+}
+
+// viewText returns the source text a leaf's view is made of: its lines
+// from its first line's start, through its content, and for a code or math
+// block through its last line.
+func viewText(src string, l *leaf) string {
+	end := l.end
+	if l.kind == kRule {
+		end = max(end, l.lineStart)
+	}
+	if l.kind == kCode || l.kind == kMath {
+		end = max(l.end, lineEndAt(src, l.lineStart))
+	}
+	return src[l.lineStart:max(end, l.lineStart)]
+}
+
+// sameText reports whether a leaf of oldSrc and one of src hold the same
+// source text. Their spans sit at different offsets when an edit moved
+// them, so the text is compared from each leaf's first line, as the views
+// are.
+func sameText(oldSrc, src string, a, b *leaf) bool {
+	return viewText(oldSrc, a) == viewText(src, b)
+}
+
+// sameLeaf reports whether two leaves show the same thing: the same
+// block, the same bytes of the source, the same containers and lines. A
+// leaf the edit did not change then keeps the view and the height it had,
+// so laying the document out again does not look up every leaf's view.
+//
+// Offsets are compared from the leaf's first line, not from the start of
+// the document: an edit moves every offset after it, and the display a
+// view holds is relative to that line too.
+func sameLeaf(a, b *leaf) bool {
+	rel := func(l *leaf, off int) int {
+		if off < 0 {
+			return off
+		}
+		return off - l.lineStart
+	}
+	if a.kind != b.kind || a.id != b.id || a.level != b.level ||
+		rel(a, a.start) != rel(b, b.start) || rel(a, a.end) != rel(b, b.end) ||
+		rel(a, a.syntaxStart) != rel(b, b.syntaxStart) ||
+		a.fenced != b.fenced || a.lang != b.lang ||
+		a.pending != b.pending || a.setext != b.setext ||
+		a.frontMatter != b.frontMatter || a.whole != b.whole ||
+		(a.table != nil) != (b.table != nil) ||
+		(a.tab != nil) != (b.tab != nil) ||
+		len(a.conts) != len(b.conts) || !slices.Equal(a.firstOf, b.firstOf) ||
+		len(a.lines) != len(b.lines) {
+		return false
+	}
+	// A fence's info string is only where its fence is: an unfenced block
+	// has zeros in those fields, and offsets from the leaf's line would
+	// make them differ for no reason.
+	if a.fenced &&
+		(rel(a, a.fenceEnd) != rel(b, b.fenceEnd) ||
+			rel(a, a.infoStart) != rel(b, b.infoStart) ||
+			rel(a, a.infoEnd) != rel(b, b.infoEnd)) {
+		return false
+	}
+	for i, c := range a.conts {
+		d := b.conts[i]
+		if c.kind != d.kind || c.id != d.id || rel(a, c.start) != rel(b, d.start) ||
+			c.ordered != d.ordered || c.num != d.num || c.marker != d.marker ||
+			c.tight != d.tight || c.depth != d.depth || c.task != d.task ||
+			rel(a, c.taskAt) != rel(b, d.taskAt) || c.label != d.label {
+			return false
+		}
+	}
+	for i, ln := range a.lines {
+		if rel(a, ln.off) != rel(b, b.lines[i].off) || ln.text != b.lines[i].text {
+			return false
+		}
+	}
+	if a.tab == nil {
+		return true
+	}
+	if !slices.Equal(a.tab.align, b.tab.align) ||
+		(a.tab.delim == [2]int{}) != (b.tab.delim == [2]int{}) ||
+		a.tab.delim != [2]int{} && (rel(a, a.tab.delim[0]) != rel(b, b.tab.delim[0]) ||
+			rel(a, a.tab.delim[1]) != rel(b, b.tab.delim[1])) ||
+		len(a.tab.rows) != len(b.tab.rows) {
+		return false
+	}
+	for r, row := range a.tab.rows {
+		if len(row) != len(b.tab.rows[r]) {
+			return false
+		}
+		for c, cell := range row {
+			if !sameLeaf(cell, b.tab.rows[r][c]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // buildLeaves turns the parse of src into the leaves the editor lays out,
-// in document order.
-func buildLeaves(src string, d *parser.Document, fm int) []*leaf {
+// in document order, from the arena's memory.
+func buildLeaves(src string, d *parser.Document, fm int, a *leafArena) []*leaf {
+	// out grows through the arena's leaves; its length is the output's.
+	a.reset()
 	var out []*leaf
 	if fm > 0 {
-		out = append(out, rawLeaf(src, 0, fm, true))
+		out = append(out, rawLeaf(a, src, 0, fm, true))
 	}
 	var walk func(i int, conts []cont, listDepth int)
 	walk = func(i int, conts []cont, listDepth int) {
 		prevEnd := fm
-		for c := range d.Children(i) {
+		// The children of block i, walked by the block's own Next: the
+		// iterator Document.Children returns allocates a closure on every
+		// call, and this walk visits every block of the document.
+		for c, end := i+1, d.Block(i).Next; c < end; c = d.Block(c).Next {
 			b := d.Block(c)
 			if i == 0 {
 				// Source between top-level blocks that no block holds, as a
 				// link reference definition, shows as raw lines.
-				out = appendRaw(out, src, prevEnd, b.Start)
+				out = appendRaw(a, out, src, prevEnd, b.Start)
 				prevEnd = max(prevEnd, spanEnd(src, d, c))
 			}
 			switch b.Kind {
 			case parser.Quote:
 				first := len(out)
-				walk(c, appendCont(conts, cont{kind: cQuote, id: c, start: b.Start}), listDepth)
+				n := len(conts)
+				conts = append(conts, cont{kind: cQuote, id: c, start: b.Start})
+				walk(c, conts, listDepth)
+				conts = conts[:n]
 				if len(out) == first {
-					out = append(out, emptyLeaf(src, b, conts, cont{kind: cQuote, id: c, start: b.Start}))
+					out = append(out, emptyLeaf(a, src, b, conts, cont{kind: cQuote, id: c, start: b.Start}))
 				}
 				markFirst(out[first:], len(conts))
 			case parser.List:
 				n := 0
-				for it := range d.Children(c) {
+				for it, end := c+1, d.Block(c).Next; it < end; it = d.Block(it).Next {
 					ib := d.Block(it)
 					ct := cont{
 						kind: cItem, id: it, start: ib.Start,
@@ -382,9 +531,12 @@ func buildLeaves(src string, d *parser.Document, fm int) []*leaf {
 						ct.taskAt = taskBoxAt(src, ib.Start)
 					}
 					first := len(out)
-					walk(it, appendCont(conts, ct), listDepth+1)
+					depth := len(conts)
+					conts = append(conts, ct)
+					walk(it, conts, listDepth+1)
+					conts = conts[:depth]
 					if len(out) == first {
-						out = append(out, emptyItemLeaf(src, ib, conts, ct))
+						out = append(out, emptyItemLeaf(a, src, ib, conts, ct))
 					}
 					markFirst(out[first:], len(conts))
 					n++
@@ -392,42 +544,43 @@ func buildLeaves(src string, d *parser.Document, fm int) []*leaf {
 			case parser.FootnoteDefinition:
 				first := len(out)
 				ct := cont{kind: cFootnote, id: c, start: b.Start, label: b.Label()}
-				walk(c, appendCont(conts, ct), listDepth)
+				depth := len(conts)
+				conts = append(conts, ct)
+				walk(c, conts, listDepth)
+				conts = conts[:depth]
 				if len(out) == first {
-					out = append(out, emptyLeaf(src, b, conts, ct))
+					out = append(out, emptyLeaf(a, src, b, conts, ct))
 				}
 				markFirst(out[first:], len(conts))
 			case parser.Paragraph:
-				out = append(out, &leaf{kind: kPara, id: c, start: b.Start, end: paraEnd(src, b.End),
-					lineStart: lineStartAt(src, b.Start), syntaxStart: b.Start, conts: slices.Clone(conts)})
+				l := a.get()
+				l.kind, l.id, l.start, l.end = kPara, c, b.Start, paraEnd(src, b.End)
+				l.lineStart, l.syntaxStart = lineStartAt(src, b.Start), b.Start
+				setConts(l, conts)
+				out = append(out, l)
 			case parser.Heading:
-				out = append(out, headingLeaf(src, d, c, conts))
+				out = append(out, headingLeaf(a, src, d, c, conts))
 			case parser.ThematicBreak:
-				out = append(out, &leaf{kind: kRule, id: c, start: b.Start, end: b.End,
-					lineStart: lineStartAt(src, b.Start), syntaxStart: b.Start, conts: slices.Clone(conts)})
+				l := a.get()
+				l.kind, l.id, l.start, l.end = kRule, c, b.Start, b.End
+				l.lineStart, l.syntaxStart = lineStartAt(src, b.Start), b.Start
+				setConts(l, conts)
+				out = append(out, l)
 			case parser.CodeBlock:
-				out = append(out, codeLeaf(src, d, c, conts))
+				out = append(out, codeLeaf(a, src, d, c, conts))
 			case parser.MathBlock:
-				out = append(out, linesLeaf(src, d, c, kMath, conts))
+				out = append(out, linesLeaf(a, src, d, c, kMath, conts))
 			case parser.HTMLBlock:
-				out = append(out, linesLeaf(src, d, c, kHTML, conts))
+				out = append(out, linesLeaf(a, src, d, c, kHTML, conts))
 			case parser.Table:
-				out = append(out, tableLeaf(src, d, c, conts))
+				out = append(out, tableLeaf(a, src, d, c, conts))
 			}
 		}
 		if i == 0 {
-			out = appendRaw(out, src, prevEnd, len(src))
+			out = appendRaw(a, out, src, prevEnd, len(src))
 		}
 	}
 	walk(0, nil, 0)
-	return out
-}
-
-// appendCont returns conts with c after them, in a slice of its own.
-func appendCont(conts []cont, c cont) []cont {
-	out := make([]cont, len(conts)+1)
-	copy(out, conts)
-	out[len(conts)] = c
 	return out
 }
 
@@ -451,9 +604,12 @@ func paraEnd(src string, end int) int {
 
 // headingLeaf makes the leaf of a heading: an ATX heading's text after its
 // #s, or a setext heading's text above its underline.
-func headingLeaf(src string, d *parser.Document, c int, conts []cont) *leaf {
+func headingLeaf(a *leafArena, src string, d *parser.Document, c int, conts []cont) *leaf {
 	b := d.Block(c)
-	l := &leaf{kind: kHeading, id: c, level: b.Level, lineStart: lineStartAt(src, b.Start), syntaxStart: b.Start, conts: slices.Clone(conts)}
+	l := a.get()
+	l.kind, l.id, l.level = kHeading, c, b.Level
+	l.lineStart, l.syntaxStart = lineStartAt(src, b.Start), b.Start
+	setConts(l, conts)
 	// An ATX heading's line starts with its #s, after the indentation.
 	p := b.Start
 	for p < len(src) && src[p] == ' ' {
@@ -504,9 +660,9 @@ func closingHashes(rest string) bool {
 
 // codeLeaf makes the leaf of a fenced or indented block of code: its
 // lines, and its fence's info string.
-func codeLeaf(src string, d *parser.Document, c int, conts []cont) *leaf {
+func codeLeaf(a *leafArena, src string, d *parser.Document, c int, conts []cont) *leaf {
 	b := d.Block(c)
-	l := linesLeaf(src, d, c, kCode, conts)
+	l := linesLeaf(a, src, d, c, kCode, conts)
 	l.fenced = b.Fenced
 	if b.Fenced {
 		// The opening fence: ``` or ~~~ and the info string after it.
@@ -536,15 +692,17 @@ func codeLeaf(src string, d *parser.Document, c int, conts []cont) *leaf {
 }
 
 // linesLeaf makes the leaf of a block of lines: code, math or HTML.
-func linesLeaf(src string, d *parser.Document, c int, kind leafKind, conts []cont) *leaf {
+func linesLeaf(a *leafArena, src string, d *parser.Document, c int, kind leafKind, conts []cont) *leaf {
 	b := d.Block(c)
-	l := &leaf{kind: kind, id: c, lineStart: lineStartAt(src, b.Start), syntaxStart: b.Start, conts: slices.Clone(conts)}
+	l := a.get()
+	l.kind, l.id = kind, c
+	l.lineStart, l.syntaxStart = lineStartAt(src, b.Start), b.Start
+	setConts(l, conts)
 	n := d.LineCount(c)
 	for k := 0; k < n; k++ {
 		text, off := d.Line(c, k)
 		// The parser's line is of the source it was given, which may have
-		// characters swapped (see Editor.parserSource): the line is the
-		// source's.
+		// characters swapped (see Editor.mask): the line is the source's.
 		text = src[off : off+len(sourceLine(d.Source(), text, off))]
 		l.lines = append(l.lines, line{off: off, text: strings.TrimSuffix(text, "\r")})
 	}
@@ -616,20 +774,24 @@ func spanEnd(src string, d *parser.Document, c int) int {
 			}
 		}
 	}
-	for ch := range d.Children(c) {
+	for ch, last := c+1, d.Block(c).Next; ch < last; ch = d.Block(ch).Next {
 		end = max(end, spanEnd(src, d, ch))
 	}
 	return end
 }
 
 // tableLeaf makes the leaf of a table: its rows of cells.
-func tableLeaf(src string, d *parser.Document, c int, conts []cont) *leaf {
+func tableLeaf(a *leafArena, src string, d *parser.Document, c int, conts []cont) *leaf {
 	b := d.Block(c)
 	t := &table{align: b.Align}
-	l := &leaf{kind: kTable, id: c, start: b.Start, end: b.End, lineStart: lineStartAt(src, b.Start), syntaxStart: b.Start, conts: slices.Clone(conts), tab: t}
-	for r := range d.Children(c) {
+	l := a.get()
+	l.kind, l.id = kTable, c
+	l.start, l.end, l.lineStart, l.syntaxStart = b.Start, b.End, lineStartAt(src, b.Start), b.Start
+	l.tab = t
+	setConts(l, conts)
+	for r, rowsEnd := c+1, d.Block(c).Next; r < rowsEnd; r = d.Block(r).Next {
 		var row []*leaf
-		for cell := range d.Children(r) {
+		for cell, cellsEnd := r+1, d.Block(r).Next; cell < cellsEnd; cell = d.Block(cell).Next {
 			cb := d.Block(cell)
 			start, end := cb.Start, cb.End
 			if start == end {
@@ -637,7 +799,10 @@ func tableLeaf(src string, d *parser.Document, c int, conts []cont) *leaf {
 				// pipe, not against the pipe that closes it.
 				start, end = emptyCellAt(src, start), emptyCellAt(src, start)
 			}
-			row = append(row, &leaf{kind: kPara, id: cell, start: start, end: end, lineStart: lineStartAt(src, cb.Start), syntaxStart: start, table: l})
+			cl := a.get()
+			cl.kind, cl.id, cl.start, cl.end = kPara, cell, start, end
+			cl.lineStart, cl.syntaxStart, cl.table = lineStartAt(src, cb.Start), start, l
+			row = append(row, cl)
 		}
 		t.rows = append(t.rows, row)
 	}
@@ -671,17 +836,20 @@ func emptyCellAt(src string, at int) int {
 
 // emptyItemLeaf makes the leaf of a list item without content, "- " or
 // "1. ", for the caret to type in after its marker.
-func emptyItemLeaf(src string, ib *parser.Block, conts []cont, ct cont) *leaf {
+func emptyItemLeaf(a *leafArena, src string, ib *parser.Block, conts []cont, ct cont) *leaf {
 	p := ib.Start
 	for p < len(src) && src[p] != ' ' && src[p] != '\t' && src[p] != '\n' && src[p] != '\r' {
 		p++
 	}
-	l := &leaf{kind: kPara, id: -1, lineStart: lineStartAt(src, ib.Start), conts: appendCont(conts, ct)}
+	l := a.get()
+	l.kind, l.id, l.lineStart = kPara, -1, lineStartAt(src, ib.Start)
+	l.conts = append(l.conts[:0], conts...)
+	l.conts = append(l.conts, ct)
 	if p >= len(src) || src[p] == '\n' || src[p] == '\r' {
 		// "-" alone: a marker still being typed, which shows as text,
 		// outside the item it would make.
 		l.pending = true
-		l.conts = slices.Clone(conts)
+		l.conts = setConts(l, conts)
 		l.start, l.end = ib.Start, p
 		l.syntaxStart = ib.Start
 		return l
@@ -697,7 +865,7 @@ func emptyItemLeaf(src string, ib *parser.Block, conts []cont, ct cont) *leaf {
 }
 
 // emptyLeaf makes the leaf of a quotation or footnote without content.
-func emptyLeaf(src string, b *parser.Block, conts []cont, ct cont) *leaf {
+func emptyLeaf(a *leafArena, src string, b *parser.Block, conts []cont, ct cont) *leaf {
 	e := lineEndAt(src, b.Start)
 	p := b.Start
 	if ct.kind == cQuote {
@@ -711,12 +879,15 @@ func emptyLeaf(src string, b *parser.Block, conts []cont, ct cont) *leaf {
 			p++
 		}
 	}
-	l := &leaf{kind: kPara, id: -1, lineStart: lineStartAt(src, b.Start), conts: appendCont(conts, ct)}
+	l := a.get()
+	l.kind, l.id, l.lineStart = kPara, -1, lineStartAt(src, b.Start)
+	l.conts = append(l.conts[:0], conts...)
+	l.conts = append(l.conts, ct)
 	if ct.kind == cQuote && p == b.Start+1 {
 		// ">" alone: still being typed, and shown as text outside the
 		// quotation it would make.
 		l.pending = true
-		l.conts = slices.Clone(conts)
+		l.conts = setConts(l, conts)
 		l.start, l.end = b.Start, p
 		l.syntaxStart = b.Start
 		return l
@@ -728,8 +899,8 @@ func emptyLeaf(src string, b *parser.Block, conts []cont, ct cont) *leaf {
 
 // codeDocLeaf makes the one leaf of a document that is code: all its
 // lines, highlighted as lang.
-func codeDocLeaf(src, lang string) *leaf {
-	l := rawLeaf(src, 0, len(src), false)
+func codeDocLeaf(a *leafArena, src, lang string) *leaf {
+	l := rawLeaf(a, src, 0, len(src), false)
 	l.kind = kCode
 	l.whole = true
 	if lang != "text" {
@@ -749,8 +920,9 @@ func codeDocLeaf(src, lang string) *leaf {
 }
 
 // rawLeaf makes a leaf of the lines of src from start to end.
-func rawLeaf(src string, start, end int, front bool) *leaf {
-	l := &leaf{kind: kRaw, id: -1, lineStart: start, syntaxStart: start, frontMatter: front}
+func rawLeaf(a *leafArena, src string, start, end int, front bool) *leaf {
+	l := a.get()
+	l.kind, l.id, l.lineStart, l.syntaxStart, l.frontMatter = kRaw, -1, start, start, front
 	for off := start; off <= end && off < len(src); {
 		e := min(lineEndAt(src, off), end)
 		l.lines = append(l.lines, line{off: off, text: strings.TrimSuffix(src[off:e], "\r")})
@@ -768,7 +940,7 @@ func rawLeaf(src string, start, end int, front bool) *leaf {
 
 // appendRaw adds the non-blank lines of src between from and to, which no
 // block holds, as a raw leaf.
-func appendRaw(out []*leaf, src string, from, to int) []*leaf {
+func appendRaw(a *leafArena, out []*leaf, src string, from, to int) []*leaf {
 	if from < 0 || to <= from || from >= len(src) {
 		return out
 	}
@@ -795,7 +967,7 @@ func appendRaw(out []*leaf, src string, from, to int) []*leaf {
 		return out
 	}
 	from = lineStartAt(src, from)
-	return append(out, rawLeaf(src, from, to, false))
+	return append(out, rawLeaf(a, src, from, to, false))
 }
 
 // taskBoxAt returns the offset of the [ of a task item's check box, on the

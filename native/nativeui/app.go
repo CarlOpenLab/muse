@@ -180,6 +180,11 @@ type App struct {
 	aiModels     []services.ProviderModel
 	aiModelsBusy bool
 	aiModelsErr  string
+	// aiMdCache keeps the text of the last few Markdown parts parsed: a
+	// frame that draws a part whose text has not changed does not parse it
+	// again, as scrolling or a chunk arriving elsewhere redraws it.
+	aiMdCache [8]aiMdEntry
+	aiMdNext  int
 
 	// search: the matches in the document, and the row chosen
 	query       string

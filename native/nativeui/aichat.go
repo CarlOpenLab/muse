@@ -370,9 +370,30 @@ func toolDescription(tool *toolCall) string {
 	return strings.TrimSpace(tool.Args)
 }
 
+// aiMdEntry is a Markdown text and the blocks it parsed into.
+type aiMdEntry struct {
+	text   string
+	blocks []mdoc.Block
+}
+
+// aiMdBlocks returns the blocks of a Markdown part, from the cache when
+// the text was parsed already. The assistant's text is parsed as it
+// streams, and every frame in between draws the same part again.
+func (a *App) aiMdBlocks(text string) []mdoc.Block {
+	for i := range a.aiMdCache {
+		if e := &a.aiMdCache[i]; e.blocks != nil && e.text == text {
+			return e.blocks
+		}
+	}
+	blocks := mdoc.Parse(text).Blocks
+	a.aiMdCache[a.aiMdNext%len(a.aiMdCache)] = aiMdEntry{text: text, blocks: blocks}
+	a.aiMdNext++
+	return blocks
+}
+
 // aiTextPart 是正文段：mdoc 流式渲染。
 func (a *App) aiTextPart(c *ui.Context, text string) {
-	mdoc.BlocksView(c, mdoc.Parse(text).Blocks, mdoc.Options{
+	mdoc.BlocksView(c, a.aiMdBlocks(text), mdoc.Options{
 		BodyFontSize: 12.5,
 		ContentWidth: a.aiContentWidth(),
 		BaseDir:      a.docDir(),

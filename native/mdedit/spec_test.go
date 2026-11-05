@@ -7,7 +7,7 @@ package mdedit
 // The layers are tested separately: the engine with no extensions, the
 // GFM extensions the editor always enables, and the editor's own math
 // dialect, where \[...\] is display math but an escaped \[ must stay text
-// (mdedit masks escaped brackets before parsing; see parserSource).
+// (mdedit masks escaped brackets before parsing; see editMask).
 
 import (
 	"encoding/json"
