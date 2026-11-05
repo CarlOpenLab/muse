@@ -172,7 +172,7 @@ func (a *App) quickOpenDialog(c *ui.Context) {
 					row.Background(t.SurfaceHover)
 				}
 				row.Children(func() {
-					ui.Icon(c, iconFile).Size(13, 13).TextColor(t.TextMuted)
+					ui.Icon(c, iconFile).Size(13, 13).TextColor(iconTint(t))
 					ui.Text(c, filepath.Base(r.path)).FontSize(12.5).TextColor(t.Text).
 						SingleLine().Ellipsis("…")
 					dir := filepath.Dir(strings.TrimPrefix(r.path, a.root))

@@ -30,6 +30,8 @@ func Run() {
 				app.themeMode = 1
 			}
 		}
+		// 材料在窗口创建时就按应用外观画好，先定下来再开窗。
+		app.syncAppearance()
 		if ws := os.Getenv("MUSE_WORKSPACE"); ws != "" {
 			app.setWorkspace(ws)
 		}

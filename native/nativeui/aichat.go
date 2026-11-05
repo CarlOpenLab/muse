@@ -22,7 +22,7 @@ func (a *App) aiView(c *ui.Context) {
 	t := c.Theme()
 	if !a.aiConfigured() {
 		ui.Column(c).Fill().Center().Gap(10).Padding(20).Children(func() {
-			ui.Icon(c, iconAI).Size(28, 28).TextColor(t.TextMuted)
+			ui.Icon(c, iconAI).Size(28, 28).TextColor(iconTint(t))
 			ui.Text(c, "先设置模型").FontSize(13).FontWeight(600)
 			ui.Text(c, "Muse 使用 OpenAI 兼容的接口，密钥只保存在本机。").
 				FontSize(11.5).TextColor(t.TextMuted).Wrap().TextAlign(ui.Center)
@@ -61,7 +61,7 @@ func (a *App) aiView(c *ui.Context) {
 func (a *App) aiEmpty(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).FillWidth().Padding(24, 0, 8, 0).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, iconAI).Size(26, 26).TextColor(t.TextMuted)
+		ui.Icon(c, iconAI).Size(26, 26).TextColor(iconTint(t))
 		ui.Text(c, "问问 Muse 的 Agent").FontSize(13).FontWeight(600)
 		ui.Text(c, "它可以浏览、搜索和编辑工作区里的文档。").
 			FontSize(11.5).TextColor(t.TextMuted).Wrap().TextAlign(ui.Center)
@@ -165,7 +165,7 @@ func (a *App) aiThinkPart(c *ui.Context, p *chatPart) {
 	ui.Column(c).FillWidth().Gap(4).Children(func() {
 		if !hasBody {
 			ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, iconAI).Size(11, 11).TextColor(t.TextMuted)
+				ui.Icon(c, iconAI).Size(11, 11).TextColor(iconTint(t))
 				ui.Text(c, label).FontSize(10.5).TextColor(t.TextMuted)
 			})
 			return
@@ -180,13 +180,13 @@ func (a *App) aiThinkPart(c *ui.Context, p *chatPart) {
 			a.invalidate()
 		})
 		btn.Children(func() {
-			ui.Icon(c, iconAI).Size(11, 11).TextColor(t.TextMuted)
+			ui.Icon(c, iconAI).Size(11, 11).TextColor(iconTint(t))
 			ui.Text(c, label).FontSize(10.5).TextColor(t.TextMuted)
 			chevron := iconChevron
 			if p.open {
 				chevron = iconChevronDown
 			}
-			ui.Icon(c, chevron).Size(10, 10).TextColor(t.TextMuted)
+			ui.Icon(c, chevron).Size(10, 10).TextColor(iconTint(t))
 		})
 		if p.open {
 			ui.Column(c).FillWidth().Padding(2, 0, 0, 9).
@@ -236,7 +236,7 @@ func (a *App) aiToolPart(c *ui.Context, p *chatPart) {
 			a.invalidate()
 		})
 		btn.Children(func() {
-			ui.Icon(c, toolIcon(tool.Name)).Size(12, 12).TextColor(t.TextMuted)
+			ui.Icon(c, toolIcon(tool.Name)).Size(12, 12).TextColor(iconTint(t))
 			ui.Text(c, label).FontSize(11).TextColor(t.Text).SingleLine()
 			if target != "" {
 				ui.Text(c, target).FontSize(10.5).TextColor(t.TextMuted).Grow(1).
@@ -506,7 +506,7 @@ func (a *App) aiSendButton(c *ui.Context) {
 	case strings.TrimSpace(a.aiInput) == "":
 		b.Background(t.SurfaceHover)
 		b.Children(func() {
-			ui.Icon(c, iconArrowUp).Size(14, 14).TextColor(t.TextMuted)
+			ui.Icon(c, iconArrowUp).Size(14, 14).TextColor(iconTint(t))
 		})
 	default:
 		b.Background(t.Accent)

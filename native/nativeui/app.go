@@ -53,9 +53,12 @@ const (
 
 	// The context panel's width, as a drag at its edge moves it: between
 	// these, and folding away when a drag releases past foldWidth.
-	panelMinWidth float32 = 224
-	panelMaxWidth float32 = 440
-	panelFoldOn   float32 = 200
+	// panelDefaultWidth is the one width of every module: switching views
+	// never resizes the panel, and so never reflows the editor beside it.
+	panelDefaultWidth float32 = 268
+	panelMinWidth     float32 = 224
+	panelMaxWidth     float32 = 440
+	panelFoldOn       float32 = 200
 )
 
 // panelView is the page the context panel shows.
@@ -78,6 +81,17 @@ type heading struct {
 // clipboardWrite is a seam for tests: the real clipboard waits on the app's
 // main loop, which a headless test does not run.
 var clipboardWrite = mygo.Clipboard.WriteText
+
+// setAppAppearance tells the system which way to draw its own surfaces —
+// the acrylic material behind the rail and the panel, the title bar — so
+// they follow the theme the page draws instead of the desktop's. It is a
+// seam for tests: the real call waits on the app's main loop, and there is
+// nothing to restyle before the app is ready.
+var setAppAppearance = func(s mygo.ThemeSource) {
+	if mygo.App.IsReady() {
+		mygo.Theme.SetSource(s)
+	}
+}
 
 // Dialog seams keep the blocking desktop APIs testable and document that
 // every call runs off the UI thread.
@@ -108,6 +122,9 @@ type App struct {
 	// appearance
 	themeMode int  // 0 pure white, 1 near black
 	dark      bool // derived from themeMode for the view
+	// themeApplied 是已经交给系统的主题；系统画的材料与标题栏跟随它，
+	// 与页面所画的主题保持一致。-1 表示还没交过。
+	themeApplied int
 
 	// context panel
 	panel      panelView
@@ -218,20 +235,21 @@ type App struct {
 // New returns the app on an empty untitled document, with the panel on files.
 func New() *App {
 	a := &App{
-		panel:      panelFiles,
-		panelOpen:  true,
-		panelWidth: 268,
-		panelW:     268,
-		dirs:       map[string][]string{},
-		isDir:      map[string]bool{},
-		expanded:   map[string]bool{},
-		outlineRow: -1,
-		fontSize:   16,
-		lineHeight: 1.75,
-		recents:    loadRecents(),
-		ai:         loadAISettings(),
-		aiClient:   services.NewAI(),
-		aiMessages: loadAIChat(),
+		panel:        panelFiles,
+		panelOpen:    true,
+		panelWidth:   panelDefaultWidth,
+		panelW:       panelDefaultWidth,
+		themeApplied: -1,
+		dirs:         map[string][]string{},
+		isDir:        map[string]bool{},
+		expanded:     map[string]bool{},
+		outlineRow:   -1,
+		fontSize:     16,
+		lineHeight:   1.75,
+		recents:      loadRecents(),
+		ai:           loadAISettings(),
+		aiClient:     services.NewAI(),
+		aiMessages:   loadAIChat(),
 	}
 	// 新窗口就是一张空白未命名文档：光标停在空段落里，直接就能写。
 	a.ed = mdedit.New("", a.editorOptions())
@@ -279,6 +297,7 @@ func (a *App) windowBG() ui.Color {
 
 func (a *App) applyTheme(c *ui.Context) {
 	a.dark = a.themeMode == 1
+	a.syncAppearance()
 	t := *c.Theme()
 	if a.dark {
 		t.Dark = true
@@ -314,6 +333,22 @@ func (a *App) applyTheme(c *ui.Context) {
 	t.Radius = 7
 	t.FontSize = 13
 	c.SetTheme(&t)
+}
+
+// syncAppearance hands the theme to the system so its own surfaces follow:
+// the acrylic behind the rail and the panel, and the title bar, are drawn
+// by the desktop and would keep the desktop's appearance while the page
+// switches to the other theme.
+func (a *App) syncAppearance() {
+	if a.themeApplied == a.themeMode {
+		return
+	}
+	a.themeApplied = a.themeMode
+	if a.themeMode == 1 {
+		setAppAppearance(mygo.ThemeDark)
+		return
+	}
+	setAppAppearance(mygo.ThemeLight)
 }
 
 // canvas is the floating editor card: 8px away from the window's top, right
@@ -373,6 +408,17 @@ func (a *App) rail(c *ui.Context) {
 	})
 }
 
+// iconTint is the colour of the shell's line icons. In the light theme
+// they keep the muted grey the labels use; on the dark shell that grey
+// nearly vanishes, because the thin strokes antialias into the near-black
+// surface, so they draw as a bright white there instead.
+func iconTint(t *ui.Theme) ui.Color {
+	if t.Dark {
+		return ui.RGBA(255, 255, 255, 0.92)
+	}
+	return t.TextMuted
+}
+
 func (a *App) railButton(c *ui.Context, icon *ui.SVG, label string, active bool, fn func()) {
 	t := c.Theme()
 	b := ui.ButtonBase(c).Width(railButtonSize).Height(railButtonSize).Radius(8).Padding(0).
@@ -394,7 +440,7 @@ func (a *App) railButton(c *ui.Context, icon *ui.SVG, label string, active bool,
 		if active {
 			el.TextColor(t.Accent)
 		} else {
-			el.TextColor(t.TextMuted)
+			el.TextColor(iconTint(t))
 		}
 	})
 	a.railTooltip(c, b, label)
@@ -428,9 +474,10 @@ func (a *App) contextPanel(c *ui.Context) {
 	if a.panelOpen {
 		target = a.panelWidth
 	}
-	// 打开状态下切换模块（或 AI 面板的加宽）时宽度一帧到位：滑到一半
-	// 的窄面板会把头部按钮裁出可视区，正文也要跟着重排两次。仍要走
-	// AnimateTo，动画通道得保持连续——跳过调用会让下一次开关从 0 起步。
+	// 打开状态下宽度目标改变（双击边缘恢复默认、拖动等）时一帧到位：
+	// 滑到一半的窄面板会把头部按钮裁出可视区，正文也要跟着重排两次。
+	// 仍要走 AnimateTo，动画通道得保持连续——跳过调用会让下一次开关从
+	// 0 起步。切换模块本身不改宽度，因此不会走这里。
 	anim := ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut}
 	if a.panelOpen && a.panelPrevTarget > 0.5 && a.panelPrevTarget != target {
 		anim.Duration = time.Millisecond
@@ -501,6 +548,9 @@ func (a *App) panelResizeHandle(c *ui.Context) {
 	}
 }
 
+// panelHeader is the line over the context panel: the module names show on
+// the rail, so the line holds only the way to fold the panel away, and the
+// room to drag the window.
 func (a *App) panelHeader(c *ui.Context) {
 	bar := c.TitleBar()
 	left := float32(12)
@@ -509,25 +559,9 @@ func (a *App) panelHeader(c *ui.Context) {
 	}
 	ui.Row(c).Height(editorHeaderH).Shrink(0).Padding(0, 12, 0, left).Gap(4).DragWindow().
 		AlignItems(ui.Center).Children(func() {
-		ui.Text(c, a.panelTitle()).FontSize(13).FontWeight(600).Grow(1).SingleLine().Ellipsis("…")
+		ui.Spacer(c)
 		a.smallIcon(c, iconPanelLeftClose, "收起侧栏", a.collapsePanel)
 	})
-}
-
-func (a *App) panelTitle() string {
-	switch a.panel {
-	case panelFiles:
-		if a.root == "" {
-			return "文件"
-		}
-		return filepath.Base(a.root)
-	case panelOutline:
-		return "大纲"
-	case panelAI:
-		return "AI 助手"
-	default:
-		return "查找"
-	}
 }
 
 func (a *App) smallIcon(c *ui.Context, icon *ui.SVG, label string, fn func()) {
@@ -538,7 +572,7 @@ func (a *App) smallIcon(c *ui.Context, icon *ui.SVG, label string, fn func()) {
 		b.Background(t.SurfaceHover)
 	}
 	b.OnClick(fn)
-	b.Children(func() { ui.Icon(c, icon).Size(16, 16).TextColor(t.TextMuted) })
+	b.Children(func() { ui.Icon(c, icon).Size(16, 16).TextColor(iconTint(t)) })
 }
 
 // filesView draws the workspace tree. Directories open lazily; the list builds
@@ -547,7 +581,7 @@ func (a *App) filesView(c *ui.Context) {
 	t := c.Theme()
 	if a.root == "" {
 		ui.Column(c).Fill().Center().Gap(10).Padding(20).Children(func() {
-			ui.Icon(c, iconFolderOpen).Size(30, 30).TextColor(t.TextMuted)
+			ui.Icon(c, iconFolderOpen).Size(30, 30).TextColor(iconTint(t))
 			// 一个入口、一个按钮：文件与文件夹都会结束空态；下拉里还有
 			// 最近打开过的记录，点一下直接回到那里。
 			open := ui.Button(c, "打开文件或文件夹")
@@ -611,14 +645,14 @@ func (a *App) filesView(c *ui.Context) {
 		row.Children(func() {
 			if r.dir {
 				if a.expanded[r.path] {
-					ui.Icon(c, iconChevronDown).Size(12, 12).TextColor(t.TextMuted)
+					ui.Icon(c, iconChevronDown).Size(12, 12).TextColor(iconTint(t))
 				} else {
-					ui.Icon(c, iconChevron).Size(12, 12).TextColor(t.TextMuted)
+					ui.Icon(c, iconChevron).Size(12, 12).TextColor(iconTint(t))
 				}
-				ui.Icon(c, iconFolder).Size(14, 14).TextColor(t.TextMuted)
+				ui.Icon(c, iconFolder).Size(14, 14).TextColor(iconTint(t))
 			} else {
 				ui.Box(c).Width(12)
-				ui.Icon(c, iconFile).Size(14, 14).TextColor(t.TextMuted)
+				ui.Icon(c, iconFile).Size(14, 14).TextColor(iconTint(t))
 			}
 			ui.Text(c, filepath.Base(r.path)).FontSize(12.5).TextColor(t.Text).
 				SingleLine().Ellipsis("…")
@@ -948,7 +982,7 @@ func (a *App) editorHeader(c *ui.Context) {
 		}
 		if a.path != "" {
 			ui.Row(c).Gap(4).Padding(2, 6).Radius(6).Background(t.Surface).Children(func() {
-				ui.Icon(c, iconFolder).Size(11, 11).TextColor(t.TextMuted)
+				ui.Icon(c, iconFolder).Size(11, 11).TextColor(iconTint(t))
 				ui.Text(c, a.location()).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
 			})
 		}
@@ -1941,20 +1975,20 @@ func (a *App) openSettings() {
 	a.settingsOpen = true
 }
 
-// panelTargetWidth 是面板收起前的目标宽度。AI 助手面板承载对话，
-// 比文件、大纲这些列表宽一档。
+// panelTargetWidth 是面板的默认宽度，也是双击边缘恢复到的宽度。四个模块
+// 共用这一个宽度：切换模块时面板不伸缩，编辑器不会跟着重排。
 func (a *App) panelTargetWidth() float32 {
-	if a.panel == panelAI {
-		return 348
-	}
-	return 268
+	return panelDefaultWidth
 }
 
-// showPanel selects a module without ever collapsing: the rail is a view
-// switch, and clicking the active icon twice used to hide the panel.
+// showPanel selects a module without ever collapsing or resizing: the rail
+// is a view switch, and clicking the active icon twice used to hide the
+// panel.
 func (a *App) showPanel(v panelView) {
 	a.panel = v
-	a.panelWidth = a.panelTargetWidth()
+	if a.panelWidth <= 0 {
+		a.panelWidth = a.panelTargetWidth()
+	}
 	a.panelOpen = true
 	a.invalidate()
 }
@@ -1970,7 +2004,9 @@ func (a *App) togglePanel(v panelView) {
 		a.panelOpen = false
 	} else {
 		a.panel = v
-		a.panelWidth = a.panelTargetWidth()
+		if a.panelWidth <= 0 {
+			a.panelWidth = a.panelTargetWidth()
+		}
 		a.panelOpen = true
 	}
 	a.invalidate()

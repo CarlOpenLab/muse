@@ -58,6 +58,40 @@ func TestPanelDragResizesAndFolds(t *testing.T) {
 	}
 }
 
+// TestModulesShareOnePanelWidth checks that switching modules never
+// resizes the panel: the four views share one width, so the editor beside
+// it does not reflow and flicker.
+func TestModulesShareOnePanelWidth(t *testing.T) {
+	a := New()
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	want := a.panelWidth
+	if want != panelDefaultWidth {
+		t.Fatalf("the panel starts at %.0f, want the one %.0f", want, panelDefaultWidth)
+	}
+	for _, label := range []string{"大纲", "搜索", "AI 助手", "文件"} {
+		if err := tt.Click(label); err != nil {
+			t.Fatalf("click %s: %v", label, err)
+		}
+		tt.Frame()
+		if a.panelWidth != want {
+			t.Fatalf("switching to %s set the panel to %.0f, want the shared %.0f", label, a.panelWidth, want)
+		}
+		if a.panelW != want {
+			t.Fatalf("switching to %s drew the panel %.0f wide, want %.0f", label, a.panelW, want)
+		}
+	}
+	// A width the user dragged to stays across a switch as well.
+	a.panelWidth = 320
+	if err := tt.Click("AI 助手"); err != nil {
+		t.Fatalf("click AI: %v", err)
+	}
+	tt.Frame()
+	if a.panelWidth != 320 {
+		t.Fatalf("switching to AI set the dragged width to %.0f, want 320", a.panelWidth)
+	}
+}
+
 func TestCollapsedPanelReopensFromTheHeader(t *testing.T) {
 	a := New()
 	tt := ui.NewTester(a.View, 1200, 800)

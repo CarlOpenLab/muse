@@ -3,10 +3,12 @@ package nativeui
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -125,6 +127,32 @@ func TestRailSelectsModulesAndHeaderCollapses(t *testing.T) {
 	tt.Frame()
 	if !a.panelOpen || a.panel != panelFiles {
 		t.Fatalf("reopen: panel = %v, open = %v", a.panel, a.panelOpen)
+	}
+}
+
+// TestThemeSwitchForcesTheAppAppearance checks that the app's own acrylic
+// and title bar follow the theme it draws, not the desktop's appearance:
+// the material behind the rail and the panel is the system's, and would
+// stay light in a dark app otherwise. The first frame asks for the theme
+// in use, an unchanged frame asks for nothing, and every switch asks for
+// the new one.
+func TestThemeSwitchForcesTheAppAppearance(t *testing.T) {
+	prev := setAppAppearance
+	var asked []mygo.ThemeSource
+	setAppAppearance = func(s mygo.ThemeSource) { asked = append(asked, s) }
+	t.Cleanup(func() { setAppAppearance = prev })
+
+	a := New()
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	tt.Frame()
+	a.themeMode = 1
+	tt.Frame()
+	a.themeMode = 0
+	tt.Frame()
+	want := []mygo.ThemeSource{mygo.ThemeLight, mygo.ThemeDark, mygo.ThemeLight}
+	if !slices.Equal(asked, want) {
+		t.Fatalf("appearance requests = %v, want %v", asked, want)
 	}
 }
 

@@ -88,7 +88,7 @@ func windowButton(c *ui.Context, key string, icon *ui.SVG, label string, dangero
 	} else {
 		b.Tooltip(label)
 	}
-	col := t.TextMuted
+	col := iconTint(t)
 	switch {
 	case dangerous && (b.Hovered() || b.Pressed()):
 		b.Background(t.Danger)
