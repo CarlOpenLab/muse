@@ -41,6 +41,18 @@ func Run() {
 		if os.Getenv("MUSE_SETTINGS") == "1" {
 			app.settingsOpen = true
 		}
+		// TEMP capture hook
+		switch os.Getenv("MUSE_PANEL") {
+		case "outline":
+			app.showPanel(panelOutline)
+		case "search":
+			app.showPanel(panelSearch)
+		case "ai":
+			app.showPanel(panelAI)
+		case "closed":
+			app.panelOpen = false
+			app.panelW = 0
+		}
 		app.openWindow()
 	})
 	mygo.App.OnActivate(func(hasVisibleWindows bool) {
