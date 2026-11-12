@@ -265,10 +265,11 @@ func TestFoldAnimatesFromTheWidthItHad(t *testing.T) {
 // icon out in it. The proof is that folding after a drag lands exactly where
 // folding a panel nobody dragged lands.
 func TestFoldedPanelDoesNotLeaveAHoleBehind(t *testing.T) {
-	// 一个从没拖过卡片的面板，折叠后该在哪儿——这就是基准。
+	// 一个从没拖过卡片的面板，折叠后该在哪儿——这就是基准：侧栏整个没了，
+	// 卡片贴着窗口左边站，只剩窗口自己那道 canvasPadding。
 	want := foldedCardX(t, false)
-	if want <= railWidth {
-		t.Fatalf("the untouched fold put the card at %.0f, want it past the rail", want)
+	if want > canvasPadding+0.5 {
+		t.Fatalf("the untouched fold put the card's left edge at %.0f, want it tucked to the window's left at %.0f", want, canvasPadding)
 	}
 
 	// 拖过卡片左边缘，再折叠：必须落在同一个地方。
@@ -279,10 +280,16 @@ func TestFoldedPanelDoesNotLeaveAHoleBehind(t *testing.T) {
 }
 
 // foldedCardX drags the card's left edge when drag is set, folds the panel,
-// and returns the X the editor's title ends up at.
+// and returns the X the card's left edge ends up at.
 func foldedCardX(t *testing.T, drag bool) float32 {
 	t.Helper()
+	// 自己的配置目录：卡片坐标是落盘的，别的测试拖完那一格会留下来，两个
+	// 分支就都从同一个拖过的坐标起跑，「折叠不留洞」变成一句空话。
+	t.Setenv("MUSE_CONFIG_DIR", t.TempDir())
 	a := New()
+	if a.cardWidth() != 0 {
+		t.Fatalf("the test starts with a dragged card at %.0f, so it is not testing the fold", a.cardWidth())
+	}
 	tt := ui.NewTester(a.View, 1200, 800)
 	tt.Frame()
 	tt.Frame()
@@ -310,11 +317,13 @@ func foldedCardX(t *testing.T, drag bool) float32 {
 	if a.panelW != 0 {
 		t.Fatalf("the panel did not fold away: panelW=%.0f", a.panelW)
 	}
-	r, ok := tt.Find("未命名")
+	// 量卡片自己的左边缘，不是标题：标题在卡片里还偏着一份，那是对另一个
+	// 量的断言，会把「卡片贴到窗口左边」判成失败。
+	h, ok := tt.Find("调整卡片宽度")
 	if !ok {
-		t.Fatal("the editor's title is off screen after the fold")
+		t.Fatal("the card's left edge is off screen after the fold")
 	}
-	return r.X
+	return h.X + cardResizeGrab
 }
 
 // TestFoldingTakesTheRailWithIt pins the rail leaving with the panel: a fold

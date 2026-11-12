@@ -2191,22 +2191,25 @@ func (a *App) togglePanel(v panelView) {
 // It follows the animated panel width so the card slides with the panel
 // instead of jumping when panelOpen flips.
 func (a *App) canvasLeft(c *ui.Context) float32 {
-	if w := a.cardWidth(); w > 0 {
-		// 卡片被拖动过：它的左边缘是自己说了算的绝对坐标，重新打开折叠的
-		// 面板时这份坐标得留着，否则卡片会跳回面板旁边。侧栏整个没了（轨道
-		// 和面板都折叠了）时也一样——那时卡片该贴着窗口左边站，而不是被
-		// 留下来对着 268px 面板的鬼魂。
-		return max(w-a.railW-a.panelW, 0)
-	}
 	left := canvasPadding
 	if a.panelWidth <= 0 {
 		return left
 	}
-	// 侧栏收走了，就没有「面板的右边缘」可留：卡片贴着窗口左边站，那道
+	// 侧栏整个收走了，就没有「面板的右边缘」可留：卡片贴着窗口左边站，那道
 	// canvasPadding 就是全部。少了这一条，折叠会在左边留下 22px 的空洞
 	// （TitleBar().Left - railWidth），标题和唤回键都掉到那里面去。
+	//
+	// 这一条要在拖动坐标前面：那份坐标是留给侧栏回来时用的（见 cardLeft），
+	// 不是让折叠之后卡片还停在 268px 面板的鬼魂旁边——那样左边空着一整条
+	// 窗口底色，唤回键孤零零落在里面。放在这里，拖动过的卡片折叠后和没拖过
+	// 的落在同一处，侧栏打开时那份坐标又原样回来。
 	if a.railW < 0.5 && a.panelW < 0.5 {
 		return left
+	}
+	if w := a.cardWidth(); w > 0 {
+		// 卡片被拖动过：它的左边缘是自己说了算的绝对坐标，重新打开折叠的
+		// 面板时这份坐标得留着，否则卡片会跳回面板旁边。
+		return max(w-a.railW-a.panelW, 0)
 	}
 	openness := a.panelW / a.panelWidth
 	if openness > 1 {
