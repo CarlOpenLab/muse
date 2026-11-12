@@ -87,10 +87,11 @@ func (a *App) openWindow() {
 		StateKey:        "muse",
 		Content:         ui.View(a.View),
 		// 亚克力：窗口背景透明，桌面的模糊由系统的材料给出；视图只在
-		// 编辑卡片上画不透明的表面，轨道与面板后面透出材料来。不支持
-		// 材料的平台上视图自己画不透明的底色。
+		// 编辑卡片上画半透明的表面，轨道与面板后面透出材料来。不支持
+		// 材料的平台上视图自己画不透明的底色。材料强度取设置里存的
+		// 那一档（见 cardBlur），首次启动是亚克力。
 		Transparent: true,
-		Vibrancy:    mygo.VibrancyAcrylic,
+		Vibrancy:    cardVibrancy(a.cardBlur()),
 		// The rail's first 44px hold the traffic lights; the rest of the
 		// view starts beside them, as the web app did. On Windows and
 		// Linux the system's buttons go away and the view draws its own.
