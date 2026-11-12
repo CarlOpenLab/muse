@@ -430,16 +430,34 @@ func (e *Editor) composeCaretRect() (ui.Rect, bool) {
 	return ui.Rect{}, false
 }
 
+// hintLayout shapes the hint of the empty line l: what the hint looks like
+// where what is typed there will show, in the line's own font. It is the
+// title's font on the title's line, and the body's on a line of the body,
+// so that the hint is the size of what replaces it.
+func (e *Editor) hintLayout(l *leaf, hint string) *ui.TextLayout {
+	if l == nil || l.view == nil {
+		return nil
+	}
+	col := e.lk.muted.Alpha(0.6)
+	return ui.ShapeRichTextWith([]ui.Span{{Text: hint, Color: col}}, l.view.font, ui.TextShape{Width: l.w})
+}
+
 // paintHint draws the hint of the empty line in the line's own font, where
 // what is typed there will show: the title's in the title's size.
 func (e *Editor) paintHint(p *ui.Painter, hint string, ox, oy float32) {
 	for _, l := range e.leaves {
-		if l.kind != kPhantom || l.view == nil {
+		if l.kind != kPhantom {
 			continue
 		}
 		v := l.view
+		if v == nil {
+			continue
+		}
+		lay := e.hintLayout(l, hint)
+		if lay == nil {
+			return
+		}
 		col := e.lk.muted.Alpha(0.6)
-		lay := ui.ShapeRichTextWith([]ui.Span{{Text: hint, Color: col}}, v.font, ui.TextShape{Width: l.w})
 		p.TextLayout(lay, ox+l.x+v.tx, oy+l.y+v.ty, col)
 		return
 	}
