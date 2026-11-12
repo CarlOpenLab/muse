@@ -2,6 +2,7 @@ package nativeui
 
 import (
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -55,6 +56,65 @@ func TestPanelDragResizesAndFolds(t *testing.T) {
 	}
 	if w := a2.panelWidth; w != 248 {
 		t.Fatalf("width = %.0f, want 248", w)
+	}
+}
+
+// TestDragFoldedPanelReopensAtTheWidthYouLeftIt 拖过阈值折叠面板，重新打开
+// 时必须是折叠前那个宽度，不是被钳住的最小宽度。
+//
+// 拖动把宽度实时钳进 [224, 440]：手指拖到 150 以下，panelWidth 当场变成
+// 224，你原来的宽度当场就没了。等松手折叠、再重新打开，读到的就是钳过的
+// 224——每一次「拖到折叠再打开」都把宽度往最小值推一截，用户拖宽的 panel
+// 会越用越窄，而且回不来。
+func TestDragFoldedPanelReopensAtTheWidthYouLeftIt(t *testing.T) {
+	a := New()
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	tt.Frame()
+
+	// 先拖宽到一个认得出的宽度，再一路拖到折叠阈值之外。
+	r, ok := tt.Find("调整面板宽度")
+	if !ok || r.W == 0 {
+		t.Fatalf("the resize handle is not on screen: %+v", r)
+	}
+	x, y := r.X+r.W/2, r.Y+40
+	tt.Press(x, y)
+	tt.Frame()
+	tt.Move(x+80, y) // 拖宽
+	tt.Frame()
+	tt.Release(x+80, y)
+	tt.Frame()
+	tt.Advance(time.Second) // 等宽度动画到位，手柄才重新出现
+	tt.Frame()
+	want := a.panelWidth
+	if want <= panelDefaultWidth {
+		t.Fatalf("the drag did not widen the panel: %.0f", want)
+	}
+
+	// 现在一路拖过阈值，松手折叠。
+	r, ok = tt.Find("调整面板宽度")
+	if !ok {
+		t.Fatalf("the resize handle is gone after the widen: %+v", r)
+	}
+	x, y = r.X+r.W/2, r.Y+40
+	tt.Press(x, y)
+	tt.Frame()
+	tt.Move(x-300, y) // 一路拖到阈值之外
+	tt.Frame()
+	tt.Release(x-300, y)
+	tt.Frame()
+	if a.panelOpen {
+		t.Fatal("a drag past the fold kept the panel open")
+	}
+
+	// 重新打开：折叠前的宽度要还在。
+	a.showPanel(a.panel)
+	tt.Frame()
+	if !a.panelOpen {
+		t.Fatal("reopening did not open the panel")
+	}
+	if a.panelWidth != want {
+		t.Fatalf("the panel reopened at %.0f, want the %.0f it had before the fold", a.panelWidth, want)
 	}
 }
 

@@ -140,6 +140,12 @@ type App struct {
 	// panelNarrow 记录这次拖动已经越过了收起的阈值。
 	panelDrag   float32
 	panelNarrow bool
+	// panelFoldedWidth 是拖到折叠之前的宽度。拖动把宽度实时钳进
+	// [panelMinWidth, panelMaxWidth]，手指拖到阈值以下时 panelWidth 当场
+	// 就被钳成最小值，折叠前的宽度必须在这里留一份——否则重新打开时读到的
+	// 是钳过的值，每一次「拖到折叠再打开」都把宽度往最小值推一截，用户
+	// 拖宽的面板会越用越窄且回不来。0 表示没有记：用 panelWidth 就好。
+	panelFoldedWidth float32
 
 	// workspace
 	recents []recentEntry
@@ -575,6 +581,8 @@ func (a *App) panelResizeHandle(c *ui.Context) {
 	if dx, _, ok := h.Dragged(); ok {
 		if a.panelDrag == 0 {
 			a.panelDrag = a.panelWidth
+			// 拖动开始时的宽度就是折叠后要还回去的那个：此刻还没被钳过。
+			a.panelFoldedWidth = a.panelWidth
 		}
 		a.panelDrag += dx
 		a.panelNarrow = a.panelDrag < panelFoldOn
@@ -586,6 +594,8 @@ func (a *App) panelResizeHandle(c *ui.Context) {
 			a.collapsePanel()
 			return
 		}
+		// 没折叠：这次拖动定的宽度就是以后的宽度，折叠前的记录清掉。
+		a.panelFoldedWidth = 0
 	}
 	if h.DoubleClicked() {
 		a.panelWidth = a.panelTargetWidth()
@@ -2073,11 +2083,23 @@ func (a *App) panelTargetWidth() float32 {
 // panel.
 func (a *App) showPanel(v panelView) {
 	a.panel = v
+	a.restorePanelWidth()
+	a.panelOpen = true
+	a.invalidate()
+}
+
+// restorePanelWidth puts the panel back at the width it should have: the one
+// the drag before a fold left it at (panelFoldedWidth), else whatever width it
+// already holds, else the module's default for a first open.
+func (a *App) restorePanelWidth() {
+	if a.panelFoldedWidth > 0.5 {
+		a.panelWidth = a.panelFoldedWidth
+		a.panelFoldedWidth = 0
+		return
+	}
 	if a.panelWidth <= 0 {
 		a.panelWidth = a.panelTargetWidth()
 	}
-	a.panelOpen = true
-	a.invalidate()
 }
 
 // collapsePanel is the panel header's dedicated close control.
@@ -2091,9 +2113,7 @@ func (a *App) togglePanel(v panelView) {
 		a.panelOpen = false
 	} else {
 		a.panel = v
-		if a.panelWidth <= 0 {
-			a.panelWidth = a.panelTargetWidth()
-		}
+		a.restorePanelWidth()
 		a.panelOpen = true
 	}
 	a.invalidate()
