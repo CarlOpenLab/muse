@@ -120,13 +120,22 @@ func TestRailSelectsModulesAndHeaderCollapses(t *testing.T) {
 	if a.panelOpen {
 		t.Fatal("the header icon did not collapse the panel")
 	}
+	// 折叠把整条侧栏（图标列和面板）都收走了，重新打开只剩编辑器标题行
+	// 里那个唤回键。
 	tt.Advance(time.Second)
-	if err := tt.Click("文件"); err != nil {
-		t.Fatalf("reopen files: %v", err)
-	}
 	tt.Frame()
-	if !a.panelOpen || a.panel != panelFiles {
+	if err := tt.Click("打开侧栏"); err != nil {
+		t.Fatalf("reopen from the editor header: %v", err)
+	}
+	tt.Advance(time.Second) // 等轨道展开动画走完
+	tt.Frame()
+	// 唤回键把你刚才在看的那个模块带回来，不是硬切回文件。
+	want := a.panel
+	if !a.panelOpen || a.panel != want {
 		t.Fatalf("reopen: panel = %v, open = %v", a.panel, a.panelOpen)
+	}
+	if a.railW < railWidth-0.5 {
+		t.Fatalf("the rail did not come back with the panel: railW=%.0f", a.railW)
 	}
 }
 

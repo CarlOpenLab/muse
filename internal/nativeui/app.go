@@ -136,6 +136,12 @@ type App struct {
 	panelW float32
 	// panelPrevTarget 是上一帧的宽度目标，用来识别「开着切换模块」。
 	panelPrevTarget float32
+	// railW is the animated width of the icon column, which folds away with
+	// the panel: a fold is a way to get the sidebar out of the way, and the
+	// rail is that sidebar's other half. It slides on the same clock as the
+	// panel, so both leave together instead of the rail staying behind as a
+	// strip of icons down the window's left edge.
+	railW float32
 	// panelDrag 累计一次边缘拖动，拖动期间面板宽度逐帧跟手；
 	// panelNarrow 记录这次拖动已经越过了收起的阈值。
 	panelDrag   float32
@@ -254,6 +260,7 @@ func New() *App {
 		panelOpen:    true,
 		panelWidth:   panelDefaultWidth,
 		panelW:       panelDefaultWidth,
+		railW:        railWidth,
 		themeApplied: -1,
 		dirs:         map[string][]string{},
 		isDir:        map[string]bool{},
@@ -400,7 +407,23 @@ func (a *App) canvas(c *ui.Context) {
 // view is a raised card, as the demo's chosen sidebar row is.
 func (a *App) rail(c *ui.Context) {
 	bar := c.TitleBar()
-	ui.Column(c).Width(railWidth).FillHeight().Padding(0, railInset).GapY(railGapY).Children(func() {
+	// railW 是动画后的宽度，折叠时跟面板一起归零。和面板同一条轨道、同一个
+	// ease，所以折叠时看不到一列图标被孤零零留在窗口左边缘。
+	col := ui.Column(c).FillHeight()
+	a.railW = col.AnimateTo("width", a.railTarget(), ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
+	col.Width(a.railW)
+	// 内边距跟着折叠一起收：全开时 11px 把按钮摆在轨道正中，归零时一点都
+	// 不留。Width(0) 的列是被这 22px 撑着的——不收回来的话，轨道和面板都
+	// 折叠了，卡片还被顶在右边 22px，窗口左边就剩这一条缝，标题和唤回键
+	// 全掉进去。截图里那条空头就是这个。
+	if a.railW >= 0.5 {
+		col.Padding(0, railInset)
+	}
+	col.GapY(railGapY)
+	if a.railW < 0.5 {
+		return
+	}
+	col.Children(func() {
 		// The room above the first button: macOS's traffic lights when the
 		// system reports them, else just enough to centre the first button
 		// on the window's one top line.
@@ -1028,7 +1051,11 @@ func (a *App) editorHeader(c *ui.Context) {
 	if controlsAtRight {
 		padRight += windowButtonsRoom
 	}
-	ui.Row(c).Height(editorHeaderH).Shrink(0).Padding(0, padRight, 0, 8).Gap(8).
+	// 左边要避开 macOS 的红绿灯：它们画在窗口左上角，卡片折叠后贴到窗口
+	// 左边，标题行就压在它们身上——所以这里按 TitleBar().Left 让位，和面板
+	// 头部是同一套做法。8 是卡片自己的边距，红绿灯比它宽多少就再让多少。
+	padLeft := max(8, bar.Left)
+	ui.Row(c).Height(editorHeaderH).Shrink(0).Padding(0, padRight, 0, padLeft).Gap(8).
 		DragWindow().
 		AlignItems(ui.Center).Children(func() {
 		// The panel's reopen slot: the icon that brings the panel back
@@ -2086,6 +2113,14 @@ func (a *App) panelTargetWidth() float32 {
 	return panelDefaultWidth
 }
 
+// railTarget 是图标列要去的宽度：面板折叠时一起归零，展开时回到 railWidth。
+func (a *App) railTarget() float32 {
+	if a.panelOpen {
+		return railWidth
+	}
+	return 0
+}
+
 // showPanel selects a module without ever collapsing or resizing: the rail
 // is a view switch, and clicking the active icon twice used to hide the
 // panel.
@@ -2136,10 +2171,20 @@ func (a *App) togglePanel(v panelView) {
 // instead of jumping when panelOpen flips.
 func (a *App) canvasLeft(c *ui.Context) float32 {
 	if w := a.cardWidth(); w > 0 {
-		return max(w-railWidth-a.panelW, 0)
+		// 卡片被拖动过：它的左边缘是自己说了算的绝对坐标，重新打开折叠的
+		// 面板时这份坐标得留着，否则卡片会跳回面板旁边。侧栏整个没了（轨道
+		// 和面板都折叠了）时也一样——那时卡片该贴着窗口左边站，而不是被
+		// 留下来对着 268px 面板的鬼魂。
+		return max(w-a.railW-a.panelW, 0)
 	}
 	left := canvasPadding
 	if a.panelWidth <= 0 {
+		return left
+	}
+	// 侧栏收走了，就没有「面板的右边缘」可留：卡片贴着窗口左边站，那道
+	// canvasPadding 就是全部。少了这一条，折叠会在左边留下 22px 的空洞
+	// （TitleBar().Left - railWidth），标题和唤回键都掉到那里面去。
+	if a.railW < 0.5 && a.panelW < 0.5 {
 		return left
 	}
 	openness := a.panelW / a.panelWidth
@@ -2160,6 +2205,11 @@ func (a *App) canvasLeft(c *ui.Context) float32 {
 // the card's own coordinate, which is what a drag of its left edge moves, and
 // what cardWidth stores — so a reload puts the card back exactly where it was
 // left, whatever width the panel has by then.
+//
+// The stored coordinate is not clamped here: this is what a drag reads back to
+// know where it stands, and clamping it mid-drag would stop the card following
+// the pointer. The fold's clamp lives in canvasLeft, which is what positions
+// the card.
 func (a *App) cardLeft(c *ui.Context) float32 {
 	if w := a.cardWidth(); w > 0 {
 		return w
@@ -2174,9 +2224,15 @@ func (a *App) cardMinLeft() float32 {
 	return railWidth + a.panelW
 }
 
-// cardMaxLeft is how far right the card's left edge may go: far enough that the
-// card keeps cardMinWidth of room. Past that a line of text no longer fits, and
+// cardMaxLeft is how far right the card's left edge may go: far enough that
+// the card keeps cardMinWidth of room. Past that a line of text no longer fits, and
 // a card you cannot write in is not an editor.
+//
+// It is a bound on the drag alone, measured against the window: the panel's
+// edge is not part of it, because a drag is a live gesture against the room
+// there is now. The panel's edge is enforced where the card is positioned
+// (canvasLeft), which is what keeps a fold from leaving the card stranded out
+// where the panel used to be.
 func (a *App) cardMaxLeft(c *ui.Context) float32 {
 	w, _ := c.Size()
 	return w - canvasPadding - cardMinWidth

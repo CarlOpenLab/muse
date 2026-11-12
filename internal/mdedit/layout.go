@@ -178,9 +178,11 @@ const (
 )
 
 // defaultPadX is how far the body text sits from the editor's left and right
-// edges when Options.PadX is not set, in DIPs. 40 left the writing line short
-// in a wide card; 24 still gives it air without narrowing it further.
-const defaultPadX = 24
+// edges when Options.PadX is not set, in DIPs. The card is already inset from
+// the window, so the writing line wants more air than a bare column: 40 keeps
+// the text centred in the card instead of running to its edges, while still
+// leaving a line long enough to write in.
+const defaultPadX = 40
 
 // defaultMaxWidth caps the column of text when Options.MaxWidth is not set,
 // in DIPs. It is the ceiling, not the target: a narrower card writes inside

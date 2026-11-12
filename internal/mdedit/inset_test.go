@@ -19,9 +19,9 @@ func laidIn(t *testing.T, width int) *Editor {
 	return e
 }
 
-// TestTextColumnKeepsAReadableInset 正文离卡片左右两边是 40px 的话，宽一点
-// 的卡片里正文显得夹在中间很空，写作的每一行都短一截。默认留白要收到 24px：
-// 仍然透气，但一行放得下更多字。
+// TestTextColumnKeepsAReadableInset 正文离卡片左右两边的留白要够，正文列才
+// 不会顶着卡片边写；但也别大到把一行挤得只剩几个字。默认取 40px：卡片本身
+// 已经离窗口有一段，正文再收 40 才显得落在卡片中间，而不是摊在它的沿上。
 func TestTextColumnKeepsAReadableInset(t *testing.T) {
 	// 卡片比正文列的限宽还窄时，留白是唯一在起作用的东西。
 	const narrow = 700
@@ -29,8 +29,11 @@ func TestTextColumnKeepsAReadableInset(t *testing.T) {
 	if e.elemW == 0 {
 		t.Fatal("the editor never measured its element")
 	}
-	if defaultPadX >= 40 {
-		t.Fatalf("defaultPadX = %v, want under 40: the writing line was too short", defaultPadX)
+	if defaultPadX < 24 {
+		t.Fatalf("defaultPadX = %v, want at least 24: the text would run to the card's edge", defaultPadX)
+	}
+	if defaultPadX > 56 {
+		t.Fatalf("defaultPadX = %v, want at most 56: the writing line is too short to write in", defaultPadX)
 	}
 	// 留白要真的用上：正文列顶到两边留白，一点都不浪费。
 	if got, want := e.colW, e.elemW-2*defaultPadX; got != want {
