@@ -145,13 +145,17 @@ jobs:
           # action 默认 overwrite_files: true，同名文件互相覆盖，发布
           # 直接以 Not Found 失败。只列安装包：干净，且同名冲突根本不
           # 发生——安装包的名字每个平台都不一样。
+          #
+          # 只列真实存在的产物：mygo 在 macOS 上出 dmg，Linux 上出 deb/rpm/
+          # tar.gz，Windows 上出 exe；它不产 msi，也不产 pkg。Windows 在 CI
+          # 上还带 -skip-installer（runner 没有 NSIS），所以连 setup.exe 都
+          # 没有，只有 Muse.exe 本体。列了不存在的扩展名，配上
+          # fail_on_unmatched_files: true，就是把发布自己绊倒——那次 release
+          # 就是这样红的：安装包一个都没挂上，release 停在旧的那一版。
           files: |
             release-assets/**/*.dmg
             release-assets/**/*.exe
-            release-assets/**/*.msi
             release-assets/**/*.deb
             release-assets/**/*.rpm
             release-assets/**/*.tar.gz
-            release-assets/**/*.zip
-            release-assets/**/*.pkg
           fail_on_unmatched_files: true

@@ -178,6 +178,23 @@ func TestTheReleaseAttachesOnlyInstallers(t *testing.T) {
 	}
 }
 
+// TestEveryPatternMatchesAFiles 每个模式都要匹配到文件。
+//
+// fail_on_unmatched_files: true 把匹配不到的模式从一句 warn 变成构建红，
+// 这是好事——但列了不存在的扩展名就反过来把自己绊倒：Windows 在 CI 上带
+// -skip-installer（runner 没有 NSIS），根本不产出 msi；mygo 也从来没有
+// pkg 这个产物。写了 release-assets/**/*.msi 之后那次发布就是这样红的：
+// 安装包一个都没挂上，release 停在旧的那一版。
+func TestEveryPatternMatchesAFiles(t *testing.T) {
+	base := mergedTree(t)
+	pats := releaseFilesPatterns(t, readWorkflow(t))
+	for _, pat := range pats {
+		if got := matchFiles(t, base, pat); len(got) == 0 {
+			t.Fatalf("the pattern %s matches no file; with fail_on_unmatched_files: true that fails the publish instead of shipping the release", pat)
+		}
+	}
+}
+
 // TestTheReleaseFailsRatherThanShippingEmpty 匹配不到文件必须让构建红，
 // 而不是只 warn 一句然后发一个空 release 出去。
 func TestTheReleaseFailsRatherThanShippingEmpty(t *testing.T) {
