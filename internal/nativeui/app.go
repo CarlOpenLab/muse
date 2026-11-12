@@ -174,6 +174,15 @@ type App struct {
 	fontSize     float64
 	lineHeight   float64
 
+	// appearance: the editor card's translucency, the material behind it and
+	// where a drag at its left edge left it. 0 与空串都是未设置，见
+	// cardOpacity / cardBlur / cardWidth。
+	cardOpacityPref float64
+	cardBlurPref    string
+	cardWidthPref   float32
+	// cardDrag 累计一次左边缘拖动，拖动期间卡片宽度逐帧跟手。
+	cardDrag float32
+
 	// AI
 	ai          aiSettings
 	aiClient    *services.AI
@@ -250,6 +259,9 @@ func New() *App {
 		ai:           loadAISettings(),
 		aiClient:     services.NewAI(),
 		aiMessages:   loadAIChat(),
+	}
+	if p := loadAppearance(); p.CardOpacity > 0 || p.CardBlur != "" || p.CardWidth > 0 {
+		a.cardOpacityPref, a.cardBlurPref, a.cardWidthPref = p.CardOpacity, p.CardBlur, p.CardWidth
 	}
 	// 新窗口就是一张空白未命名文档：光标停在空段落里，直接就能写。
 	a.ed = mdedit.New("", a.editorOptions())
@@ -352,12 +364,16 @@ func (a *App) syncAppearance() {
 }
 
 // canvas is the floating editor card: 8px away from the window's top, right
-// and bottom, and 8px from the context panel. The rail and the panel paint
-// nothing, so the window color — or the acrylic material — shows behind them.
+// and bottom, and from the panel by whatever the drag at its left edge left.
+// The rail and the panel paint nothing, so the window color — or the acrylic
+// material — shows behind them.
 func (a *App) canvas(c *ui.Context) {
 	t := c.Theme()
 	ui.Row(c).Grow(1).FillHeight().MinWidth(0).Padding(canvasPadding, canvasPadding, canvasPadding, a.canvasLeft(c)).Children(func() {
-		card := ui.Column(c).Fill().Radius(14).Clip().Background(t.Background)
+		// 卡片底色是主题的卡片色乘一个不透明度，材料在它背后透出来。拖动
+		// 滑杆时底色跟着走，用 AnimateColor 补上过渡，不会一跳一跳的。
+		card := ui.Column(c).Fill().Radius(14).Clip()
+		card.Background(card.AnimateColor("card-bg", a.cardColor(t.Dark), ui.Animation{Duration: 140 * time.Millisecond}))
 		if t.Dark {
 			card.Border(1, ui.RGBA(236, 236, 240, 0.12)).
 				Shadow(0, 1, 1, 0, ui.RGBA(0, 0, 0, 0.2)).
@@ -370,6 +386,7 @@ func (a *App) canvas(c *ui.Context) {
 		card.Children(func() {
 			a.editorContent(c)
 		})
+		a.cardResizeHandle(c)
 	})
 }
 
@@ -518,6 +535,34 @@ func (a *App) contextPanel(c *ui.Context) {
 			}
 		})
 	})
+}
+
+// cardResizeHandle is the editor card's left edge: a drag moves it, which
+// narrows or widens the card against a panel that stays exactly where it
+// was, so the material shows through the gap that opens between them. A
+// double click puts the card back to following the panel.
+func (a *App) cardResizeHandle(c *ui.Context) {
+	// 手柄站在卡片左边缘上，跟着卡片走：卡片被拖窄之后它仍在卡片左边缘，
+	// 而不是留在面板旁边。Absolute 的 Left 相对的是这一行 Row 的边框盒，
+	// 卡片在自己内容盒里偏出 canvasLeft 那么远，所以这里要把那份补上。
+	// 面板的手柄在自己右边缘同样宽的一行上，两行中间隔着那道缝，不重叠。
+	h := ui.Box(c).Key("card-resize").Absolute().Left(a.canvasLeft(c) - cardResizeGrab).
+		Top(canvasPadding + cardBorder + editorHeaderH).
+		Bottom(0).Width(cardResizeGrab).Cursor(ui.CursorResizeEW).Label("调整卡片宽度")
+	if dx, _, ok := h.Dragged(); ok {
+		if a.cardDrag == 0 {
+			// 拖动的起点是按下时卡片的真实左边缘，不是「没拖过时的那 8px」：
+			// 取后者的话，一次拖动越过下限就被钳住，指针继续往右卡片也不动。
+			a.cardDrag = a.cardLeft(c)
+		}
+		a.cardDrag += dx
+		a.setCardWidth(a.clampCardLeft(a.cardDrag, c))
+	} else if a.cardDrag != 0 {
+		a.cardDrag = 0
+	}
+	if h.DoubleClicked() {
+		a.setCardWidth(0)
+	}
 }
 
 // panelResizeHandle is the panel's right edge, which a drag moves, a double
@@ -1288,12 +1333,8 @@ func (a *App) confirmDiscardOffUI() bool {
 	}
 	savePath := path
 	if savePath == "" {
-		defaultName := name
-		if defaultName == "" || defaultName == "未命名" {
-			defaultName = "Untitled.md"
-		} else if !strings.HasSuffix(strings.ToLower(defaultName), ".md") {
-			defaultName += ".md"
-		}
+		var defaultName string
+		a.onMain(func() { defaultName = a.suggestedFileName() })
 		savePath, err = saveDialog(mygo.SaveDialogOptions{
 			Parent:      a.win,
 			Title:       "保存文件",
@@ -1327,7 +1368,7 @@ func (a *App) saveAs() {
 	}
 	var name, source string
 	a.onMain(func() {
-		name = "Untitled.md"
+		name = a.suggestedFileName()
 		if a.path != "" {
 			name = filepath.Base(a.path)
 		}
@@ -1685,10 +1726,24 @@ func settingsRow(c *ui.Context, label, detail string, control func()) {
 
 func (a *App) appearanceSettings(c *ui.Context) {
 	t := c.Theme()
+	blur := cardBlurIndex(a.cardBlur())
 	settingsGroup(c, "", func() {
 		a.settingsDivider(c, false)
 		settingsRow(c, "主题", "Rex 色洗的浅色或深色；编辑器、上下文栏与弹层同步切换。", func() {
 			ui.Segmented(c, &a.themeMode, "浅色", "深色").Label("主题")
+		})
+		a.settingsDivider(c, true)
+		settingsRow(c, "卡片不透明度", "编辑器卡片透出多少桌面材料；颜色跟着主题走，能调的只有透多少。", func() {
+			ui.Textf(c, "%.0f%%", a.cardOpacity()*100).FontSize(12).TextColor(t.TextMuted).Width(38)
+			if ui.Slider(c, &a.cardOpacityPref, minCardOpacity, 1).Width(190).Label("卡片不透明度").Changed() {
+				a.setCardOpacity(a.cardOpacityPref)
+			}
+		})
+		a.settingsDivider(c, true)
+		settingsRow(c, "背景材料", "卡片背后的材料强度：无就是窗口底色，等同于不透明。", func() {
+			if ui.Segmented(c, &blur, "无", "弱", "中", "强").Label("背景材料").Changed() {
+				a.setCardBlur(cardBlurChoices[blur].id)
+			}
 		})
 	})
 	ui.Text(c, "native 渲染与编辑器共用同一套颜色；切换后立即生效。").
@@ -1733,17 +1788,18 @@ func (a *App) docDir() string {
 // document being edited.
 func (a *App) editorOptions() mdedit.Options {
 	return mdedit.Options{
-		FontSize:    float32(a.fontSize),
-		LineHeight:  float32(a.lineHeight),
-		BaseDir:     a.docDir(),
-		Placeholder: "开始写作…",
-		Label:       "文档",
-		Code:        codeLanguage(a.path),
-		Invalidate:  a.invalidate,
-		OnChange:    a.docChanged,
-		OnLink:      a.openLink,
-		SaveImage:   a.saveImage,
-		OnDropFiles: a.openDropped,
+		FontSize:         float32(a.fontSize),
+		LineHeight:       float32(a.lineHeight),
+		BaseDir:          a.docDir(),
+		Placeholder:      "开始写作…",
+		TitlePlaceholder: "标题",
+		Label:            "文档",
+		Code:             codeLanguage(a.path),
+		Invalidate:       a.invalidate,
+		OnChange:         a.docChanged,
+		OnLink:           a.openLink,
+		SaveImage:        a.saveImage,
+		OnDropFiles:      a.openDropped,
 	}
 }
 
@@ -1945,6 +2001,37 @@ func (a *App) displayName() string {
 	return filepath.Base(a.path)
 }
 
+// suggestedFileName is the name the save dialog offers a document never
+// saved: its title, the level-one heading on its first line, or
+// Untitled.md when it has none.
+func (a *App) suggestedFileName() string {
+	first, _, _ := strings.Cut(strings.TrimLeft(a.source, "\n"), "\n")
+	if strings.HasPrefix(first, "# ") && len(a.headings) > 0 && a.headings[0].level == 1 {
+		if name := fileNameOf(a.headings[0].text); name != "" {
+			return name + ".md"
+		}
+	}
+	return "Untitled.md"
+}
+
+// fileNameOf turns a title into a file name: characters file systems
+// refuse become spaces, runs of space one, and leading dots (a hidden
+// file) and trailing dots and spaces (which Windows drops) go. A long
+// title is cut. "" means the title gives no name.
+func fileNameOf(title string) string {
+	s := strings.Map(func(r rune) rune {
+		if r < 0x20 || strings.ContainsRune(`/\:*?"<>|`, r) {
+			return ' '
+		}
+		return r
+	}, title)
+	s = strings.Trim(strings.Join(strings.Fields(s), " "), ". ")
+	if r := []rune(s); len(r) > 80 {
+		s = strings.TrimRight(string(r[:80]), ". ")
+	}
+	return s
+}
+
 func (a *App) location() string {
 	if a.path == "" {
 		return "未保存"
@@ -2012,11 +2099,17 @@ func (a *App) togglePanel(v panelView) {
 	a.invalidate()
 }
 
-// canvasLeft is how far the editor card sits from the rail: 8px, plus the
-// traffic lights' inset once the panel is gone (the panel normally gives
-// them room). It follows the animated panel width so the card slides with
-// the panel instead of jumping when panelOpen flips.
+// canvasLeft is the gap between the panel's right edge and the card's left
+// edge — the padding this row puts before the card. The card's left edge is
+// kept from the window's left edge (cardLeft), and this row starts after the
+// rail and the panel, so the gap is the difference between the two.
+//
+// It follows the animated panel width so the card slides with the panel
+// instead of jumping when panelOpen flips.
 func (a *App) canvasLeft(c *ui.Context) float32 {
+	if w := a.cardWidth(); w > 0 {
+		return max(w-railWidth-a.panelW, 0)
+	}
 	left := canvasPadding
 	if a.panelWidth <= 0 {
 		return left
@@ -2032,6 +2125,43 @@ func (a *App) canvasLeft(c *ui.Context) float32 {
 		left += extra * (1 - openness)
 	}
 	return left
+}
+
+// cardLeft is where the editor card's left edge sits, from the window's left
+// edge: the rail, the panel, then whatever canvasLeft puts between them. It is
+// the card's own coordinate, which is what a drag of its left edge moves, and
+// what cardWidth stores — so a reload puts the card back exactly where it was
+// left, whatever width the panel has by then.
+func (a *App) cardLeft(c *ui.Context) float32 {
+	if w := a.cardWidth(); w > 0 {
+		return w
+	}
+	return railWidth + a.panelW + a.canvasLeft(c)
+}
+
+// cardMinLeft is how far left the card's left edge may go: to the panel's right
+// edge, exactly touching it. Any further and the card would cover the panel,
+// hiding the very thing the gap is there to leave visible.
+func (a *App) cardMinLeft() float32 {
+	return railWidth + a.panelW
+}
+
+// cardMaxLeft is how far right the card's left edge may go: far enough that the
+// card keeps cardMinWidth of room. Past that a line of text no longer fits, and
+// a card you cannot write in is not an editor.
+func (a *App) cardMaxLeft(c *ui.Context) float32 {
+	w, _ := c.Size()
+	return w - canvasPadding - cardMinWidth
+}
+
+// clampCardLeft keeps a dragged left edge inside the room the window has: not
+// over the panel on the left, not past a card you can still write in on the
+// right. A window too small for both lets the panel win — covering it is the
+// worse of the two failures.
+func (a *App) clampCardLeft(v float32, c *ui.Context) float32 {
+	lo := a.cardMinLeft()
+	hi := max(a.cardMaxLeft(c), lo)
+	return min(max(v, lo), hi)
 }
 
 func (a *App) notice(s string) {
