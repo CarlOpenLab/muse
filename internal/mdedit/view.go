@@ -99,11 +99,11 @@ func (e *Editor) View(c *ui.Context) ui.Element {
 	}
 	maxW := e.opts.MaxWidth
 	if maxW <= 0 {
-		maxW = 820
+		maxW = defaultMaxWidth
 	}
 	padX := e.opts.PadX
 	if padX <= 0 {
-		padX = 40
+		padX = defaultPadX
 	}
 	if e.elemW > 0 {
 		e.colW = max(min(maxW, e.elemW-2*padX), 120)

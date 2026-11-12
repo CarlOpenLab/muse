@@ -81,7 +81,10 @@ func (e *Editor) setLook(t *ui.Theme) {
 		lk.markBg = ui.RGBA(250, 204, 21, 0.32)
 	} else {
 		lk.codeBg = ui.RGBA(0, 0, 0, 0.055)
-		lk.panel = ui.Hex("#f6f7f9")
+		// panel 与深色主题的取值同源：一片同色系的半透明，让编辑卡片背后
+		// 的桌面材料透得过来。深色是白 4.5%，浅色用黑 4.5%——两者叠在各自
+		// 的卡片底色上亮度相当，且都不遮材料。
+		lk.panel = ui.RGBA(0, 0, 0, 0.045)
 		lk.codeText = ui.Hex("#c7254e")
 		lk.quoteBar = ui.RGBA(0, 0, 0, 0.12)
 		lk.markBg = ui.RGBA(250, 204, 21, 0.45)
@@ -173,6 +176,20 @@ const (
 	cellPadX    = 0.7
 	cellPadY    = 0.45
 )
+
+// defaultPadX is how far the body text sits from the editor's left and right
+// edges when Options.PadX is not set, in DIPs. 40 left the writing line short
+// in a wide card; 24 still gives it air without narrowing it further.
+const defaultPadX = 24
+
+// defaultMaxWidth caps the column of text when Options.MaxWidth is not set,
+// in DIPs. It is the ceiling, not the target: a narrower card writes inside
+// its padding, and a card dragged wider than this fills itself, because the
+// room a drag opened is room the writing should use. Only a card wider than
+// the cap still stops here — a 1920px display fills its card and writes a
+// 1700px line, while a 5K display keeps its prose inside one where a line
+// still scans back to its start.
+const defaultMaxWidth = 1700
 
 // leafView is a leaf as the editor shows it: its display, laid out, and
 // the boxes around it, relative to the leaf's box.
@@ -378,7 +395,7 @@ func (e *Editor) newBuilder(l *leaf, at int, withCompose bool, size, width float
 // textFont returns the font of a text leaf.
 func (e *Editor) textFont(l *leaf) ui.Font {
 	f := ui.Font{Family: e.lk.font, Size: e.lk.size, LineHeight: e.lk.lh}
-	if l.kind == kHeading && !l.pending {
+	if l.kind == kHeading && !l.pending || l.kind == kPhantom && l.level > 0 {
 		f.Size = e.lk.headingSize(l.level)
 		f.Weight = headingWeight(l.level)
 		f.LineHeight = 1.35

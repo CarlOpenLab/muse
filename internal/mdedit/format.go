@@ -795,10 +795,15 @@ func (e *Editor) insertText(text string) {
 	if p := e.phantom; p != nil {
 		cont := phantomPrefix(p.conts)
 		text = strings.ReplaceAll(text, "\n", "\n"+cont)
+		pre := p.pre
+		if p.title && !strings.Contains(text, "\n") && titleTakes(text) {
+			// One line pasted into the empty title is its text.
+			pre = titlePrefix + pre
+		}
 		e.begin(stepEdit)
 		e.phantom = nil
-		e.replace(p.at, p.at, p.pre+text+p.post)
-		c := p.at + len(p.pre) + len(text)
+		e.replace(p.at, p.at, pre+text+p.post)
+		c := p.at + len(pre) + len(text)
 		e.commit(c, c)
 		return
 	}

@@ -23,14 +23,21 @@ type Options struct {
 	// Font and MonoFont are the families of text and of code: the
 	// theme's font and the system's monospaced one when empty.
 	Font, MonoFont string
-	// MaxWidth caps the column of text (820 when 0); PadX is the least room
-	// beside it.
+	// MaxWidth caps the column of text (defaultMaxWidth when 0); PadX is the
+	// least room beside it. A card narrower than the cap writes inside its
+	// padding; a wider one fills itself up to the cap.
 	MaxWidth float32
 	PadX     float32
 	// BaseDir resolves the relative paths of images.
 	BaseDir string
 	// Placeholder shows in an empty document.
 	Placeholder string
+	// TitlePlaceholder makes an empty Markdown document open on a title:
+	// its one empty line shows this, laid out as a level-one heading, and
+	// what is typed in it goes in as one. Placeholder is then the hint of
+	// an empty line of the body under it. Empty, or with Code set, there
+	// is no title.
+	TitlePlaceholder string
 	// Label names the editor to assistive technology.
 	Label string
 	// Invalidate asks the window for a frame, from any goroutine, as an
@@ -246,6 +253,58 @@ type phantom struct {
 	// before places it above the leaf starting at at, rather than below
 	// the one ending there.
 	before bool
+	// title makes it the empty title of an empty document: it shows as a
+	// level-one heading, with Options.TitlePlaceholder, and what is typed
+	// in it goes in as one (see titlePrefix).
+	title bool
+}
+
+// titlePrefix is what goes before the text typed in the empty title: the
+// heading's own marker, so the file holds the title as `# 周报`.
+const titlePrefix = "# "
+
+// bareEmpty reports whether a phantom is the one empty line of an empty
+// document: nothing around it to write, so Backspace and Delete keep it
+// rather than leave the document with no line at all.
+func (p *phantom) bareEmpty() bool {
+	return p.pre == "" && p.post == "" && len(p.conts) == 0
+}
+
+// wantsTitle reports whether an empty document opens on a title: a
+// Markdown document with a title placeholder set.
+func (e *Editor) wantsTitle() bool {
+	return e.opts.TitlePlaceholder != "" && e.opts.Code == ""
+}
+
+// emptyLine is the phantom of an empty document: its title when it opens
+// on one, else a line of the body.
+func (e *Editor) emptyLine() *phantom {
+	return &phantom{at: len(e.src), title: e.wantsTitle()}
+}
+
+// hint returns the hint the empty line shows, or "" when none shows: the
+// title placeholder on the empty title, the placeholder on the one empty
+// line of the body below a title or of an empty document.
+func (e *Editor) hint() string {
+	p := e.phantom
+	if p == nil || e.compose != "" {
+		return ""
+	}
+	if p.title {
+		return e.opts.TitlePlaceholder
+	}
+	if len(p.conts) > 0 || strings.TrimSpace(e.src[min(p.at, len(e.src)):]) != "" {
+		// Text after it: an empty line in the middle of the document.
+		return ""
+	}
+	if strings.TrimSpace(e.src) == "" {
+		return e.opts.Placeholder
+	}
+	// The first line of the body under a title: only a title above it.
+	if len(e.leaves) == 2 && e.leaves[0].kind == kHeading && e.leaves[1].kind == kPhantom {
+		return e.opts.Placeholder
+	}
+	return ""
 }
 
 // New returns an editor of src.
@@ -295,7 +354,7 @@ func (e *Editor) SetSource(src string) {
 	e.railCardOn = false
 	e.sync()
 	if strings.TrimSpace(src) == "" {
-		e.phantom = &phantom{at: len(src)}
+		e.phantom = e.emptyLine()
 		e.sync()
 	}
 	e.caret = e.firstStop()
@@ -402,6 +461,10 @@ func parserText(lines string) string { return mdoc.CJKFriendly(bracketMath(lines
 // insertPhantom puts the phantom's leaf among the leaves, by its offset.
 func insertPhantom(leaves []*leaf, p *phantom) []*leaf {
 	pl := &leaf{kind: kPhantom, id: -1, start: p.at, end: p.at, lineStart: p.at, conts: p.conts}
+	if p.title {
+		// The empty title is laid out as the heading it becomes.
+		pl.level = 1
+	}
 	i := sort.Search(len(leaves), func(i int) bool {
 		l := leaves[i]
 		if p.before {

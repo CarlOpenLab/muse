@@ -111,6 +111,11 @@ func (e *Editor) commit(anchor, caret int) {
 	e.wantReveal = true
 	e.hasGoal = false
 	e.compose = ""
+	if e.phantom == nil && e.src == "" && e.opts.Code == "" {
+		// Everything went: the document keeps its one empty line to
+		// write in, its title when it opens on one.
+		e.setPhantom(e.emptyLine())
+	}
 	if s == nil || len(s.changes) == 0 {
 		return
 	}

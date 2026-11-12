@@ -162,6 +162,14 @@ func (e *Editor) ReplaceText(r *ui.TextInputRange, s string) {
 		a, _ := e.virtualByte(min(r.Start, r.End))
 		z, _ := e.virtualByte(max(r.Start, r.End))
 		e.compose, e.composing = "", false
+		if p := e.phantom; p != nil && a == z && a == p.at {
+			// The input method commits over its own composition in the
+			// empty line: it goes in as typed there, with what the line
+			// writes around it (the title's "# ", the blank line under a
+			// heading).
+			e.typeText(s)
+			return
+		}
 		e.dropPhantomIfAway(a)
 		e.begin(stepEdit)
 		e.replace(a, z, s)

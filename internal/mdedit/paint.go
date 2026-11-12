@@ -70,10 +70,8 @@ func (e *Editor) paint(p *ui.Painter, r ui.Rect) {
 			e.paintUnit(p, l, ox, oy, a, z)
 		}
 	}
-	if len(e.leaves) == 1 && e.leaves[0].kind == kPhantom && e.opts.Placeholder != "" && e.compose == "" {
-		l := e.leaves[0]
-		sp := ui.Span{Text: e.opts.Placeholder, Color: e.lk.muted.Alpha(0.6), Size: e.lk.size}
-		p.RichText(ox+l.x, oy+l.y+l.h/2-e.lk.size*0.7, l.w, sp)
+	if hint := e.hint(); hint != "" {
+		e.paintHint(p, hint, ox, oy)
 	}
 	e.paintCaret(p, ox, oy)
 }
@@ -430,4 +428,19 @@ func (e *Editor) composeCaretRect() (ui.Rect, bool) {
 		}
 	}
 	return ui.Rect{}, false
+}
+
+// paintHint draws the hint of the empty line in the line's own font, where
+// what is typed there will show: the title's in the title's size.
+func (e *Editor) paintHint(p *ui.Painter, hint string, ox, oy float32) {
+	for _, l := range e.leaves {
+		if l.kind != kPhantom || l.view == nil {
+			continue
+		}
+		v := l.view
+		col := e.lk.muted.Alpha(0.6)
+		lay := ui.ShapeRichTextWith([]ui.Span{{Text: hint, Color: col}}, v.font, ui.TextShape{Width: l.w})
+		p.TextLayout(lay, ox+l.x+v.tx, oy+l.y+v.ty, col)
+		return
+	}
 }

@@ -3,6 +3,7 @@ package mdedit
 import (
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui/markdown/parser"
 )
@@ -88,6 +89,10 @@ func (e *Editor) typeText(text string) {
 	}
 	e.layoutIfNeeded()
 	if p := e.phantom; p != nil {
+		if p.title && strings.TrimSpace(text) == "" {
+			// Space before a title means nothing: it stays empty.
+			return
+		}
 		e.begin(stepTyping)
 		e.phantom = nil
 		at := p.at
@@ -99,8 +104,12 @@ func (e *Editor) typeText(text string) {
 				ins = text + string(closeCh)
 			}
 		}
-		e.replace(at, at, p.pre+ins+p.post)
-		c += at + len(p.pre)
+		pre := p.pre
+		if p.title && titleTakes(text) {
+			pre = titlePrefix + pre
+		}
+		e.replace(at, at, pre+ins+p.post)
+		c += at + len(pre)
 		e.commit(c, c)
 		return
 	}
@@ -268,6 +277,24 @@ func blockFor(text, cont string) (string, int, bool) {
 	return "", 0, false
 }
 
+// titleTakes reports whether text typed into the empty title is its
+// text, which goes in after the title's "# ". What starts a block of its
+// own goes in as it is: a heading or a list typed by hand, a fence, a
+// formula, a quotation, a table or an image.
+func titleTakes(text string) bool {
+	switch strings.TrimSpace(text) {
+	case "", "#", "-", "*", "+", ">", "|", "```", "~~~", "$$":
+		return false
+	}
+	t := strings.TrimLeft(text, " ")
+	for _, p := range []string{"#", "- ", "* ", "+ ", "> ", "|", "```", "~~~", "$$", "<", "!["} {
+		if strings.HasPrefix(t, p) {
+			return false
+		}
+	}
+	return true
+}
+
 // ---------------------------------------------------------------------------
 // Deleting
 
@@ -287,6 +314,9 @@ func (e *Editor) deleteSelection() {
 // so the caret stays in a line of its own, and takes its blank lines out
 // of the source.
 func (e *Editor) tidyEmpty() {
+	if e.titleEmptied() {
+		return
+	}
 	if e.leafAt(e.caret) != nil || e.phantom != nil {
 		return
 	}
@@ -321,7 +351,7 @@ func (e *Editor) tidyEmpty() {
 		e.begin(stepEdit)
 		e.replace(0, len(e.src), "")
 		e.mergeLastStep()
-		e.setPhantom(&phantom{at: 0})
+		e.setPhantom(&phantom{at: 0, title: e.wantsTitle()})
 	case a == 0:
 		e.begin(stepEdit)
 		e.replace(0, z+1, "")
@@ -338,6 +368,20 @@ func (e *Editor) tidyEmpty() {
 		e.mergeLastStep()
 		e.setPhantom(&phantom{at: a - 1, pre: "\n", post: "\n"})
 	}
+}
+
+// titleEmptied puts the empty title back when the title was all the
+// document held and the last of its text has gone: the bare "# " left
+// leaves the source, and the line shows the title placeholder again.
+func (e *Editor) titleEmptied() bool {
+	if !e.wantsTitle() || e.phantom != nil || strings.TrimRight(e.src, " \t\n") != "#" {
+		return false
+	}
+	e.begin(stepEdit)
+	e.replace(0, len(e.src), "")
+	e.mergeLastStep()
+	e.setPhantom(&phantom{at: 0, title: true})
+	return true
 }
 
 // mergeLastStep commits the open step into the last one, as the tidying
@@ -358,6 +402,27 @@ func (e *Editor) mergeLastStep() {
 	e.sync()
 }
 
+// backspaceEmpty handles Backspace in the one empty line of an empty
+// document. A blank line Enter left there goes; with none left, the line
+// goes back to the title Enter took it from. The line itself stays.
+func (e *Editor) backspaceEmpty(p *phantom) {
+	switch {
+	case p.at > 0:
+		_, n := utf8.DecodeLastRuneInString(e.src[:p.at])
+		e.begin(stepEdit)
+		e.replace(p.at-n, p.at, "")
+		np := *p
+		np.at -= n
+		e.phantom = &np
+		e.phantomStays = true
+		e.commit(np.at, np.at)
+	case !p.title && e.wantsTitle() && e.src == "":
+		np := *p
+		np.title = true
+		e.setPhantom(&np)
+	}
+}
+
 // backspace deletes backward: the selection, the grapheme or word before
 // the caret, or at the start of a block, the block's structure.
 func (e *Editor) backspace(word bool) {
@@ -367,6 +432,12 @@ func (e *Editor) backspace(word bool) {
 		return
 	}
 	if p := e.phantom; p != nil {
+		if p.bareEmpty() {
+			// The one empty line of an empty document stays: without it
+			// there is nowhere to write (see backspaceEmpty).
+			e.backspaceEmpty(p)
+			return
+		}
 		// An empty paragraph goes away: to the end of the leaf before it.
 		at := p.at
 		e.dropPhantom()
@@ -513,8 +584,12 @@ func (e *Editor) deleteForward(word bool) {
 		e.deleteSelection()
 		return
 	}
-	if e.phantom != nil {
-		at := e.phantom.at
+	if p := e.phantom; p != nil {
+		if p.bareEmpty() {
+			// The one empty line of an empty document stays.
+			return
+		}
+		at := p.at
 		e.dropPhantom()
 		e.setCaret(e.normalize(at, 1), false)
 		return
@@ -571,6 +646,13 @@ func (e *Editor) enter(shift bool) {
 		e.deleteSelection()
 	}
 	if p := e.phantom; p != nil {
+		if p.title {
+			// Enter on the empty title: no title, the line is the body's.
+			np := *p
+			np.title = false
+			e.setPhantom(&np)
+			return
+		}
 		// An empty paragraph in a container leaves it.
 		if len(p.conts) > 0 {
 			np := *p
