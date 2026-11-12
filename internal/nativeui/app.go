@@ -591,6 +591,14 @@ func (a *App) panelResizeHandle(c *ui.Context) {
 		a.panelDrag = 0
 		if a.panelNarrow {
 			a.panelNarrow = false
+			// 折叠时把宽度对齐到动画真正的起点（panelW 现在那个值），
+			// 而不是拖动钳住后留下的最小值。透明度和 canvasLeft 都按
+			// panelW / panelWidth 算：分母停在 224、起点是 368，比值就是
+			// 1.64 被钳成 1，面板一路掉透明度、卡片跟着错比例位移。
+			// 真正的宽度在 panelFoldedWidth 里，重新打开时还回去。
+			if a.panelW > panelMinWidth {
+				a.panelWidth = a.panelW
+			}
 			a.collapsePanel()
 			return
 		}

@@ -195,3 +195,64 @@ func TestTopBarControlsShareOneLine(t *testing.T) {
 		}
 	}
 }
+
+// TestFoldAnimatesFromTheWidthItHad 折叠动画的透明度和卡片位移都按
+// panelW / panelWidth 算，所以折叠时 panelWidth 必须是动画的起点，而不是
+// 拖动钳住后留下的脏值。
+//
+// 拖动把宽度实时钳进 [224, 440]，手指越过阈值时 panelWidth 已经是 224，
+// 而 panelW 还停在拖动前的宽度（比如 368）。折叠动画从 368 滑向 0，除以
+// 224 得到 1.64 → 钳成 1 → 0.69 → …：面板一路掉透明度、卡片跟着错比例
+// 位移，不是干净地滑走。
+func TestFoldAnimatesFromTheWidthItHad(t *testing.T) {
+	a := New()
+	tt := ui.NewTester(a.View, 1200, 800)
+	tt.Frame()
+	tt.Frame()
+
+	// 拖宽，让 panelW 停在一个认得出的宽度上。
+	r, ok := tt.Find("调整面板宽度")
+	if !ok {
+		t.Fatal("no handle")
+	}
+	x, y := r.X+r.W/2, r.Y+40
+	tt.Press(x, y)
+	tt.Frame()
+	tt.Move(x+100, y)
+	tt.Frame()
+	tt.Release(x+100, y)
+	tt.Frame()
+	tt.Advance(time.Second)
+	tt.Frame()
+	from := a.panelW
+	if from <= panelDefaultWidth {
+		t.Fatalf("the drag did not widen the panel: %.0f", from)
+	}
+
+	// 一路拖过阈值，松手折叠。折叠的那一刻，panelWidth 必须已经跟着
+	// panelW 走——否则动画的分母是钳住的 224，起点是 368。
+	r, ok = tt.Find("调整面板宽度")
+	if !ok {
+		t.Fatal("handle gone after the widen")
+	}
+	x, y = r.X+r.W/2, r.Y+40
+	tt.Press(x, y)
+	tt.Frame()
+	tt.Move(x-300, y)
+	tt.Frame()
+	tt.Release(x-300, y)
+	tt.Frame()
+
+	if a.panelWidth < from-0.5 {
+		t.Fatalf("the fold starts from panelWidth %.0f while the panel is drawn %.0f wide; the opacity and the card's slide both divide by the wrong one", a.panelWidth, from)
+	}
+	// 动画途中：分母必须仍是起点，透明度才不会中途跳变。
+	tt.Advance(30 * time.Millisecond)
+	tt.Frame()
+	if a.panelW > 0 && a.panelW < a.panelWidth {
+		got := a.panelW / a.panelWidth
+		if got > 1 {
+			t.Fatalf("mid-fold openness is %v, above 1: panelW %.0f over panelWidth %.0f", got, a.panelW, a.panelWidth)
+		}
+	}
+}
