@@ -138,5 +138,20 @@ jobs:
           # 只匹配到这三个目录本身。action 再把 glob 结果用 isFile() 过滤
           # 一遍，目录全部落空，release 于是发成一个空壳——v0.4.0 就是
           # 这样发出去的。`**/*` 才一层层穿到文件。
-          files: release-assets/**/*
+          #
+          # 但只写 `**/*` 会把三个平台 artifact 里全部 26 个文件都挂上去：
+          # .app bundle 的内部文件、图标、PKGBUILD、install.sh。而且三个
+          # 平台各自都带一份 icon.png、icon.icns、update-public-key.txt，
+          # action 默认 overwrite_files: true，同名文件互相覆盖，发布
+          # 直接以 Not Found 失败。只列安装包：干净，且同名冲突根本不
+          # 发生——安装包的名字每个平台都不一样。
+          files: |
+            release-assets/**/*.dmg
+            release-assets/**/*.exe
+            release-assets/**/*.msi
+            release-assets/**/*.deb
+            release-assets/**/*.rpm
+            release-assets/**/*.tar.gz
+            release-assets/**/*.zip
+            release-assets/**/*.pkg
           fail_on_unmatched_files: true
