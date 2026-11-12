@@ -132,4 +132,11 @@ jobs:
           name: Muse ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
           generate_release_notes: true
           make_latest: true
-          files: release-assets/*
+          # `*` 不跨目录分隔符：merge-multiple 把三个平台下到同一个
+          # release-assets/ 之后，这里每个平台各占一个子目录
+          # （darwin-arm64/、windows-amd64/、linux-amd64/），`*`
+          # 只匹配到这三个目录本身。action 再把 glob 结果用 isFile() 过滤
+          # 一遍，目录全部落空，release 于是发成一个空壳——v0.4.0 就是
+          # 这样发出去的。`**/*` 才一层层穿到文件。
+          files: release-assets/**/*
+          fail_on_unmatched_files: true
