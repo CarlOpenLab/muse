@@ -136,6 +136,10 @@ type App struct {
 	panelW float32
 	// panelPrevTarget 是上一帧的宽度目标，用来识别「开着切换模块」。
 	panelPrevTarget float32
+	// pendingOpen 是窗口还没开起来时系统交来的文件路径：双击 .md 启动 Muse
+	// 就是这样，文件比窗口先到。窗口一开就把它打开，不然用户看到的是一个
+	// 空文档，而不是他双击的那个文件。
+	pendingOpen string
 	// railW is the animated width of the icon column, which folds away with
 	// the panel: a fold is a way to get the sidebar out of the way, and the
 	// rail is that sidebar's other half. It slides on the same clock as the
@@ -1262,6 +1266,23 @@ func (a *App) openPathNow(path string) {
 	}
 	a.applyOpen(path, string(data))
 	a.invalidate()
+}
+
+// openFileFromSystem opens a path the system handed over: a .md double-clicked
+// in the Finder, dropped on the Dock icon, or passed on the command line. It is
+// requestOpen — the same confirm-if-dirty, same unsupported-type notice — because
+// a file from the system is a file the user asked to open, exactly as one picked
+// in the panel is.
+//
+// mygo delivers it on the main thread, and it can arrive before the window
+// exists: the file then waits until the window opens, so launching Muse by
+// double-clicking shows that file rather than an empty document.
+func (a *App) openFileFromSystem(path string) {
+	if a.win == nil || a.win.IsDestroyed() {
+		a.pendingOpen = path
+		return
+	}
+	a.requestOpen(path)
 }
 
 // requestOpen opens a path from the UI. A clean document opens at once; an

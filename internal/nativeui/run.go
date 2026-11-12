@@ -55,6 +55,11 @@ func Run() {
 		}
 		app.openWindow()
 	})
+	// 系统交来的文件：在 Finder 里双击 .md、拖到 Dock 图标上、或者命令行
+	// 带上一个路径。mygo.json 的 fileAssociations 让 Muse 出现在系统的
+	// 「打开方式」里，这一行才让那些文件真的进到编辑器——声明了没人接，
+	// 双击就只是把 Muse 带到前台，文档还是老的。
+	mygo.App.OnOpenFile(app.openFileFromSystem)
 	mygo.App.OnActivate(func(hasVisibleWindows bool) {
 		if !hasVisibleWindows {
 			app.openWindow()
@@ -102,6 +107,13 @@ func (a *App) openWindow() {
 	})
 	a.installMenu()
 	a.updateTitle()
+	// 双击 .md 启动时，文件路径比窗口先到（见 pendingOpen）：窗口刚建好，
+	// 现在把它打开，用户看到的就是他双击的那个文件。
+	if a.pendingOpen != "" {
+		p := a.pendingOpen
+		a.pendingOpen = ""
+		a.requestOpen(p)
+	}
 	// The window buttons' drawing changes with the maximize state, and the
 	// state can change from outside the view (a double click on the header,
 	// the system's snap). Redraw when it does.

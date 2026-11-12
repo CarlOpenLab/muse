@@ -7,6 +7,14 @@
   "icon": "resources/icon.png",
   "out": "dist",
   "resourcesExclude": ["logo/**"],
+  "fileAssociations": [
+    {
+      "ext": ["md", "markdown"],
+      "name": "Markdown Document",
+      "mimeType": "text/markdown",
+      "role": "Editor"
+    }
+  ],
   "linux": {
     "webview": false
   },
