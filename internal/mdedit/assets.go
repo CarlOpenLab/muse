@@ -3,7 +3,7 @@ package mdedit
 import (
 	"strings"
 
-	"muse/mdoc"
+	"muse/internal/mdoc"
 )
 
 // mathScale turns the pixels of a typeset formula into DIPs: mdoc

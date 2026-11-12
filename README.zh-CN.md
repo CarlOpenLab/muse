@@ -4,7 +4,7 @@
 
 [![Release](https://img.shields.io/github/v/release/CarlOpenLab/muse?color=24292f)](https://github.com/CarlOpenLab/muse/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-24292f)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.27+-24292f)](native/go.mod)
+[![Go](https://img.shields.io/badge/Go-1.27+-24292f)](go.mod)
 
 [English](README.md) | 简体中文
 
@@ -14,7 +14,7 @@
 
 ## 编辑器
 
-编辑器（`native/mdedit`）是一整面可以直接书写的文档，行为对齐 Typora：
+编辑器（`internal/mdedit`）是一整面可以直接书写的文档，行为对齐 Typora：
 
 - **所见即所得的整篇编辑** — 文档就是渲染结果：光标在段落、标题、列表、引用、表格、代码与公式之间连续移动，可以跨块选择、复制、删除。
 - **语法只在光标处显露** — `#`、列表符号、`>`、代码围栏、表格竖线这些块级标记永远隐藏；`**粗体**`、`` `代码` ``、`[链接](url)`、`$公式$`、`![图片](src)` 的标记只在光标进入时以浅灰色出现，离开即渲染。
@@ -43,24 +43,45 @@ AI 面板是一位真正的写作 Agent，不是聊天框：
 从 [Releases](https://github.com/CarlOpenLab/muse/releases/latest) 下载（Windows / macOS / Linux），或源码构建：
 
 ```bash
-go run -C native .            # 运行
-go build -C native -o Muse .  # 构建二进制
-go test -C native ./...       # 测试
+go tool mygo dev            # 运行，改动即热重载
+go tool mygo build          # 打包 .app / .exe / Linux 构建与 DMG
+go test ./...               # 测试
 ```
 
+`mygo dev` 会自己选用钥匙串里第一个 `Apple Development` 身份给开发版签名，
+macOS 的权限授权因此能跨重建沿用。也可用
+`go tool mygo dev -sign <身份>` 指定。
+
 需要 Go 1.27.3+。不需要 Node、pnpm、vite，也没有任何前端构建。
+
+## AI 配置
+
+设置 →「模型」填写 Base URL、API Key、模型和系统提示词，保存到
+`~/Library/Application Support/Muse/ai.json`（0600）。未配置时 AI 面板会显示
+「设置模型」入口。任意 OpenAI 兼容的流式 `/chat/completions` 端点都可以。
+
+内置两种服务形式：
+
+- **Magpie 本地网关** — 接口地址自动填 `http://127.0.0.1:3425/v1`（magpie
+  桌面应用的网关默认地址），API Key 可留空；点「获取模型」会拉取 magpie 的
+  模型名。
+- **自定义** — 任意 OpenAI 兼容端点（OpenAI、DeepSeek 或自建网关），按需填写 Key。
 
 ## 项目结构
 
 ```
-native/
+.
 ├── main.go            原生入口
-├── nativeui/          窗口、图标栏、上下文面板、Agent
-├── mdedit/            所见即所得 Markdown 编辑器：解析、排版、绘制、光标、输入法、撤销
-├── mdoc/              Markdown 模型与渲染器（AI 对话）、公式排版、Mermaid 图
-├── doc/               文档类型注册
-├── services/          原生 AI HTTP 客户端
-└── cmd/               辅助命令
+├── internal/
+│   ├── nativeui/      窗口、图标栏、上下文面板、Agent
+│   ├── mdedit/        所见即所得 Markdown 编辑器：解析、排版、绘制、光标、输入法、撤销
+│   ├── mdoc/          Markdown 模型与渲染器（AI 对话）、公式排版、Mermaid 图
+│   ├── doc/           文档类型注册
+│   ├── services/      原生 AI HTTP 客户端
+│   └── cmd/           辅助命令
+├── resources/         应用图标与更新签名公钥
+├── website/           官网
+└── docs/              设计记录与 RFC
 ```
 
 ## 已知限制
@@ -68,6 +89,7 @@ native/
 - 公式由 go-latex 排版；较冷门的 TeX 命令可能回退为源码。
 - Mermaid 覆盖流程图、时序图、状态图、饼图、类图与甘特图子集；高级特性可能渲染为代码。
 - 对话记录最多保留最近 100 条。
+- 更新、导出等旧 Electron 时代的功能尚未在原生 UI 中重新实现。
 
 ## 许可
 

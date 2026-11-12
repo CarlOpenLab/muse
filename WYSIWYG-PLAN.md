@@ -1,9 +1,9 @@
-# Muse WYSIWYG Editor (`native/mdedit`)
+# Muse WYSIWYG Editor (`internal/mdedit`)
 
 Muse edits Markdown as Typora does: the document is one surface the user
 writes on, rendered as it reads, with no WebView and no separate source
 mode. This note records how the editor is built; the code and its tests
-(`go test ./mdedit`) are the reference.
+(`go test ./internal/mdedit`) are the reference.
 
 ## The source is the only state
 

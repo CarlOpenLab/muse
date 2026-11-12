@@ -14,7 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"muse/mdoc"
+	"muse/internal/mdoc"
 )
 
 func main() {

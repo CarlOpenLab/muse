@@ -13,7 +13,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"muse/services"
+	"muse/internal/services"
 )
 
 // aiTools 是 Agent 的能力开关：一组工具的可用性，按组开关。

@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown/parser"
 
-	"muse/mdoc"
+	"muse/internal/mdoc"
 )
 
 // Options configure an editor. The app sets them before building the

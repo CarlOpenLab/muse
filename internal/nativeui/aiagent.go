@@ -24,8 +24,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"muse/mdoc"
-	"muse/services"
+	"muse/internal/mdoc"
+	"muse/internal/services"
 )
 
 // partKind 是助手回复里一段内容的类型。

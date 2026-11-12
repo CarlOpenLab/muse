@@ -22,9 +22,9 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
-	"muse/mdedit"
-	"muse/mdoc"
-	"muse/services"
+	"muse/internal/mdedit"
+	"muse/internal/mdoc"
+	"muse/internal/services"
 )
 
 const (

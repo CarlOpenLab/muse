@@ -84,7 +84,7 @@ RFC-001 §4.2 要求先做 M0(Vditor)与 M0.5(Milkdown)两个 PoC,再决定方�
 
 ## 6. macOS 宿主侧待验证(下一步)
 
-> **补充(2026-10-23)**:本机(无 GPU 的 Linux 沙箱)实测——`go build -C native .`
+> **补充(2026-10-23)**:本机(无 GPU 的 Linux 沙箱)实测——`go build .`
 > 在 **Linux 上直接成功**(23.8MB 单一二进制),应用完整运行:菜单、文件栏、图标栏、
 > 编辑卡、设置对话框、明暗主题切换、原地编辑全部正常;无 GPU 时 MyGo 自动降级 CPU
 > 绘制;`go vet ./...` 与全量 `go test ./...`(含 nativeui headless 测试)全部通过。

@@ -4,13 +4,11 @@ Untitled*.md
 未命名*.md
 
 # MyGo 构建产物
-native/Muse
-native/Muse.exe
-native/build/
-native/.mygo/
+.mygo/
+Muse
+Muse.exe
+Muse.exe~
 
 # 构建输出
 out/
 dist/
-native/muse
-native/Muse.exe~

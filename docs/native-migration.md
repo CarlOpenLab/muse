@@ -15,7 +15,7 @@
 
 必须自研或替代：
 
-- **块级 Markdown 渲染**：`ui` 没有任何 markdown 支持，需要自建块模型 + 渲染（本仓库 `native/mdoc` 已完成第一版）。
+- **块级 Markdown 渲染**：`ui` 没有任何 markdown 支持，需要自建块模型 + 渲染（本仓库 `internal/mdoc` 已完成第一版）。
 - **所见即所得编辑**：`ui.RichText` 只有行内样式、没有光标/块编辑；块级 WYSIWYG 要从零做。
 - **diff 视图**：`ui` 没有 diff 组件，需要自算行/词级 diff 再用带底色的 `RichText` 画。
 - 公式（KaTeX）、图表（mermaid）、粘贴图片：无等价物。
@@ -26,7 +26,7 @@
 
 mygo 的 `mygo.Use(...)` 是编译期插件（Go service + npm 包），**不是热插拔**。Muse 自己的插件形态定为「编译期注册 + 运行期可发现」，四个贡献点：
 
-1. **DocType**：扩展名 → 解析器 + 原生视图（`native/doc`）。已落地：`markdown`、`text`（纯文本，保留换行），其余非二进制扩展名兜底为纯文本。
+1. **DocType**：扩展名 → 解析器 + 原生视图（`internal/doc`）。已落地：`markdown`、`text`（纯文本，保留换行），其余非二进制扩展名兜底为纯文本。
 2. **AI 工具**：给模型的工具由插件注册（读写选区、按标题定位、按行区间读等）。
 3. **Renderer**：一种块类型的自定义画法（代码块、表格、图片、公式）。
 4. **Panel**：侧栏/底部面板。
@@ -47,11 +47,11 @@ mygo 的 `mygo.Use(...)` 是编译期插件（Go service + npm 包），**不是
 1. 系统提示词：角色 + 编辑准则 + 工具选择规则 + 「无必要不改动」。
 2. 工具集：`get_outline` / `read_section` / `read_lines` / `replace_section` / `replace_lines` / `insert_after`，全部按结构定位。
 3. 提议 diff：工具产出**提议**（目标区间 + 新内容），Muse 本地算 diff、渲染确认条，用户逐条或整体应用；短改写可直接落笔，结构性改动一律走 diff。
-4. 把 agent 循环从 `app/src/chat/*` 移到 Go（`native/services`），前端删除后 AI 才真正不依赖 webview。
+4. 把 agent 循环从 `app/src/chat/*` 移到 Go（`internal/services`），前端删除后 AI 才真正不依赖 webview。
 
 ## 4. 迁移批次
 
-- **B0（已完成）**：`native/mdoc` 文档模型 + 原生渲染 + 纯文本；`native/doc` DocType 注册表。统一 `go test ./...` 通过。
+- **B0（已完成）**：`internal/mdoc` 文档模型 + 原生渲染 + 纯文本；`internal/doc` DocType 注册表。统一 `go test ./...` 通过。
 - **B1**：原生应用外壳——窗口、文件树、标签、命令面板、设置，不加载 webview；DocType 驱动打开/保存。
 - **B2**：块级编辑（光标、插入/删除、撤销）；富文本从只读走到可编辑。
 - **B3**：AI 原生化——agent 循环迁入 Go，新工具集 + 提议 diff 渲染。

@@ -1,0 +1,16 @@
+{
+  "name": "Muse",
+  "slug": "muse",
+  "identifier": "com.muse.app",
+  "version": "0.3.0",
+  "main": ".",
+  "icon": "resources/icon.png",
+  "out": "dist",
+  "resourcesExclude": ["logo/**"],
+  "linux": {
+    "webview": false
+  },
+  "macos": {
+    "icon": "resources/icon.icns"
+  }
+}

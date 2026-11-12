@@ -1,6 +1,6 @@
 # RFC-001：编辑器内核选型——原生外壳 + Web Canvas，还是继续全原生
 
-- **状态**：**已废弃（2026-10-30）**——正文编辑器改回全原生：`native/mdedit` 在 MyGo v0.7.3 的位置化 CommonMark 解析器与行内对象排版之上实现 Typora 式所见即所得，WebView 画布（`editor-web/`、`webeditor.go`、`nativeui/web/`）已整体移除。下文为历史记录。原状态：已实施 M1（2026-10-25）——目标方案落地：MyGo 原生 `ui.WebView` 元素承载 Vue 3 + Milkdown 画布（`native/nativeui/webeditor.go` + `editor-web/src/app/`），桥协议经 mygo IPC（`Muse.*` 绑定方法 + `muse:bridge` 事件）运行，WebKitGTK 缺失或 `MUSE_NATIVE_EDITOR=1` 时自动回退全原生编辑器。早期 Proposed/M0/M0.5 PoC 的结论与过程见下文与 [rfc-001-m0-poc-report.md](rfc-001-m0-poc-report.md)。
+- **状态**：**已废弃（2026-10-30）**——正文编辑器改回全原生：`internal/mdedit` 在 MyGo v0.7.3 的位置化 CommonMark 解析器与行内对象排版之上实现 Typora 式所见即所得，WebView 画布（`editor-web/`、`webeditor.go`、`nativeui/web/`）已整体移除。下文为历史记录。原状态：已实施 M1（2026-10-25）——目标方案落地：MyGo 原生 `ui.WebView` 元素承载 Vue 3 + Milkdown 画布（`internal/nativeui/webeditor.go` + `editor-web/src/app/`），桥协议经 mygo IPC（`Muse.*` 绑定方法 + `muse:bridge` 事件）运行，WebKitGTK 缺失或 `MUSE_NATIVE_EDITOR=1` 时自动回退全原生编辑器。早期 Proposed/M0/M0.5 PoC 的结论与过程见下文与 [rfc-001-m0-poc-report.md](rfc-001-m0-poc-report.md)。
 - **日期**：2026-10-23
 - **相关**：[native-migration.md](native-migration.md)、[WYSIWYG-PLAN.md](../WYSIWYG-PLAN.md)
 - **影响范围**：正文编辑器内核、构建/发布链路、测试体系、AI 选区桥
@@ -18,7 +18,7 @@ Go / MyGo 生态没有生产级的 Markdown WYSIWYG 框架。成熟方案几乎�
 
 1. **目标方案**：保留 Go/MyGo 原生外壳，正文画布改为 **WKWebView + Milkdown 7**；Go 继续负责文件、工作区、AI、设置、菜单和保存。
 2. **先做 PoC**：用 1–2 天验证 Vditor 或 Milkdown 在 WKWebView 中的加载、编辑、保存、IME 和主题；PoC 通过后再投入正式迁移。
-3. **保留回退**：在功能对齐前保留当前原生编辑器，通过 feature flag 切换；不直接删除 `native/nativeui/wysiwyg.go` 一系代码。
+3. **保留回退**：在功能对齐前保留当前原生编辑器，通过 feature flag 切换；不直接删除 `internal/nativeui/wysiwyg.go` 一系代码。
 
 如果“完全不用 WebView”仍是不可放松的产品约束，则本 RFC 的目标方案不成立，应改为 Qt `QTextDocument` 或 macOS TextKit 2 的纯原生路线；两者成本都显著更高。
 
@@ -29,13 +29,13 @@ Go / MyGo 生态没有生产级的 Markdown WYSIWYG 框架。成熟方案几乎�
 ### 1.1 已经发生了什么
 
 - 仓库曾有一套 Vue 3 + Milkdown 7 的前端编辑器，位于 `app/`；`git show HEAD:app/package.json` 可见 `@milkdown/core@7.22`、`preset-commonmark`、`preset-gfm`、`plugin-block`、`plugin-history`、`katex`、`shiki` 等依赖。
-- 为满足“完全原生、去 WebView”的目标，`app/` 在工作区被删除，改为 `native/` 下的 MyGo 原生实现。
+- 为满足“完全原生、去 WebView”的目标，`app/` 在工作区被删除，改为 Go 原生实现。
 - 原生实现已经完成：
-  - `native/nativeui/wysiwyg.go`：段落/标题/列表/引用的富文本编辑、标记隐藏、光标/选区、IME 组合预览、撤销、粘贴；
-  - `native/nativeui/image_edit.go`：图片块的 alt/src/title 字段编辑；
-  - `native/nativeui/code_edit.go`：代码块/公式块的围栏剥离与恢复；
-  - `native/mdoc/inline_runs.go`：Markdown 行内标记到可见文本/样式的映射；
-  - `native/mdoc`：块级 Markdown 解析、渲染、公式/图表等。
+  - `internal/nativeui/wysiwyg.go`：段落/标题/列表/引用的富文本编辑、标记隐藏、光标/选区、IME 组合预览、撤销、粘贴；
+  - `internal/nativeui/image_edit.go`：图片块的 alt/src/title 字段编辑；
+  - `internal/nativeui/code_edit.go`：代码块/公式块的围栏剥离与恢复；
+  - `internal/mdoc/inline_runs.go`：Markdown 行内标记到可见文本/样式的映射；
+  - `internal/mdoc`：块级 Markdown 解析、渲染、公式/图表等。
 - 现有测试：`go test ./...`、`go vet ./...` 通过；`ui.NewTester` 覆盖了大部分原生交互。
 
 ### 1.2 原生路线暴露的真实成本
@@ -88,7 +88,7 @@ Go / MyGo 生态没有生产级的 Markdown WYSIWYG 框架。成熟方案几乎�
 
 ### 方案 A：继续全原生 MyGo
 
-**做法**：在现有 `native/nativeui/wysiwyg.go` 上继续补行内公式图片、表格操作、图片缩放、链接弹层、长文本光标、IME 边界。
+**做法**：在现有 `internal/nativeui/wysiwyg.go` 上继续补行内公式图片、表格操作、图片缩放、链接弹层、长文本光标、IME 边界。
 
 **优点**
 
@@ -406,7 +406,7 @@ Web → Native：
 ### M4：清理（下一个版本）
 
 - 观察一个发布周期；
-- 无回退需求后，删除 `native/nativeui/wysiwyg.go` 等自研编辑内核；
+- 无回退需求后，删除 `internal/nativeui/wysiwyg.go` 等自研编辑内核；
 - 文档更新，移除“完全原生”表述（如果产品定位也调整）。
 
 ---
@@ -497,7 +497,7 @@ Web → Native：
 - [Qt QTextDocument](https://doc.qt.io/qt-6/qtextdocument.html)
 - [Apple TextKit 2](https://developer.apple.com/documentation/appkit/textkit)
 - [AppFlowy Editor](https://github.com/AppFlowy-IO/appflowy-editor)
-- 当前原生实现：[wysiwyg.go](../native/nativeui/wysiwyg.go)、[image_edit.go](../native/nativeui/image_edit.go)、[code_edit.go](../native/nativeui/code_edit.go)、[inline_runs.go](../native/mdoc/inline_runs.go)
+- 历史原生实现（已删除）：`wysiwyg.go`、`image_edit.go`、`code_edit.go`、`inline_runs.go`（原 `native/nativeui/` 与 `native/mdoc/` 下，仓库结构重构后不再存在）
 
 ---
 

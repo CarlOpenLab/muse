@@ -5,9 +5,9 @@
   "license": "MIT",
   "description": "Muse — a fully native MyGo Markdown editor",
   "scripts": {
-    "dev": "sh scripts/dev.sh",
-    "build": "sh scripts/build.sh",
-    "test": "go test -C native ./...",
-    "fmt": "gofmt -w native"
+    "dev": "go tool mygo dev",
+    "build": "go tool mygo build",
+    "test": "go test ./...",
+    "fmt": "gofmt -w ."
   }
 }

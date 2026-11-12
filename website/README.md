@@ -20,7 +20,7 @@ python3 -m http.server -d website 8765
 website/
 ├── index.html              单页结构：Hero（应用窗口） / 缪斯 Agent / 原生 / 图与公式 / 工作区 / 内核 / 下载
 └── assets/
-    ├── css/main.css        设计令牌逐字取自 native/nativeui/app.go 的 applyTheme() + 窗口 chrome + 双主题
+    ├── css/main.css        设计令牌逐字取自 internal/nativeui/app.go 的 applyTheme() + 窗口 chrome + 双主题
     ├── js/main.js          主题切换 · 滚动显现 · hero 原地编辑打字演示 · Agent 审批流状态机
     ├── fonts/              Space Grotesk / Instrument Serif / JetBrains Mono（可变字体）
     │                       + Noto Serif SC 22 字子集（标题衬线强调字，6KB）
@@ -32,11 +32,11 @@ website/
 - **「官网即应用」**：色板逐字取自产品源码（`applyTheme()`）——暗色窗口 `#1a1a1a` / 面板 `#232328` /
   表面 `#2a2a30`；官网强调色为单色（Linear 风）：暗色近白 `#f5f5f7`、亮色近黑 `#17171a`——黑白灰层次，不用彩色强调。导航栏的主题开关切换整站，与产品行为一致。
 - **主视觉是产品本身**：所有演示都是 DOM 复刻的应用窗口——56px 图标栏、文件树、编辑卡片、Agent 面板，
-  图标路径与 `native/nativeui/icons.go` 同源（Lucide）。
+  图标路径与 `internal/nativeui/icons.go` 同源（Lucide）。
 - **Agent 演示是真的**：进入视口自动播放一段真实交互脚本——用户提问、思考（可折叠）、读取文档、
   **工具审批卡暂停**。点「同意修改 / 总是允许 / 拒绝」走不同分支；把权限预设切到「完全访问」跳过审批，
   切到「只读」看 Agent 被拒后如何改道。
-- **双主线**：全原生（Go 外壳 + `native/mdedit` 画布）× Agent（13 个工具、审批、权限）；键盘快捷键以芯片形式并入原生区。
+- **双主线**：全原生（Go 外壳 + `internal/mdedit` 画布）× Agent（13 个工具、审批、权限）；键盘快捷键以芯片形式并入原生区。
 - **装饰做减法**：没有极光 WebGL、没有自定义光标、没有预加载器；动效只有滚动显现与演示本身。
 - **渐进增强**：`prefers-reduced-motion` 下关闭全部动效；无 JS 时内容完整可读；窄屏逐级收起面板。
 

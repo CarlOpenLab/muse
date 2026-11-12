@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"muse/mdedit"
+	"muse/internal/mdedit"
 )
 
 // Run opens the native Muse window and runs the app loop. It is called by the
@@ -84,7 +84,7 @@ func (a *App) openWindow() {
 		MinWidth:        720,
 		MinHeight:       480,
 		BackgroundColor: "light-dark(#f5f5f5, #1a1a1a)",
-		StateKey:        "muse-native",
+		StateKey:        "muse",
 		Content:         ui.View(a.View),
 		// 亚克力：窗口背景透明，桌面的模糊由系统的材料给出；视图只在
 		// 编辑卡片上画不透明的表面，轨道与面板后面透出材料来。不支持

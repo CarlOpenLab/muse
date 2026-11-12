@@ -4,7 +4,7 @@
 
 [![Release](https://img.shields.io/github/v/release/CarlOpenLab/muse?color=24292f)](https://github.com/CarlOpenLab/muse/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-24292f)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.27+-24292f)](native/go.mod)
+[![Go](https://img.shields.io/badge/Go-1.27+-24292f)](go.mod)
 
 English | [简体中文](README.zh-CN.md)
 
@@ -14,7 +14,7 @@ Built with [MyGo](https://mygo.egoist.dev/). The window, icon rail, file tree, o
 
 ## The editor
 
-The editor (`native/mdedit`) is one surface the whole document is written on, behaving as Typora does:
+The editor (`internal/mdedit`) is one surface the whole document is written on, behaving as Typora does:
 
 - **Seamless WYSIWYG** — the document *is* the rendering: the caret moves continuously through paragraphs, headings, lists, quotes, tables, code and math, and selections cross blocks to copy, cut and delete.
 - **Syntax only at the caret** — block syntax (`#`, list markers, `>`, fences, table pipes) never shows; the markers of `**bold**`, `` `code` ``, `[links](url)`, `$math$` and `![images](src)` appear in light gray only while the caret is in them, and render again when it leaves.
@@ -43,29 +43,47 @@ Privacy: agent tools are sandboxed to the workspace root; API keys and chat hist
 Grab a build from [Releases](https://github.com/CarlOpenLab/muse/releases/latest) (Windows / macOS / Linux), or from source:
 
 ```bash
-sh scripts/dev.sh             # run (signed, so macOS keeps permission grants)
-sh scripts/build.sh           # build a binary, signed with the same identity
-go test -C native ./...       # tests
+go tool mygo dev            # run, with live reload
+go tool mygo build          # package .app / .exe / Linux builds and the DMG
+go test ./...               # tests
 ```
 
-The scripts sign with the first `Apple Development` identity in your keychain
-(override with `MACOS_SIGNING_IDENTITY`), so macOS permission grants survive
-rebuilds. On Windows, use `go run -C native .` / `go build -C native -o Muse .`
-directly.
+`mygo dev` signs the development app with the first `Apple Development`
+identity in your keychain, so macOS permission grants survive rebuilds.
+Override with `go tool mygo dev -sign <identity>`.
 
 Requires Go 1.27.3+. No Node, no pnpm, no vite — there is no frontend build at all.
+
+## AI configuration
+
+Settings → "Model" takes a Base URL, API key, model and system prompt, saved to
+`~/Library/Application Support/Muse/ai.json` (mode 0600). Until one is set the
+AI panel shows an entry to configure it. Any OpenAI-compatible streaming
+`/chat/completions` endpoint works.
+
+Two kinds of service are built in:
+
+- **Magpie local gateway** — the Base URL is prefilled with
+  `http://127.0.0.1:3425/v1` (magpie's desktop gateway default) and the API key
+  may stay empty; "Fetch models" lists magpie's model names.
+- **Custom** — any OpenAI-compatible endpoint (OpenAI, DeepSeek, your own
+  gateway), with a key as it needs.
 
 ## Project layout
 
 ```
-native/
+.
 ├── main.go            native entry point
-├── nativeui/          window, icon rail, context panel, agent
-├── mdedit/            the WYSIWYG Markdown editor: parse, layout, paint, caret, IME, undo
-├── mdoc/              Markdown model and renderer (agent chat), math typesetting, Mermaid
-├── doc/               document type registry
-├── services/          native AI HTTP client
-└── cmd/               auxiliary commands
+├── internal/
+│   ├── nativeui/      window, icon rail, context panel, agent
+│   ├── mdedit/        the WYSIWYG Markdown editor: parse, layout, paint, caret, IME, undo
+│   ├── mdoc/          Markdown model and renderer (agent chat), math typesetting, Mermaid
+│   ├── doc/           document type registry
+│   ├── services/      native AI HTTP client
+│   └── cmd/           auxiliary commands
+├── resources/         app icon and the update signing public key
+├── website/           the landing page
+└── docs/              design notes and RFCs
 ```
 
 ## Known limits
@@ -73,6 +91,7 @@ native/
 - Math is typeset with go-latex; rarer TeX commands may fall back to source.
 - Mermaid covers flowcharts, sequence, state, pie, a class-diagram subset and a Gantt subset; advanced features may render as code.
 - Chat history is capped at the last 100 messages.
+- Updates, export and the other Electron-era features are not implemented in the native UI yet.
 
 ## License
 

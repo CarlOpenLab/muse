@@ -28,17 +28,14 @@ jobs:
         include:
           - os: macos-latest
             artifact: macos
-            output: Muse
             goos: darwin
             goarch: arm64
           - os: windows-latest
             artifact: windows
-            output: Muse.exe
             goos: windows
             goarch: amd64
           - os: ubuntu-latest
             artifact: linux
-            output: Muse-linux
             goos: linux
             goarch: amd64
 
@@ -49,35 +46,24 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: native/go.mod
-          cache-dependency-path: native/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Format check
-        working-directory: native
         shell: bash
         run: test -z "$(gofmt -l .)"
 
       - name: Vet
-        working-directory: native
         run: go vet ./...
 
       - name: Test
-        working-directory: native
         run: go test ./...
-
-      - name: Build native binary
-        shell: bash
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          mkdir -p out
-          go build -C native -o "../out/${{ matrix.output }}" .
 
       # TCC 授权（文件与文件夹、屏幕录制、辅助功能）绑定在 App 的代码签名上。
       # ad-hoc 签名每次发版 cdhash 都会变，用户更新后旧授权匹配不上，只能重新
       # 授权；用同一张 Apple Development 证书签名后，designated requirement
-      # 跨版本不变，授权就能一直沿用。
+      # 跨版本不变，授权就能一直沿用。mygo build 自己做 .app bundle、DMG 与
+      # Windows/Linux 安装包，这一段只负责把证书导进 CI 的钥匙串。
       - name: Import the macOS signing certificate
         if: matrix.os == 'macos-latest'
         env:
@@ -102,31 +88,29 @@ jobs:
           test -n "$identity" || { echo "证书中没有 Apple Development 身份"; exit 1; }
           echo "MACOS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
-      - name: Build macOS DMG
-        if: matrix.os == 'macos-latest'
+      - name: Build and package
         shell: bash
         env:
-          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          MACOS_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && env.MACOS_SIGNING_IDENTITY || '' }}
         run: |
-          brew install create-dmg || true
-          chmod +x scripts/build-macos-app.sh
-          scripts/build-macos-app.sh "out/${{ matrix.output }}" "resources/icon.icns" "${RELEASE_TAG#v}"
+          args=(-platform "${{ matrix.goos }}/${{ matrix.goarch }}" -skip-notarize)
+          # Windows 安装器需要 NSIS（makensis），runner 上默认没有：
+          # 出 exe 与资源，安装器留空。
+          if [ "${{ matrix.goos }}" = windows ]; then
+            args+=(-skip-installer)
+          fi
+          if [ "${{ matrix.os }}" = macos-latest ] && [ -n "${MACOS_SIGNING_IDENTITY:-}" ]; then
+            args+=(-sign "$MACOS_SIGNING_IDENTITY")
+          fi
+          go tool mygo build "${args[@]}"
 
-      - name: Upload binary
-        if: matrix.os != 'macos-latest'
+      - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}-release
-          path: out/${{ matrix.output }}
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload DMG
-        if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v7
-        with:
-          name: macos-release
-          path: dist/Muse-*-macOS.dmg
+          path: dist/**
           if-no-files-found: error
           retention-days: 7
 

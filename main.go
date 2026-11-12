@@ -3,7 +3,7 @@
 // build in this binary.
 package main
 
-import "muse/nativeui"
+import "muse/internal/nativeui"
 
 func main() {
 	nativeui.Run()

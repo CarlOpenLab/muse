@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/egoist/mygo/ui/markdown/parser"
 
-	"muse/mdoc"
+	"muse/internal/mdoc"
 )
 
 // look is how the document looks, resolved from the window's theme and the

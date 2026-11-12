@@ -16,7 +16,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"muse/mdoc"
+	"muse/internal/mdoc"
 )
 
 // Type is one kind of openable document.
