@@ -1,6 +1,9 @@
 package nativeui
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 // TestAppBundleFromExecutable 认出正在运行的 Muse 属于哪个 .app。设置里那个
 // 「设为默认」按钮只能把一个真实的应用包交给 macOS；`go run` 出来的裸二进制
@@ -39,8 +42,9 @@ func TestAppBundleFromExecutable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := appBundleFromExecutable(tt.exe); got != tt.want {
-				t.Fatalf("appBundleFromExecutable(%q) = %q, want %q", tt.exe, got, tt.want)
+			want := filepath.FromSlash(tt.want)
+			if got := appBundleFromExecutable(tt.exe); got != want {
+				t.Fatalf("appBundleFromExecutable(%q) = %q, want %q", tt.exe, got, want)
 			}
 		})
 	}
