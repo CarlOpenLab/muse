@@ -189,6 +189,10 @@ type App struct {
 	settingsDrag ui.Point
 	fontSize     float64
 	lineHeight   float64
+	// revealMarkdownInFinder 是 revealCurrentMarkdown 探出去的那道口子：默认
+	// 是 nil，也就是真的去 Finder 里显示。测试替掉它，才能断言「揭示的是哪个
+	// 文件」而不真的弹一个 Finder 窗口。
+	revealMarkdownInFinder func(path string)
 
 	// appearance: the editor card's translucency, the material behind it and
 	// where a drag at its left edge left it. 0 与空串都是未设置，见
@@ -1814,6 +1818,31 @@ func (a *App) appearanceSettings(c *ui.Context) {
 	})
 	ui.Text(c, "native 渲染与编辑器共用同一套颜色；切换后立即生效。").
 		FontSize(11.5).TextColor(t.TextMuted).Padding(0, 4)
+	settingsGroup(c, "Markdown", func() {
+		a.settingsDivider(c, false)
+		settingsRow(c, "Markdown 默认打开方式", markdownDefaultNote(a.path != ""), func() {
+			if a.path == "" {
+				// 没有文档就没有文件可揭示，这一行点不动：说清楚比弹一个
+				// 空的 Finder 窗口好。
+				ui.Text(c, "先保存文档").FontSize(12).TextColor(t.TextMuted)
+				return
+			}
+			if ui.Button(c, "在 Finder 中显示").Clicked() {
+				a.revealCurrentMarkdown()
+			}
+		})
+	})
+}
+
+// markdownDefaultNote explains where macOS actually decides which app opens a
+// .md, because the honest answer is not "here". There is no default-apps
+// settings page, the API that sets one is dead on macOS 26, and the place that
+// works — the file's Get Info window — is only about a file that exists.
+func markdownDefaultNote(hasFile bool) string {
+	if hasFile {
+		return "macOS 没有「默认应用」设置页，Muse 也无法替你改：选中这个文件，按 ⌘I，在「打开方式」里选 Muse 并点「全部更改」。"
+	}
+	return "macOS 没有「默认应用」设置页，Muse 也无法替你改：先保存文档，再到 Finder 里选中它，按 ⌘I，在「打开方式」里选 Muse 并点「全部更改」。"
 }
 
 func (a *App) typographySettings(c *ui.Context) {
@@ -1841,6 +1870,25 @@ func (a *App) settingsDivider(c *ui.Context, between bool) {
 
 // ---------------------------------------------------------------------------
 // The document
+
+// revealCurrentMarkdown shows the document being edited in the Finder, which
+// is where macOS changes which app opens a .md: the system has no settings
+// page for default apps (nothing under /System/Library/PreferencePanes owns
+// it), and the Launch Services call that sets one is dead on macOS 26 — it
+// returns success and changes nothing. What is left that actually works is
+// the file's Get Info window, which needs a file to be about. A document
+// that has never been saved has no path, so there is nothing to reveal and
+// nothing happens.
+func (a *App) revealCurrentMarkdown() {
+	if a.path == "" {
+		return
+	}
+	if a.revealMarkdownInFinder != nil {
+		a.revealMarkdownInFinder(a.path)
+		return
+	}
+	mygo.Shell.ShowItemInFolder(a.path)
+}
 
 // docDir is the folder images and links of the document resolve in.
 func (a *App) docDir() string {
