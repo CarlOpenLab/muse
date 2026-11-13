@@ -1,8 +1,8 @@
 // Package nativeui is Muse's fully native shell: MyGo draws the window, the
-// icon rail, the context panel and the Markdown editor, with no webview and
+// context panel and the Markdown editor, with no webview and
 // no frontend build.
 //
-// The layout is a 56px icon rail, one shared context panel (files / outline
+// The layout is a horizontal module bar, one shared context panel (files / outline
 // / search / AI) and the editor card, which shows the document as Typora
 // does: one surface the user writes on, rendered as it reads (package
 // mdedit).
@@ -134,8 +134,10 @@ type App struct {
 	// The canvas reads it instead of panelOpen so it moves with the slide
 	// instead of jumping at the ends.
 	panelW float32
-	// panelPrevTarget 是上一帧的宽度目标，用来识别「开着切换模块」。
-	panelPrevTarget float32
+	// sidebarProgress is the one animation clock shared by the rail and panel.
+	// Keeping one clock prevents their independent layout animations from
+	// briefly disagreeing while the editor card is moving beside them.
+	sidebarProgress float32
 	// pendingOpen 是窗口还没开起来时系统交来的文件路径：双击 .md 启动 Muse
 	// 就是这样，文件比窗口先到。窗口一开就把它打开，不然用户看到的是一个
 	// 空文档，而不是他双击的那个文件。
@@ -193,6 +195,13 @@ type App struct {
 	// 是 nil，也就是真的去 Finder 里显示。测试替掉它，才能断言「揭示的是哪个
 	// 文件」而不真的弹一个 Finder 窗口。
 	revealMarkdownInFinder func(path string)
+	// markdownDefaultApp 是「设为默认」要交给 macOS 的应用包路径；空串表示
+	// 当前不是从 .app 运行，没有 bundle 可交。markdownDefaultRequest 是
+	// 按钮背后的系统调用，测试替掉它，headless 下不碰真的 NSWorkspace。
+	markdownDefaultApp     string
+	markdownDefaultRequest func(appPath string, done func(error)) error
+	markdownDefaultBusy    bool
+	markdownDefaultMsg     string
 
 	// appearance: the editor card's translucency, the material behind it and
 	// where a drag at its left edge left it. 0 与空串都是未设置，见
@@ -259,6 +268,8 @@ type App struct {
 	renameOpen  bool
 	renamePath  string
 	renameValue string
+	renameExt   string
+	renameError string
 }
 
 // New returns the app on an empty untitled document, with the panel on files.
@@ -280,6 +291,9 @@ func New() *App {
 		ai:           loadAISettings(),
 		aiClient:     services.NewAI(),
 		aiMessages:   loadAIChat(),
+
+		markdownDefaultApp:     currentAppBundle(),
+		markdownDefaultRequest: requestDefaultMarkdownApp,
 	}
 	if p := loadAppearance(); p.CardOpacity > 0 || p.CardBlur != "" || p.CardWidth > 0 {
 		a.cardOpacityPref, a.cardBlurPref, a.cardWidthPref = p.CardOpacity, p.CardBlur, p.CardWidth
@@ -297,6 +311,11 @@ func (a *App) View(c *ui.Context) {
 	a.mainMu.Lock()
 	defer a.mainMu.Unlock()
 	a.applyTheme(c)
+	target := float32(0)
+	if a.panelOpen {
+		target = 1
+	}
+	a.sidebarProgress = c.Root().AnimateTo("sidebar-progress", target, ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
 	row := ui.Row(c).Fill()
 	if c.Vibrancy() {
 		// 亚克力在视图没画背景的地方透出来：轨道与面板后面是材料，
@@ -415,50 +434,14 @@ func (a *App) canvas(c *ui.Context) {
 // view is a raised card, as the demo's chosen sidebar row is.
 func (a *App) rail(c *ui.Context) {
 	bar := c.TitleBar()
-	// railW 是动画后的宽度，折叠时跟面板一起归零。和面板同一条轨道、同一个
-	// ease，所以折叠时看不到一列图标被孤零零留在窗口左边缘。
+	// Keep the native traffic lights clear; module controls live in the
+	// panel's horizontal toolbar.
 	col := ui.Column(c).FillHeight()
-	a.railW = col.AnimateTo("width", a.railTarget(), ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
+	a.railW = railWidth * a.sidebarProgress
 	col.Width(a.railW)
-	// 内边距跟着折叠一起收：全开时 11px 把按钮摆在轨道正中，归零时一点都
-	// 不留。Width(0) 的列是被这 22px 撑着的——不收回来的话，轨道和面板都
-	// 折叠了，卡片还被顶在右边 22px，窗口左边就剩这一条缝，标题和唤回键
-	// 全掉进去。截图里那条空头就是这个。
-	if a.railW >= 0.5 {
-		col.Padding(0, railInset)
-	}
-	col.GapY(railGapY)
-	if a.railW < 0.5 {
-		return
-	}
 	col.Children(func() {
-		// The room above the first button: macOS's traffic lights when the
-		// system reports them, else just enough to centre the first button
-		// on the window's one top line.
-		ui.Box(c).Height(max(bar.Height, topLineCenter-railButtonSize/2-railGapY)).DragWindow()
-		// 最左侧只放模块切换；新建/打开都是文件模块的内容（面板顶部与菜单）。
-		a.railButton(c, iconFiles, "文件", a.panelOpen && a.panel == panelFiles, func() {
-			a.showPanel(panelFiles)
-		})
-		a.railButton(c, iconOutline, "大纲", a.panelOpen && a.panel == panelOutline, func() {
-			a.showPanel(panelOutline)
-		})
-		a.railButton(c, iconSearch, "搜索", a.panelOpen && a.panel == panelSearch, func() {
-			a.showPanel(panelSearch)
-		})
-		a.railButton(c, iconAI, "AI 助手", a.panelOpen && a.panel == panelAI, func() {
-			a.showPanel(panelAI)
-		})
+		ui.Box(c).Height(max(bar.Height, topLineCenter-railButtonSize/2)).DragWindow()
 		ui.Spacer(c)
-		themeIcon := iconMoon
-		themeLabel := "切换到深色"
-		if a.dark {
-			themeIcon = iconSun
-			themeLabel = "切换到浅色"
-		}
-		a.railButton(c, themeIcon, themeLabel, false, func() { a.themeMode = 1 - a.themeMode })
-		a.railButton(c, iconSettings, "设置", a.settingsOpen, a.openSettings)
-		ui.Box(c).Height(8)
 	})
 }
 
@@ -524,53 +507,59 @@ func (a *App) railTooltip(c *ui.Context, anchor ui.Element, label string) {
 // Context panel
 
 func (a *App) contextPanel(c *ui.Context) {
-	target := float32(0)
-	if a.panelOpen {
-		target = a.panelWidth
-	}
-	// 打开状态下宽度目标改变（双击边缘恢复默认、拖动等）时一帧到位：
-	// 滑到一半的窄面板会把头部按钮裁出可视区，正文也要跟着重排两次。
-	// 仍要走 AnimateTo，动画通道得保持连续——跳过调用会让下一次开关从
-	// 0 起步。切换模块本身不改宽度，因此不会走这里。
-	anim := ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut}
-	if a.panelOpen && a.panelPrevTarget > 0.5 && a.panelPrevTarget != target {
-		anim.Duration = time.Millisecond
-	}
-	a.panelPrevTarget = target
 	// The panel is always built so its width can slide instead of vanishing
 	// from one frame to the next. The content keeps the full panel width and
-	// the outer box clips it, so text does not reflow on the way; it only
-	// fades as the box closes.
+	// the outer box clips it, so text does not reflow on the way.
 	panel := ui.Column(c).Shrink(0).FillHeight().Clip()
-	w := panel.AnimateTo("width", target, anim)
+	w := a.panelWidth * a.sidebarProgress
 	a.panelW = w
 	panel.Width(w)
-	if w < 0.5 {
+	if w < 0.5 || !a.panelOpen {
 		return
 	}
-	openness := w / a.panelWidth
-	if openness > 1 {
-		openness = 1
-	}
 	panel.Children(func() {
-		ui.Column(c).Width(a.panelWidth).FillHeight().Opacity(openness).
+		ui.Column(c).Width(a.panelWidth).FillHeight().
 			Padding(canvasPadding+cardBorder, 0, 0, 0).Children(func() {
 			a.panelHeader(c)
-			switch a.panel {
-			case panelFiles:
-				a.filesView(c)
-			case panelOutline:
-				a.outlineView(c)
-			case panelAI:
-				a.aiView(c)
-			case panelSearch:
-				a.searchView(c)
-			}
+			a.panelToolbar(c)
+			ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+				switch a.panel {
+				case panelFiles:
+					a.filesView(c)
+				case panelOutline:
+					a.outlineView(c)
+				case panelAI:
+					a.aiView(c)
+				case panelSearch:
+					a.searchView(c)
+				}
+			})
+			a.panelFooter(c)
 			// The edge goes in last, so it hits above the content.
 			if a.panelW > a.panelWidth-0.5 {
 				a.panelResizeHandle(c)
 			}
 		})
+	})
+}
+
+func (a *App) panelToolbar(c *ui.Context) {
+	ui.Row(c).FillWidth().Height(railButtonSize).Shrink(0).Justify(ui.Start).Gap(4).Padding(0, 12).AlignItems(ui.Center).Children(func() {
+		a.railButton(c, iconFiles, "文件", a.panelOpen && a.panel == panelFiles, func() { a.showPanel(panelFiles) })
+		a.railButton(c, iconOutline, "大纲", a.panelOpen && a.panel == panelOutline, func() { a.showPanel(panelOutline) })
+		a.railButton(c, iconSearch, "搜索", a.panelOpen && a.panel == panelSearch, func() { a.showPanel(panelSearch) })
+		a.railButton(c, iconAI, "AI 助手", a.panelOpen && a.panel == panelAI, func() { a.showPanel(panelAI) })
+	})
+}
+
+func (a *App) panelFooter(c *ui.Context) {
+	themeIcon, themeLabel := iconMoon, "切换到深色"
+	if a.dark {
+		themeIcon, themeLabel = iconSun, "切换到浅色"
+	}
+	ui.Row(c).FillWidth().Height(34).Shrink(0).Justify(ui.End).AlignItems(ui.Center).Gap(2).Padding(0, 12, 8, 12).Children(func() {
+		a.smallIcon(c, themeIcon, themeLabel, func() { a.themeMode = 1 - a.themeMode })
+		a.smallIcon(c, iconSettings, "设置", a.openSettings)
 	})
 }
 
@@ -622,13 +611,10 @@ func (a *App) panelResizeHandle(c *ui.Context) {
 		a.panelDrag = 0
 		if a.panelNarrow {
 			a.panelNarrow = false
-			// 折叠时把宽度对齐到动画真正的起点（panelW 现在那个值），
-			// 而不是拖动钳住后留下的最小值。透明度和 canvasLeft 都按
-			// panelW / panelWidth 算：分母停在 224、起点是 368，比值就是
-			// 1.64 被钳成 1，面板一路掉透明度、卡片跟着错比例位移。
-			// 真正的宽度在 panelFoldedWidth 里，重新打开时还回去。
-			if a.panelW > panelMinWidth {
-				a.panelWidth = a.panelW
+			// 折叠动画从拖动前的真实宽度开始，而不是从拖动过程中
+			// 钳住的最小宽度开始。这个宽度也会在重新打开时还回来。
+			if a.panelFoldedWidth > panelMinWidth {
+				a.panelWidth = a.panelFoldedWidth
 			}
 			a.collapsePanel()
 			return
@@ -1062,7 +1048,10 @@ func (a *App) editorHeader(c *ui.Context) {
 	// 左边要避开 macOS 的红绿灯：它们画在窗口左上角，卡片折叠后贴到窗口
 	// 左边，标题行就压在它们身上——所以这里按 TitleBar().Left 让位，和面板
 	// 头部是同一套做法。8 是卡片自己的边距，红绿灯比它宽多少就再让多少。
-	padLeft := max(8, bar.Left)
+	padLeft := float32(40)
+	if !a.panelOpen {
+		padLeft = max(8, bar.Left)
+	}
 	ui.Row(c).Height(editorHeaderH).Shrink(0).Padding(0, padRight, 0, padLeft).Gap(8).
 		DragWindow().
 		AlignItems(ui.Center).Children(func() {
@@ -1071,10 +1060,8 @@ func (a *App) editorHeader(c *ui.Context) {
 		// so the title never slides when the panel folds away.
 		if !a.panelOpen {
 			a.smallIcon(c, iconPanelLeftOpen, "打开侧栏", func() { a.showPanel(a.panel) })
-		} else {
-			ui.Box(c).Width(26).Shrink(0)
 		}
-		ui.Text(c, a.displayName()).FontSize(13).FontWeight(600).SingleLine().Ellipsis("…")
+		a.documentNameButton(c)
 		if a.dirty {
 			ui.Box(c).Size(6, 6).Radius(3).Background(t.Accent)
 		}
@@ -1549,9 +1536,7 @@ func (a *App) fileMenu(c *ui.Context, row ui.Element, path string) {
 		}
 		m.Separator()
 		if m.Item("重命名…").Chosen() {
-			a.renamePath = path
-			a.renameValue = filepath.Base(path)
-			a.renameOpen = true
+			a.beginRename(path)
 		}
 		if m.Item("移到废纸篓").Chosen() {
 			a.trash(path)
@@ -1616,51 +1601,6 @@ func (a *App) trash(path string) {
 			a.notice("已移到废纸篓")
 		})
 	}()
-}
-
-func (a *App) renameDialog(c *ui.Context) {
-	t := c.Theme()
-	ui.Modal(c, &a.renameOpen, func() {
-		ui.Column(c).Width(420).Gap(12).Padding(18).Radius(12).
-			Background(t.Background).Border(1, t.Border).
-			Shadow(0, 18, 50, 0, ui.RGBA(0, 0, 0, 0.22)).Children(func() {
-			ui.Text(c, "重命名").FontSize(14).FontWeight(600)
-			input := ui.TextInput(c, &a.renameValue).AutoFocus().Label("新名称")
-			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				if ui.Button(c, "取消").Clicked() {
-					a.renameOpen = false
-				}
-				if ui.PrimaryButton(c, "重命名").Clicked() || input.Submitted() {
-					a.applyRename()
-				}
-			})
-		})
-	})
-}
-
-func (a *App) applyRename() {
-	name := strings.TrimSpace(a.renameValue)
-	if name == "" || a.renamePath == "" {
-		a.renameOpen = false
-		return
-	}
-	old := a.renamePath
-	newPath := filepath.Join(filepath.Dir(old), name)
-	if err := os.Rename(old, newPath); err != nil {
-		a.notice(fmt.Sprintf("重命名失败：%v", err))
-		a.renameOpen = false
-		a.invalidate()
-		return
-	}
-	if a.path == old {
-		a.path = newPath
-	}
-	a.renameOpen = false
-	a.renamePath = ""
-	a.clearTreeCache()
-	a.notice("已重命名")
-	a.updateTitle()
-	a.invalidate()
 }
 
 func uniquePath(dir, base, ext string) string {
@@ -1820,11 +1760,25 @@ func (a *App) appearanceSettings(c *ui.Context) {
 		FontSize(11.5).TextColor(t.TextMuted).Padding(0, 4)
 	settingsGroup(c, "Markdown", func() {
 		a.settingsDivider(c, false)
-		settingsRow(c, "Markdown 默认打开方式", markdownDefaultNote(a.path != ""), func() {
+		detail := a.markdownDefaultNote()
+		if a.markdownDefaultMsg != "" {
+			detail = a.markdownDefaultMsg
+		}
+		settingsRow(c, "Markdown 默认打开方式", detail, func() {
+			switch {
+			case a.markdownDefaultBusy:
+				ui.Text(c, "等待系统确认…").FontSize(12).TextColor(t.TextMuted)
+			case a.markdownDefaultApp != "" && a.markdownDefaultRequest != nil:
+				if ui.Button(c, "设为默认").Clicked() {
+					a.setMarkdownAsDefault()
+				}
+			}
 			if a.path == "" {
-				// 没有文档就没有文件可揭示，这一行点不动：说清楚比弹一个
-				// 空的 Finder 窗口好。
-				ui.Text(c, "先保存文档").FontSize(12).TextColor(t.TextMuted)
+				// 没有文档就没有文件可揭示；有「设为默认」时不需要再解释
+				// 什么，没有时才说清楚下一步。
+				if a.markdownDefaultApp == "" || a.markdownDefaultRequest == nil {
+					ui.Text(c, "先保存文档").FontSize(12).TextColor(t.TextMuted)
+				}
 				return
 			}
 			if ui.Button(c, "在 Finder 中显示").Clicked() {
@@ -1834,15 +1788,15 @@ func (a *App) appearanceSettings(c *ui.Context) {
 	})
 }
 
-// markdownDefaultNote explains where macOS actually decides which app opens a
-// .md, because the honest answer is not "here". There is no default-apps
-// settings page, the API that sets one is dead on macOS 26, and the place that
-// works — the file's Get Info window — is only about a file that exists.
-func markdownDefaultNote(hasFile bool) string {
-	if hasFile {
-		return "macOS 没有「默认应用」设置页，Muse 也无法替你改：选中这个文件，按 ⌘I，在「打开方式」里选 Muse 并点「全部更改」。"
+// markdownDefaultNote says what this row can do. macOS owns the choice of
+// default app and asks before changing it; there is no default-apps settings
+// page. A running .app can be handed to the system from here. A bundle-less
+// `go run` cannot, and then Finder's Get Info is the way.
+func (a *App) markdownDefaultNote() string {
+	if a.markdownDefaultApp == "" {
+		return "当前不是从 Muse.app 运行，设不了系统默认。打包后的 Muse 才能用这个按钮；也可以在 Finder 里选中 .md 按 ⌘I，在「打开方式」里改。"
 	}
-	return "macOS 没有「默认应用」设置页，Muse 也无法替你改：先保存文档，再到 Finder 里选中它，按 ⌘I，在「打开方式」里选 Muse 并点「全部更改」。"
+	return "点「设为默认」让 macOS 把 .md 交给 Muse。系统会弹出确认框，确认后双击 .md 就直接打开 Muse；也可以在 Finder 里按 ⌘I 手动改。"
 }
 
 func (a *App) typographySettings(c *ui.Context) {
@@ -1871,14 +1825,13 @@ func (a *App) settingsDivider(c *ui.Context, between bool) {
 // ---------------------------------------------------------------------------
 // The document
 
-// revealCurrentMarkdown shows the document being edited in the Finder, which
-// is where macOS changes which app opens a .md: the system has no settings
-// page for default apps (nothing under /System/Library/PreferencePanes owns
-// it), and the Launch Services call that sets one is dead on macOS 26 — it
-// returns success and changes nothing. What is left that actually works is
-// the file's Get Info window, which needs a file to be about. A document
-// that has never been saved has no path, so there is nothing to reveal and
-// nothing happens.
+// revealCurrentMarkdown shows the document being edited in the Finder, where
+// macOS also lets you change which app opens a .md by hand: select the file,
+// press ⌘I, and pick an app under "Open with". The settings row's 设为默认
+// button asks the system directly when Muse runs from a .app; this Finder
+// route remains for the bundle-less case and as the manual fallback. A
+// document that has never been saved has no path, so there is nothing to
+// reveal and nothing happens.
 func (a *App) revealCurrentMarkdown() {
 	if a.path == "" {
 		return
@@ -1888,6 +1841,33 @@ func (a *App) revealCurrentMarkdown() {
 		return
 	}
 	mygo.Shell.ShowItemInFolder(a.path)
+}
+
+// setMarkdownAsDefault hands this running Muse.app to macOS. The system asks
+// the user before changing a handler, so this returns while the answer is
+// still outstanding; done fires after that answer.
+func (a *App) setMarkdownAsDefault() {
+	if a.markdownDefaultBusy || a.markdownDefaultApp == "" || a.markdownDefaultRequest == nil {
+		return
+	}
+	a.markdownDefaultBusy = true
+	a.markdownDefaultMsg = ""
+	err := a.markdownDefaultRequest(a.markdownDefaultApp, func(err error) {
+		a.onMain(func() {
+			a.markdownDefaultBusy = false
+			if err != nil {
+				a.markdownDefaultMsg = "没有改成：" + err.Error()
+			} else {
+				a.markdownDefaultMsg = "已设为默认。双击 .md 会打开 Muse。"
+			}
+			a.invalidate()
+		})
+	})
+	if err != nil {
+		// 请求根本没送到系统，别再等一个不会来的 completion。
+		a.markdownDefaultBusy = false
+		a.markdownDefaultMsg = "没有改成：" + err.Error()
+	}
 }
 
 // docDir is the folder images and links of the document resolve in.
@@ -2239,37 +2219,15 @@ func (a *App) togglePanel(v panelView) {
 // It follows the animated panel width so the card slides with the panel
 // instead of jumping when panelOpen flips.
 func (a *App) canvasLeft(c *ui.Context) float32 {
-	left := canvasPadding
-	if a.panelWidth <= 0 {
-		return left
-	}
-	// 侧栏整个收走了，就没有「面板的右边缘」可留：卡片贴着窗口左边站，那道
-	// canvasPadding 就是全部。少了这一条，折叠会在左边留下 22px 的空洞
-	// （TitleBar().Left - railWidth），标题和唤回键都掉到那里面去。
-	//
-	// 这一条要在拖动坐标前面：那份坐标是留给侧栏回来时用的（见 cardLeft），
-	// 不是让折叠之后卡片还停在 268px 面板的鬼魂旁边——那样左边空着一整条
-	// 窗口底色，唤回键孤零零落在里面。放在这里，拖动过的卡片折叠后和没拖过
-	// 的落在同一处，侧栏打开时那份坐标又原样回来。
-	if a.railW < 0.5 && a.panelW < 0.5 {
-		return left
-	}
 	if w := a.cardWidth(); w > 0 {
-		// 卡片被拖动过：它的左边缘是自己说了算的绝对坐标，重新打开折叠的
-		// 面板时这份坐标得留着，否则卡片会跳回面板旁边。
-		return max(w-a.railW-a.panelW, 0)
+		// Preserve the dragged coordinate for reopening, while interpolating
+		// its gap to the collapsed inset on the same clock as the sidebar.
+		gap := max(w-railWidth-a.panelWidth, 0)
+		return canvasPadding + (gap-canvasPadding)*a.sidebarProgress
 	}
-	openness := a.panelW / a.panelWidth
-	if openness > 1 {
-		openness = 1
-	}
-	if openness < 0 {
-		openness = 0
-	}
-	if extra := c.TitleBar().Left - railWidth; extra > 0 {
-		left += extra * (1 - openness)
-	}
-	return left
+	// The header handles traffic-light clearance. Adding it here would
+	// leave a growing gap during collapse, then snap it away at the end.
+	return canvasPadding
 }
 
 // cardLeft is where the editor card's left edge sits, from the window's left

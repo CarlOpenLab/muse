@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	git.sr.ht/~sbinet/gg v0.5.0
+	github.com/ebitengine/purego v0.11.1
 	github.com/egoist/mygo v0.9.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-latex/latex v0.0.0-20250304174226-2790903426af
@@ -15,7 +16,6 @@ require (
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/campoy/embedmd v1.0.0 // indirect
 	github.com/cloudflare/circl v1.6.2 // indirect
-	github.com/ebitengine/purego v0.11.1 // indirect
 	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect

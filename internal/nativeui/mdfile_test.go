@@ -8,10 +8,10 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// TestSettingsShowsWhereTheMarkdownDefaultLives 默认打开方式在 macOS 上不在
-// 任何设置页里（见 markdownDefaultNote）：改它的地方是 Finder 的「显示简介」，
-// 而那个窗口必须挂在一个真实文件上。所以设置里这一行说的是事实——它把你带到
-// 系统真正改关联的地方，而不是一个点了没反应的按钮。
+// TestSettingsShowsWhereTheMarkdownDefaultLives 在没有 .app 的测试运行里，
+// 设置页把用户带到系统真正改关联的地方：Finder 的「显示简介」，而那个窗口
+// 必须挂在一个真实文件上。打包后的 Muse 会多一个「设为默认」按钮，那条路径
+// 由 TestSettingMuseAsDefault* 覆盖；这里守的是没有 bundle 时的退路。
 func TestSettingsShowsWhereTheMarkdownDefaultLives(t *testing.T) {
 	t.Setenv("MUSE_CONFIG_DIR", t.TempDir())
 	dir := t.TempDir()

@@ -1,14 +1,57 @@
 package nativeui
 
 import (
+	"math"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 )
 
+// The card must travel to its final inset in one motion, including the last
+// frames where the rail is narrower than its usual horizontal padding.
+func TestSidebarFoldHasOneContinuousPath(t *testing.T) {
+	for _, dragged := range []bool{false, true} {
+		t.Run(map[bool]string{false: "default", true: "dragged"}[dragged], func(t *testing.T) {
+			t.Setenv("MUSE_CONFIG_DIR", t.TempDir())
+			a := New()
+			if dragged {
+				a.setCardWidth(460)
+			}
+			tt := ui.NewTester(a.View, 1200, 800)
+			tt.SetTitleBar(ui.TitleBar{Height: 60, Left: 86, Bottom: 37})
+			tt.Frame()
+			edge, ok := tt.Find("调整卡片宽度")
+			if !ok {
+				t.Fatal("missing card edge")
+			}
+			start := edge.X + cardResizeGrab
+			a.collapsePanel()
+			tt.Frame()
+			for frame := 0; frame < 24; frame++ {
+				tt.Advance(10 * time.Millisecond)
+				for _, label := range []string{"文件", "大纲", "搜索", "AI 助手"} {
+					if _, ok := tt.Find(label); ok {
+						t.Fatalf("module toolbar item %q remains visible during collapse", label)
+					}
+				}
+				edge, ok = tt.Find("调整卡片宽度")
+				if !ok {
+					t.Fatal("missing moving card edge")
+				}
+				want := canvasPadding + (start-canvasPadding)*a.sidebarProgress
+				if got := edge.X + cardResizeGrab; math.Abs(float64(got-want)) > 0.6 {
+					t.Fatalf("frame %d: card left %.2f, want %.2f at progress %.4f", frame, got, want, a.sidebarProgress)
+				}
+			}
+		})
+	}
+}
+
 func TestPanelDragResizesAndFolds(t *testing.T) {
 	a := New()
+	a.loadDoc("# 标题\n\n正文")
 	tt := ui.NewTester(a.View, 1200, 800)
 	tt.Frame()
 	tt.Frame()
@@ -179,20 +222,38 @@ func TestCollapsedPanelReopensFromTheHeader(t *testing.T) {
 // status all centre on the same height, the one the window buttons sit on.
 func TestTopBarControlsShareOneLine(t *testing.T) {
 	a := New()
+	a.loadDoc("# 标题\n\n正文")
 	tt := ui.NewTester(a.View, 1200, 800)
 	tt.Frame()
 	tt.Frame()
-	for _, s := range []string{"文件", "收起侧栏", "未命名", "0 字 · 1 行"} {
+	for _, s := range []string{"收起侧栏", "未命名", "5 字 · 3 行"} {
 		r, ok := tt.Find(s)
 		if !ok {
 			t.Fatalf("%q is not on screen", s)
 		}
-		if s == "文件" && r.X >= railWidth {
-			continue // the panel's title shares the word; the rail's button is meant
-		}
 		if d := r.Y + r.H/2 - topLineCenter; d < -0.5 || d > 0.5 {
 			t.Errorf("%q centres at %.2f, want the top line at %.1f", s, r.Y+r.H/2, topLineCenter)
 		}
+	}
+	toolbarY := float32(-1)
+	for _, s := range []string{"文件", "大纲", "搜索", "AI 助手"} {
+		r, ok := tt.Find(s)
+		if !ok {
+			t.Fatalf("toolbar item %q is not on screen", s)
+		}
+		if toolbarY < 0 {
+			toolbarY = r.Y
+		} else if r.Y != toolbarY {
+			t.Fatalf("toolbar item %q is at y=%.1f, want %.1f", s, r.Y, toolbarY)
+		}
+	}
+	name, _ := tt.Find("未命名")
+	bodyX, _, ok := a.ed.WindowPoint(strings.Index(a.source, "标题"))
+	if !ok {
+		t.Fatal("document heading is not on screen")
+	}
+	if name.X != bodyX {
+		t.Fatalf("document name starts at %.1f, heading starts at %.1f", name.X, bodyX)
 	}
 }
 
@@ -339,8 +400,8 @@ func TestFoldingTakesTheRailWithIt(t *testing.T) {
 	if a.railW != railWidth {
 		t.Fatalf("the rail starts %.0f wide, want %.0f", a.railW, railWidth)
 	}
-	if r, ok := tt.Find("文件"); !ok || r.X >= railWidth {
-		t.Fatalf("the rail's first button is not in the rail: %+v", r)
+	if r, ok := tt.Find("文件"); !ok || r.Y <= topLineCenter {
+		t.Fatalf("the modules are not in a toolbar below the traffic lights: %+v", r)
 	}
 
 	tt.Click("收起侧栏")

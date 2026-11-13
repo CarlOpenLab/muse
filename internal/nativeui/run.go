@@ -102,7 +102,7 @@ func (a *App) openWindow() {
 		// Linux the system's buttons go away and the view draws its own.
 		TitleBarStyle:        mygo.TitleBarHidden,
 		TitleBarHeight:       44,
-		TrafficLightPosition: &mygo.Point{X: 12, Y: 15},
+		TrafficLightPosition: &mygo.Point{X: 20, Y: 23},
 		HideWindowButtons:    controlsAtRight,
 	})
 	a.installMenu()

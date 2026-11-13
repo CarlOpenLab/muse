@@ -26,6 +26,7 @@ func (a *App) paletteCommands() []paletteCommand {
 		{name: "新建文档", hint: "⌘N", run: a.newDoc},
 		{name: "保存", hint: "⌘S", run: a.save},
 		{name: "另存为…", hint: "⇧⌘S", run: a.saveAs},
+		{name: "重命名当前文档…", run: a.renameCurrentDocument},
 		{name: "跳转到文件", hint: "⌘O", run: a.openQuickOpen},
 		{name: "打开文件…", hint: "", run: a.openFileDialog},
 		{name: "打开文件夹…", hint: "⇧⌘O", run: a.openFolderDialog},

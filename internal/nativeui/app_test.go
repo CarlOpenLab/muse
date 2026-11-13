@@ -61,28 +61,45 @@ func TestOpenWorkspaceAndFile(t *testing.T) {
 	}
 }
 
-func TestRailButtonsInsetFromWindowEdge(t *testing.T) {
+func TestPanelToolbarButtonsShareOneRow(t *testing.T) {
 	a := New()
 	tt := ui.NewTester(a.View, 1200, 800)
 	tt.Frame()
 	modules := []string{"文件", "大纲", "搜索", "AI 助手"}
-	prevBottom := float32(-1)
-	for i, label := range append(modules, "设置") {
+	prevRight := float32(-1)
+	var y float32
+	var firstX float32
+	for _, label := range modules {
 		r, ok := tt.Find(label)
 		if !ok {
-			t.Fatalf("rail button %q missing", label)
+			t.Fatalf("toolbar button %q missing", label)
 		}
-		if r.X < railInset-0.5 {
-			t.Fatalf("%q starts at x=%.1f, want at least %.1f", label, r.X, railInset)
+		if r.X <= prevRight {
+			t.Fatalf("%q starts at x=%.1f, want after previous button at %.1f", label, r.X, prevRight)
 		}
-		if right := r.X + r.W; right > railWidth-railInset+0.5 {
-			t.Fatalf("%q ends at x=%.1f, want at most %.1f", label, right, railWidth-railInset)
+		if y == 0 {
+			y = r.Y
+		} else if r.Y != y {
+			t.Fatalf("%q is at y=%.1f, want the toolbar row at %.1f", label, r.Y, y)
 		}
-		if i < len(modules) {
-			if prevBottom >= 0 && r.Y-prevBottom < 3.5 {
-				t.Fatalf("%q sits %.1fpx below the icon above, want a 4px gap", label, r.Y-prevBottom)
-			}
-			prevBottom = r.Y + r.H
+		prevRight = r.X + r.W
+		if firstX == 0 {
+			firstX = r.X
+		}
+	}
+	if firstX < railWidth+canvasPadding || firstX > railWidth+canvasPadding+12 {
+		t.Fatalf("module toolbar starts at x=%.1f, want it aligned to the panel's left inset", firstX)
+	}
+	for _, label := range []string{"切换到深色", "设置"} {
+		r, ok := tt.Find(label)
+		if !ok {
+			t.Fatalf("bottom rail button %q missing", label)
+		}
+		if r.X < panelDefaultWidth-railButtonSize*2-8 {
+			t.Fatalf("bottom control %q is too far left at x=%.1f", label, r.X)
+		}
+		if r.W != 26 || r.H != 26 {
+			t.Fatalf("bottom control %q is %gx%g, want 26x26 like the collapse button", label, r.W, r.H)
 		}
 	}
 }
@@ -181,7 +198,7 @@ func TestDarkThemeRenders(t *testing.T) {
 	}
 }
 
-func TestPanelCollapseAnimatesInsteadOfSnapping(t *testing.T) {
+func TestPanelCollapseAndReopenAnimate(t *testing.T) {
 	a := New()
 	tt := ui.NewTester(a.View, 1200, 800)
 	tt.Frame()
@@ -192,7 +209,7 @@ func TestPanelCollapseAnimatesInsteadOfSnapping(t *testing.T) {
 	tt.Frame()
 	tt.Advance(30 * time.Millisecond)
 	if a.panelW <= 0 || a.panelW >= a.panelWidth {
-		t.Fatalf("the panel did not slide: width %.1f", a.panelW)
+		t.Fatalf("the panel did not slide closed: width %.1f", a.panelW)
 	}
 	tt.Advance(time.Second)
 	if a.panelW != 0 {
