@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.6.0 — 2026-11-16
+
+### Features / 新功能
+
+- Automatic updates are back: Muse checks GitHub Releases once a day in the background, and a native update window shows the release notes, lets you skip a version or be reminded later, reports download progress, and installs then relaunches. Settings gains an 应用更新 page with the running version, the last check, a check-now button and switches for automatic checks and automatic downloads; the menu bar gains 更新 → 检查更新…. / 自动更新回来了：Muse 每天在后台检查 GitHub Releases，原生更新窗口展示更新说明，支持跳过此版本、稍后提醒、显示下载进度，并在安装后重启。设置新增「应用更新」页，显示当前版本、上次检查、立即检查按钮，以及自动检查、自动下载两个开关；菜单栏新增「更新 → 检查更新…」。
+- An update that asks to relaunch while a document is unsaved now resumes the relaunch after you save or discard, instead of closing and leaving you on the old version. / 更新要求重启时若文档未保存，保存或放弃后会继续重启进入新版本，不再只关窗停在旧版本。
+
+### Improvements & fixes / 改进与修复
+
+- Releases now publish signed update archives and per-platform manifests (`update-<target>.json`) through `mygo build -upload`: the three platforms build one draft release serially, and a final job publishes it. The portable Windows `Muse.exe` is still attached. / 发布流程改由 `mygo build -upload` 上传带签名的更新归档与各平台 manifest：三个平台串行构建同一个草稿 release，最后由发布任务转为正式版；Windows 仍附带裸 `Muse.exe`。
+- Migration: versions 0.5.0 and earlier cannot update themselves. Install 0.6.0 manually once; later versions update in the app. / 迁移说明：0.5.0 及更早版本不能自更新，请手动安装 0.6.0 一次，之后的版本可在应用内更新。
+
 ## 0.5.0 — 2026-11-13
 
 ## Features / 新功能

@@ -24,18 +24,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # 三个平台共用同一个草稿 release：mygo 的第一个构建创建它，后两个
+      # 复用并上传自己的文件。并行跑会在创建草稿时互相踩。
+      max-parallel: 1
       matrix:
         include:
           - os: macos-latest
-            artifact: macos
             goos: darwin
             goarch: arm64
           - os: windows-latest
-            artifact: windows
             goos: windows
             goarch: amd64
           - os: ubuntu-latest
-            artifact: linux
             goos: linux
             goarch: amd64
 
@@ -58,6 +58,14 @@ jobs:
 
       - name: Test
         run: go test ./...
+
+      # tag、mygo.json 与更新 manifest 的版本必须一致：发出去的安装包、
+      # update-<target>.json 和 release 标题都从这三处来。
+      - name: Check the tag matches mygo.json
+        shell: bash
+        env:
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: test "v$(jq -r .version mygo.json)" = "$TAG"
 
       # TCC 授权（文件与文件夹、屏幕录制、辅助功能）绑定在 App 的代码签名上。
       # ad-hoc 签名每次发版 cdhash 都会变，用户更新后旧授权匹配不上，只能重新
@@ -88,12 +96,17 @@ jobs:
           test -n "$identity" || { echo "证书中没有 Apple Development 身份"; exit 1; }
           echo "MACOS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
+      # -upload 让 mygo 建/复用草稿 release，挂上安装包、签名更新归档、
+      # update-<target>.json 与 SHA256SUMS。私钥缺失时 mygo 直接报错，
+      # 不会悄悄发一版装不上的更新。
       - name: Build and package
         shell: bash
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           MACOS_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && env.MACOS_SIGNING_IDENTITY || '' }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           args=(-platform "${{ matrix.goos }}/${{ matrix.goarch }}" -skip-notarize)
           # Windows 安装器需要 NSIS（makensis），runner 上默认没有：
@@ -104,58 +117,28 @@ jobs:
           if [ "${{ matrix.os }}" = macos-latest ] && [ -n "${MACOS_SIGNING_IDENTITY:-}" ]; then
             args+=(-sign "$MACOS_SIGNING_IDENTITY")
           fi
-          go tool mygo build "${args[@]}"
+          go tool mygo build "${args[@]}" -upload
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact }}-release
-          path: dist/**
-          if-no-files-found: error
-          retention-days: 7
+      # 裸 Muse.exe 是 Windows 用户的便携安装包，也是更新归档替换的入口；
+      # mygo 的 -skip-installer 构建只产出它，单独挂上 release。
+      - name: Upload the portable Windows build
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: gh release upload "$TAG" dist/windows-amd64/Muse.exe --repo CarlOpenLab/muse --clobber
 
   publish:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download binaries
-        uses: actions/download-artifact@v8
-        with:
-          path: release-assets
-          merge-multiple: true
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
-          name: Muse ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
-          generate_release_notes: true
-          make_latest: true
-          # `*` 不跨目录分隔符：merge-multiple 把三个平台下到同一个
-          # release-assets/ 之后，这里每个平台各占一个子目录
-          # （darwin-arm64/、windows-amd64/、linux-amd64/），`*`
-          # 只匹配到这三个目录本身。action 再把 glob 结果用 isFile() 过滤
-          # 一遍，目录全部落空，release 于是发成一个空壳——v0.4.0 就是
-          # 这样发出去的。`**/*` 才一层层穿到文件。
-          #
-          # 但只写 `**/*` 会把三个平台 artifact 里全部 26 个文件都挂上去：
-          # .app bundle 的内部文件、图标、PKGBUILD、install.sh。而且三个
-          # 平台各自都带一份 icon.png、icon.icns、update-public-key.txt，
-          # action 默认 overwrite_files: true，同名文件互相覆盖，发布
-          # 直接以 Not Found 失败。只列安装包：干净，且同名冲突根本不
-          # 发生——安装包的名字每个平台都不一样。
-          #
-          # 只列真实存在的产物：mygo 在 macOS 上出 dmg，Linux 上出 deb/rpm/
-          # tar.gz，Windows 上出 exe；它不产 msi，也不产 pkg。Windows 在 CI
-          # 上还带 -skip-installer（runner 没有 NSIS），所以连 setup.exe 都
-          # 没有，只有 Muse.exe 本体。列了不存在的扩展名，配上
-          # fail_on_unmatched_files: true，就是把发布自己绊倒——那次 release
-          # 就是这样红的：安装包一个都没挂上，release 停在旧的那一版。
-          files: |
-            release-assets/**/*.dmg
-            release-assets/**/*.exe
-            release-assets/**/*.deb
-            release-assets/**/*.rpm
-            release-assets/**/*.tar.gz
-          fail_on_unmatched_files: true
+      # 三个平台都上传完才走到这里：草稿转为正式 release。notes 由 mygo
+      # 在创建草稿时按 CHANGELOG 写好；这里统一标题、取消草稿并设为
+      # latest，下一版的 manifest 才找得到它。
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: gh release edit "$TAG" --repo CarlOpenLab/muse --draft=false --title "Muse $TAG" --latest

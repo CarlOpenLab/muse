@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
+	updaternative "github.com/egoist/mygo/plugins/updater/native"
 	"github.com/egoist/mygo/ui"
 
 	"muse/internal/mdedit"
@@ -19,6 +21,19 @@ import (
 func Run() {
 	app := New()
 	mygo.App.SetName("Muse")
+	// The update window is native UI: this app has no webview to draw a page
+	// in, so it uses the updater's native frontend rather than the webview
+	// one. The two are mutually exclusive.
+	mygo.Use(updaternative.New(updater.Options{Language: "zh-Hans"}))
+	app.updates = liveUpdates{}
+	// The settings page rereads 上次检查 after every change; the update
+	// window itself owns the available version and progress.
+	updater.OnChange(app.invalidate)
+	// An installed update asks the app to restart. If the dirty-document
+	// guard cancels that quit to ask about saving, these flags remember why
+	// the quit started so the answer can resume it (shouldRelaunchAfterSave).
+	updater.OnInstalled(func() { app.updateInstalled = true })
+	mygo.App.OnQuitCanceled(func() { app.quitCanceled = true })
 	mygo.App.WhenReady(func() {
 		switch os.Getenv("MUSE_THEME") {
 		case "light":
@@ -136,9 +151,14 @@ func (a *App) openWindow() {
 				a.closing = false
 				a.busy = false
 				if ok {
+					if a.finishCloseAfterSave() {
+						mygo.App.Relaunch()
+						return
+					}
 					a.win.Close()
 					return
 				}
+				a.cancelRelaunchAfterSave()
 				a.win.Invalidate()
 			})
 		}()
@@ -167,6 +187,35 @@ func (a *App) openWindow() {
 	}
 }
 
+// shouldRelaunchAfterSave reports whether the quit now finishing was started
+// by an installed update and then canceled by the dirty-document guard. Only
+// both together resume the relaunch once the save dialog is answered: an
+// ordinary canceled quit must stay a cancel.
+func (a *App) shouldRelaunchAfterSave() bool {
+	return a.updateInstalled && a.quitCanceled
+}
+
+// finishCloseAfterSave settles the flags once the save dialog is answered.
+// It reports whether this close should relaunch into an installed update.
+// Either way the canceled-quit latch is consumed: the quit it came from is
+// over, so a later dirty window close must not restart the app on macOS,
+// where closing a window is not quitting.
+func (a *App) finishCloseAfterSave() bool {
+	if a.shouldRelaunchAfterSave() {
+		a.updateInstalled = false
+		a.quitCanceled = false
+		return true
+	}
+	a.quitCanceled = false
+	return false
+}
+
+// cancelRelaunchAfterSave forgets the canceled quit but keeps the installed
+// update: a later quit with a clean document still relaunches into it.
+func (a *App) cancelRelaunchAfterSave() {
+	a.quitCanceled = false
+}
+
 func (a *App) installMenu() {
 	if a.win == nil {
 		return
@@ -180,6 +229,7 @@ func (a *App) installMenu() {
 	}
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 		{Role: mygo.RoleAppMenu},
+		{Label: "更新", Submenu: []*mygo.MenuItem{updater.MenuItem()}},
 		{
 			Label: "文件",
 			Submenu: []*mygo.MenuItem{

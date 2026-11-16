@@ -212,6 +212,20 @@ type App struct {
 	// cardDrag 累计一次左边缘拖动，拖动期间卡片宽度逐帧跟手。
 	cardDrag float32
 
+	// updates is the settings page's view of the updater. New() starts with
+	// the unavailable controller so tests and headless builds can open the
+	// page without registering the plugin; Run() swaps in the live one after
+	// mygo.Use.
+	updates updateController
+
+	// updateInstalled and quitCanceled resume a relaunch that the dirty-
+	// document guard interrupted: the updater installed an update and asked
+	// the app to restart, the guard canceled that quit to ask about saving,
+	// and the save dialog's answer decides whether to restart again. Both
+	// are read and written on the main thread only.
+	updateInstalled bool
+	quitCanceled    bool
+
 	// AI
 	ai          aiSettings
 	aiClient    *services.AI
@@ -288,6 +302,7 @@ func New() *App {
 		fontSize:     16,
 		lineHeight:   1.75,
 		recents:      loadRecents(),
+		updates:      unavailableUpdates{},
 		ai:           loadAISettings(),
 		aiClient:     services.NewAI(),
 		aiMessages:   loadAIChat(),
@@ -1646,6 +1661,8 @@ func (a *App) settingsDialog(c *ui.Context) {
 						a.settingsNavItem(c, "主题", 0)
 						a.settingsNavItem(c, "排版", 1)
 						a.settingsNavItem(c, "模型", 2)
+						ui.Text(c, "应用").FontSize(11).FontWeight(600).TextColor(t.TextMuted).Padding(10, 10, 4, 10)
+						a.settingsNavItem(c, "应用更新", 3)
 					})
 					// Right content card, with its own 44px page header.
 					ui.Column(c).Grow(1).MinWidth(0).FillHeight().Padding(0, 8, 8, 8).Children(func() {
@@ -1658,6 +1675,8 @@ func (a *App) settingsDialog(c *ui.Context) {
 								title = "排版"
 							case 2:
 								title = "模型"
+							case 3:
+								title = "应用更新"
 							}
 							ui.Row(c).Height(44).Shrink(0).Padding(0, 18).AlignItems(ui.Center).
 								BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
@@ -1670,8 +1689,10 @@ func (a *App) settingsDialog(c *ui.Context) {
 										a.appearanceSettings(c)
 									case 1:
 										a.typographySettings(c)
-									default:
+									case 2:
 										a.modelSettings(c)
+									default:
+										a.updateSettings(c)
 									}
 								})
 							})

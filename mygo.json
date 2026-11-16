@@ -2,11 +2,16 @@
   "name": "Muse",
   "slug": "muse",
   "identifier": "com.muse.app",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "main": ".",
   "icon": "resources/icon.png",
   "out": "dist",
   "resourcesExclude": ["logo/**"],
+  "updates": {
+    "publicKey": "FG0Hg7hGBVq3w+Cin+CDYOH/tqOiXF+jOd+V3e0kAa0=",
+    "github": "CarlOpenLab/muse",
+    "tagPrefix": "v"
+  },
   "fileAssociations": [
     {
       "ext": ["md", "markdown"],

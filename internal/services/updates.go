@@ -22,12 +22,13 @@ func (a *App) UpdatePreferences() UpdatePreferences {
 		AutomaticChecks: updater.AutomaticChecks(), AutomaticDownloads: updater.AutomaticDownloads(), LastCheck: lastCheck}
 }
 
-func (a *App) SetUpdatePreferences(req struct {
-	AutomaticChecks    bool `json:"automaticChecks"`
-	AutomaticDownloads bool `json:"automaticDownloads"`
-}) UpdatePreferences {
-	updater.SetAutomaticChecks(req.AutomaticChecks)
-	updater.SetAutomaticDownloads(req.AutomaticDownloads)
+func (a *App) SetAutomaticChecks(on bool) UpdatePreferences {
+	updater.SetAutomaticChecks(on)
+	return a.UpdatePreferences()
+}
+
+func (a *App) SetAutomaticDownloads(on bool) UpdatePreferences {
+	updater.SetAutomaticDownloads(on)
 	return a.UpdatePreferences()
 }
 
